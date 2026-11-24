@@ -8,6 +8,9 @@ import { buildArchitecture } from './architecture.js';
 import { XRMode } from './xr.js';
 import { ShotEffects } from './shotfx.js';
 import { ImpactMarks } from './impact_marks.js';
+import { WallMeshes } from './wall_mesh.js';
+import { skinMeshData } from './hand_mesh.js';
+export { WALLS, REMOVED, cellBox, solidRuns } from './wall_layout.js';
 import { isolateDisplayProp } from './display_prop.js';
 import { buildRoomDecor } from './room_decor.js';
 export { DECOR } from './room_decor.js';
@@ -28,6 +31,7 @@ export class RoomRenderer {
     this.scene=new THREE.Scene();
     this.effects=new ShotEffects(this.scene);
     this.impacts=new ImpactMarks();
+    this.walls=new WallMeshes(this.impacts);
     this.scene.background=new THREE.Color(0xc8d6df);
     this.scene.fog=new THREE.Fog(0xc8d6df,70,300);
     this.camera=new THREE.PerspectiveCamera(65,1,.05,350);
@@ -41,8 +45,7 @@ export class RoomRenderer {
     this.weaponModels={pistol:this.buildPistol(),rifle:this.buildRifle()};
     for(const model of Object.values(this.weaponModels)){ model.visible=false; this.weaponRoot.add(model); }
     this.weaponRoot.visible=false;
-    this.viewHands={pistol:this.buildGloves('pistol'),rifle:this.buildGloves('rifle')};
-    for(const hands of Object.values(this.viewHands)){hands.visible=false;this.weaponRoot.add(hands);}
+    this.viewHands={};
     this.currentWeapon=null;
     this.photoPaths={};this.propPaths={};this.realismStatus={};
     this.kick=0;this.reloadProgress=0;
@@ -62,6 +65,7 @@ export class RoomRenderer {
 
     this.materials=new Map();
     this.geometries=new Map();
+    this.chipGeometries=new Map();
     this.textured={};
     this.models={};
     this.pool=[];
@@ -166,16 +170,89 @@ export class RoomRenderer {
     return g;
   }
 
-  // Avatar-only silhouettes, separate from the VR controller props.
+  // Procedural first-person hands. They are still generated locally,
+  // but use articulated palms, thumbs and fingers instead of placeholder blobs.
   buildGloves(kind){
     const g=new THREE.Group();
-    const fabric=new THREE.MeshStandardMaterial({color:0x343c40,roughness:.94,metalness:0});
-    const glove=new THREE.MeshStandardMaterial({color:0x272b2c,roughness:.88,metalness:0});
-    const arm=(a,b,r)=>{const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),d=end.clone().sub(start);const m=new THREE.Mesh(new THREE.CapsuleGeometry(r,Math.max(.01,d.length()-2*r),5,10),fabric);m.position.copy(start).add(end).multiplyScalar(.5);m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());g.add(m);};
-    const palm=(p,scale)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(1,16,10),glove);m.position.set(...p);m.scale.set(...scale);g.add(m);};
-    if(kind==='pistol'){arm([.021,-.13,.09],[.16,-.27,.34],.040);palm([.008,-.079,.057],[.041,.055,.039]);}
-    else{arm([.036,-.12,.12],[.18,-.29,.36],.043);palm([.026,-.084,.11],[.042,.05,.041]);arm([-.012,-.045,-.32],[-.21,-.25,.20],.045);palm([.017,-.028,-.33],[.051,.044,.069]);}
+    const sleeve=new THREE.MeshStandardMaterial({color:0x2f343b,roughness:.95,metalness:0,normalMap:this.textured?.rough_linen?.normalMap||null,normalScale:new THREE.Vector2(.28,.28)});
+    const cuff=new THREE.MeshStandardMaterial({color:0x1f2328,roughness:.86,metalness:.04});
+    const skin=new THREE.MeshPhysicalMaterial({color:0xc59a7b,roughness:.78,metalness:0,envMapIntensity:.18,sheen:.12,sheenColor:0xf2c9b1,sheenRoughness:.95,vertexColors:true});
+    const capsule=(a,b,r,mat,radial=18,cap=10)=>{const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),dir=end.clone().sub(start);const mesh=new THREE.Mesh(new THREE.CapsuleGeometry(r,Math.max(.006,dir.length()-2*r),cap,radial),mat);mesh.position.copy(start).add(end).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.clone().normalize());mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);return mesh;};
+    const forearm=(wrist,elbow,r=.036)=>{capsule(wrist,elbow,r,sleeve,20,10);capsule(new THREE.Vector3(...wrist).lerp(new THREE.Vector3(...elbow),.08).toArray(),new THREE.Vector3(...wrist).lerp(new THREE.Vector3(...elbow),.18).toArray(),r*1.025,cuff,18,8);};
+    const hand=cfg=>{
+      forearm(cfg.wrist,cfg.elbow,cfg.armRadius||.036);
+      const shapes=[{kind:'capsule',a:cfg.wrist,b:cfg.palm,r:.025},{kind:'ellipsoid',p:cfg.palm,s:[.043,.027,.052]},{kind:'ellipsoid',p:cfg.back||cfg.palm,s:[.036,.022,.041]},{kind:'ellipsoid',p:cfg.knuckles||cfg.palm,s:[.041,.019,.032]}];
+      for(const f of [cfg.thumb,...cfg.fingers])for(const [i,[a,b]] of f.entries())shapes.push({kind:'capsule',a,b,r:Math.max(.006,.011-i*.0018)});
+      const data=skinMeshData(shapes,this.quality==='1k'?.0038:.0028),geo=new THREE.BufferGeometry();
+      geo.setAttribute('position',new THREE.Float32BufferAttribute(data.positions,3));geo.setAttribute('normal',new THREE.Float32BufferAttribute(data.normals,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(data.colors,3));geo.setIndex(data.indices);
+      geo.computeBoundingSphere();const mesh=new THREE.Mesh(geo,skin);mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);
+    };
+    if(kind==='pistol')hand({
+      wrist:[.078,-.134,.166], elbow:[.182,-.265,.342], armRadius:.034,
+      palm:[.029,-.073,.071], back:[.022,-.052,.085], knuckles:[.020,-.037,.030],
+      thumb:[[[.024,-.062,.040],[.048,-.032,.012]],[[.048,-.032,.012],[.050,.004,-.010]]],
+      fingers:[
+        [[[.015,-.042,.030],[.004,-.004,-.008]],[[.004,-.004,-.008],[-.003,.025,-.034]]],
+        [[[.006,-.046,.043],[-.003,-.016,.008]],[[-.003,-.016,.008],[-.008,.012,-.024]]],
+        [[[-.003,-.050,.055],[-.010,-.025,.026]],[[-.010,-.025,.026],[-.014,-.002,-.005]]],
+        [[[-.011,-.054,.065],[-.017,-.034,.040]],[[-.017,-.034,.040],[-.020,-.013,.016]]],
+      ],
+    });
+    else{
+      hand({
+        wrist:[.084,-.132,.186], elbow:[.190,-.272,.358], armRadius:.035,
+        palm:[.036,-.080,.103], back:[.031,-.060,.119], knuckles:[.026,-.042,.063],
+        thumb:[[[.031,-.070,.073],[.058,-.038,.050]],[[.058,-.038,.050],[.066,-.006,.031]]],
+        fingers:[
+          [[[.020,-.047,.070],[.010,-.014,.025]],[[.010,-.014,.025],[.004,.015,-.018]]],
+          [[[.010,-.051,.087],[.002,-.020,.043]],[[.002,-.020,.043],[-.004,.009,.000]]],
+          [[[-.001,-.054,.101],[-.008,-.028,.062]],[[-.008,-.028,.062],[-.014,-.002,.025]]],
+          [[[-.011,-.056,.113],[-.017,-.036,.082]],[[-.017,-.036,.082],[-.022,-.015,.052]]],
+        ],
+      });
+      hand({
+        wrist:[-.076,-.095,-.252], elbow:[-.224,-.248,.176], armRadius:.034,
+        palm:[-.034,-.040,-.332], back:[-.027,-.020,-.304], knuckles:[-.018,-.008,-.375],
+        thumb:[[[-.038,-.047,-.304],[-.067,-.022,-.278]],[[-.067,-.022,-.278],[-.074,.008,-.257]]],
+        fingers:[
+          [[[-.012,-.016,-.363],[-.003,.005,-.428]],[[-.003,.005,-.428],[.001,.020,-.486]]],
+          [[[-.026,-.019,-.372],[-.021,.003,-.438]],[[-.021,.003,-.438],[-.018,.017,-.495]]],
+          [[[-.040,-.021,-.374],[-.041,.001,-.438]],[[-.041,.001,-.438],[-.043,.013,-.491]]],
+          [[[-.053,-.020,-.368],[-.060,-.002,-.426]],[[-.060,-.002,-.426],[-.067,.011,-.470]]],
+        ],
+      });
+    }
     return g;
+  }
+
+  createWeaponPreview(id){
+    const source=this.weaponModels[id];if(!source)return null;
+    const width=360,height=208,canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0x253242);scene.environment=this.scene.environment;
+    scene.add(new THREE.HemisphereLight(0xf4f5f2,0x33404c,1.6));
+    for(const [p,color,intensity] of [[[2,3,2],0xfff4df,2.2],[[-2,1,-1],0xadc3d7,1.1]]){const light=new THREE.DirectionalLight(color,intensity);light.position.set(...p);scene.add(light);}
+    const model=source.clone(true);model.visible=true;const root=new THREE.Group();root.add(model);scene.add(root);
+    root.rotation.set(-.08,id==='rifle'?Math.PI*.45:Math.PI*.38,.04);root.updateMatrixWorld(true);
+    const box=new THREE.Box3().setFromObject(root),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
+    if(box.isEmpty()||!Number.isFinite(size.length()))return null;
+    const aspect=width/height,half=Math.max(size.y/2,size.x/(2*aspect),.05)*1.18;
+    const camera=new THREE.OrthographicCamera(-half*aspect,half*aspect,half,-half,.01,100);
+    camera.position.copy(center).add(new THREE.Vector3(0,0,Math.max(2,size.length()*3)));camera.lookAt(center);
+    const target=new THREE.WebGLRenderTarget(width,height,{depthBuffer:true});target.texture.colorSpace=THREE.SRGBColorSpace;
+    const prev=this.renderer.getRenderTarget();const pixels=new Uint8Array(width*height*4);
+    try{
+      this.renderer.setRenderTarget(target);this.renderer.render(scene,camera);this.renderer.readRenderTargetPixels(target,0,0,width,height,pixels);
+      const ctx=canvas.getContext('2d');if(!ctx)return null;const image=ctx.createImageData(width,height);
+      for(let y=0;y<height;y++)image.data.set(pixels.subarray((height-y-1)*width*4,(height-y)*width*4),y*width*4);
+      ctx.putImageData(image,0,0);return canvas.toDataURL('image/png');
+    }finally{this.renderer.setRenderTarget(prev);target.dispose();}
+  }
+  ensureInventoryPreviews(){
+    this.previewPaths={};
+    for(const id of ['pistol','rifle']){
+      try{const uri=this.createWeaponPreview(id);if(uri)this.previewPaths[id]=uri;}
+      catch(e){console.warn('Lokale Inventarvorschau fehlgeschlagen',id,e);}
+    }
   }
 
   async loadOptionalWeaponPhotos(manifest,path,_textureLoader){
@@ -184,7 +261,7 @@ export class RoomRenderer {
       const url=manifest.photos?.[id];
       if(!url)continue;
       try{ this.photoPaths[id]=path(url); }
-      catch(e){ console.warn('Optionales Inventarfoto nicht ladbar, Inventar nutzt Platzhalter:',id,e); }
+      catch(e){ console.warn('Optionales Inventarfoto nicht ladbar, Inventar nutzt lokale Vorschau:',id,e); }
     }
   }
 
@@ -208,8 +285,8 @@ export class RoomRenderer {
         this.propPaths[id]=url;this.realismStatus[id]='ready';
       }catch(e){this.realismStatus[id]='local';console.warn('Spielmodell konnte nicht isoliert werden; lokale Darstellung bleibt aktiv',id,e);}
     }
-
   }
+
   async load(spec,objects){
     const response=await fetch(BASE+'manifest.json');
     if(!response.ok)throw new Error('Asset-Manifest fehlt. Docker-Image neu bauen.');
@@ -259,6 +336,9 @@ export class RoomRenderer {
 
     const loader=new GLTFLoader(manager);
     await this.loadRealism(manifest,path,loader,manager);
+    this.ensureInventoryPreviews();
+    this.status('Handmodelle werden aufgebaut');
+    for(const id of ['pistol','rifle']){try{this.viewHands[id]=this.buildGloves(id);this.viewHands[id].visible=false;this.weaponRoot.add(this.viewHands[id]);}catch(e){console.warn('Optionales Handmesh nicht verfügbar',id,e);}}
     for(const [id,asset] of Object.entries(MODEL_IDS)){
       this.status('Möbelmodell: '+asset);
       const gltf=await loader.loadAsync(path(profile.models[asset]));
@@ -284,7 +364,7 @@ export class RoomRenderer {
     for(const o of objects){
       const m=new THREE.Mesh(this.geometry(o),this.material(o));
       this.place(m,o);m.castShadow=o.m!=='glass';m.receiveShadow=true;this.staticGroup.add(m);
-      if(o.surfaceId)this.impacts.register(o.surfaceId,m,o.m==='wooden_floor_01'?'wood':'wall');
+      if(o.surfaceId){this.impacts.register(o.surfaceId,m,o.m==='wooden_floor_01'?'wood':'wall');this.walls.register(o.surfaceId,m);}
     }
     buildArchitecture(this,spec);
     await buildRoomDecor(this,manifest,path,loader);
@@ -339,10 +419,18 @@ export class RoomRenderer {
 
   place(mesh,o){mesh.position.set(...o.p);if(o.q)mesh.quaternion.set(...o.q);else mesh.rotation.set(0,o.r||0,0);}
   begin(){this.cursor=0;for(const m of Object.values(this.models))m.root.visible=false;for(const m of Object.values(this.contactShadows))m.visible=false;}
+  chipGeometry(variant){
+    const k=(variant||0)%4;if(!this.chipGeometries.has(k)){
+      const geo=new THREE.IcosahedronGeometry(.5,0),a=geo.attributes.position;
+      for(let i=0;i<a.count;i++){const x=a.getX(i),y=a.getY(i),z=a.getZ(i),v=.83+.18*Math.sin(17*x+11*y+23*z+k);a.setXYZ(i,x*v,y*v,z*v);}
+      geo.computeVertexNormals();this.chipGeometries.set(k,geo);
+    }return this.chipGeometries.get(k);
+  }
   drawBox(o){
     let mesh=this.pool[this.cursor++];
-    if(!mesh){mesh=new THREE.Mesh(this.geometry(o),this.material(o));mesh.receiveShadow=true;this.pool.push(mesh);this.dynamicGroup.add(mesh);}
-    mesh.geometry=this.geometry(o);mesh.material=this.material(o);mesh.castShadow=o.m!=='glass'&&o.s[0]<5&&o.s[2]<5;mesh.visible=true;this.place(mesh,o);
+    const chip=o.kind==='wallChip',geometry=chip?this.chipGeometry(o.variant):this.geometry(o);
+    if(!mesh){mesh=new THREE.Mesh(geometry,this.material(o));mesh.receiveShadow=true;this.pool.push(mesh);this.dynamicGroup.add(mesh);}
+    mesh.geometry=geometry;mesh.scale.set(...(chip?o.s:[1,1,1]));mesh.material=this.material(o);mesh.castShadow=o.m!=='glass'&&o.s[0]<5&&o.s[2]<5;mesh.visible=true;this.place(mesh,o);
   }
   drawModel(id,p,s,hp,max,q){
     const sh=this.contactShadows[id];if(sh){sh.visible=true;sh.position.set(p[0],.006,p[2]);sh.material.opacity=Math.max(0,.82-(p[1]-s[1]/2)*.68);}
@@ -357,6 +445,7 @@ export class RoomRenderer {
     return true;
   }
   surfaceHit(origin,direction,held){this.scene.updateMatrixWorld(true);return this.impacts.cast(origin,direction,[this.staticGroup,this.dynamicGroup],held);}
+  syncWalls(walls){this.walls.sync(walls);}
   syncMarks(marks){this.impacts.sync(marks);}
   equip(id,first){this.currentWeapon=id||null;this.weaponRoot.visible=!!id&&first&&!this.xrMode.active;for(const [key,g] of Object.entries(this.weaponModels))g.visible=key===id;for(const [key,g] of Object.entries(this.viewHands))g.visible=key===id;this.xrMode.equip(this.xrMode.active?id:null);}
   setLoop(fn){this.renderer.setAnimationLoop(fn);}

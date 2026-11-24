@@ -211,7 +211,8 @@ class ProbeTest(unittest.TestCase):
     def test_real_python_health_endpoint_from_probe(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); fixture=root/'app'; fixture.mkdir(); install=root/'install';install.mkdir()
-            for name in ('server.py','updater_api.py'):shutil.copy2(ROOT/name,fixture/name)
+            for name in ('server.py','updater_api.py','wall_damage.py'):shutil.copy2(ROOT/name,fixture/name)
+            layout=fixture/'web/engine/wall_layout.json';layout.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ROOT/'web/engine/wall_layout.json',layout)
             for rel in ('web/assets/polyhaven/manifest.json','web/engine/renderer.bundle.js'):
                 path=fixture/rel;path.parent.mkdir(parents=True,exist_ok=True);path.write_text('{}')
             with socket.socket() as sock:

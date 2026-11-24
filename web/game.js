@@ -1,4 +1,4 @@
-import { RoomRenderer, RoomPhysics, DECOR } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, DECOR, WALLS, REMOVED, cellBox, solidRuns } from './engine/renderer.bundle.js';
 const $=id=>document.getElementById(id), canvas=$('world');
 let renderer=null, physicsWorld=null, graphicsReady=false;
 let equipped=null, xrEntering=false, xrReturnFirst=true;
@@ -25,17 +25,8 @@ function solid(x,y,z,w,h,d,c){box(x,y,z,w,h,d,c);room.push({p:[x,y,z],s:[w,h,d]}
 // Room shell.
 solid(0,-.15,0,10,.3,10,'aa8b67');
 solid(0,3.15,0,10,.3,10,'e4e1d9');
-solid(-5,1.5,-3.65,.24,3,2.70,'d8d2c9');
-solid(-5,1.5,2.65,.24,3,4.70,'d8d2c9');
-solid(-5,.46,-1,.24,.92,2.60,'d8d2c9');
-solid(-5,2.78,-1,.24,.44,2.60,'d8d2c9');
-solid(5,1.5,0,.2,3,10,'d8d2c9');
-solid(0,1.5,5,10,3,.2,'d8d2c9');
-solid(-3.0,1.5,-5,4,3,.2,'d8d2c9');
-solid(3.0,1.5,-5,4,3,.2,'d8d2c9');
-solid(0,2.6,-5,2,.8,.2,'d8d2c9');
-// Stable identifiers for the original 11 structural surfaces.
-objects.forEach((o,i)=>{o.surfaceId='surface_'+i;});
+for(const [id,w] of Object.entries(WALLS)){solid(...w.p,...w.s,'d8d2c9');objects.at(-1).surfaceId=id;room.at(-1).surfaceId=id;}
+objects[0].surfaceId='surface_0';objects[1].surfaceId='surface_1';
 
 // Baseboards, crown details, outlet and switch.
 for(let x of [-4.86,4.86])box(x,.075,0,.08,.15,9.78,'f0ede8');
@@ -82,19 +73,37 @@ const spec={
   coffee_table:{p:[-3.3,.25,1.22],s:[1.4,.5,.76],c:'765742',max:100}
 };
 
-let state={objects:Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,o.max])),unlocked:false}, bodies=Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,{p:[...o.p],v:[0,0,0]}])), debris=[], busy=false, held=null, player={x:0,z:3,y:0,vy:0,yaw:.62,pitch:0}, keys=new Set(), first=true, started=false, active=false;
+let wallSolids=Object.values(WALLS).map(w=>({p:w.p,s:w.s})),wallSignatures={};
+let state={walls:{},marks:[],objects:Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,o.max])),unlocked:false}, bodies=Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,{p:[...o.p],v:[0,0,0]}])), debris=[], busy=false, held=null, player={x:0,z:3,y:0,vy:0,yaw:.62,pitch:0}, keys=new Set(), first=true, started=false, active=false;
 let mobile=matchMedia('(pointer:coarse)').matches, touchMove=[0,0], look=null;
 function clearControls(){keys.clear();touchMove=[0,0];look=null;$('stick').classList.remove('moving');$('stick').style.removeProperty('--jx');$('stick').style.removeProperty('--jy');}
 function setMode(v){mobile=v;document.body.classList.toggle('mobile',v);$('mode').textContent=v?'Desktop-Modus':'Touch-Modus';clearControls();if(v)document.exitPointerLock?.();}
 let token=sessionStorage.getItem('second_live_token')||''; $('token').value=token;
 const api=async(path,data)=>{let r=await fetch(path,{headers:{'X-SecondLive-Token':token,'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});let j=await r.json();if(!r.ok)throw Error(j.error||r.status);return j;};
-function sync(s){for(const [id,o] of Object.entries(spec)){let hp=s.objects[id];if(!bodies[id]||((state.objects[id]||0)===0&&hp>0)){bodies[id]={p:[...o.p],v:[0,0,0]};debris=debris.filter(d=>d.source!==id);}if(state.objects[id]>0&&hp===0){let p=id==='window'?[-4.45,1.52,-1]:bodies[id].p;for(let i=0;i<8;i++)debris.push({source:id,p:[...p],v:[(Math.random()-.5)*4,2+Math.random()*3,(Math.random()-.5)*4],s:id==='window'?[.035,.07+Math.random()*.09,.09+Math.random()*.12]:[.10+Math.random()*.15,.045+Math.random()*.08,.10+Math.random()*.18],c:rgb(o.c),m:id==='window'?'glass':mat(o.c),r:Math.random()*6});if(held===id)held=null;}}state=s; $('worldstate').textContent=s.unlocked?'Testbereich freigeschaltet':'Welt noch nicht erschlossen';}
+function syncWallState(next){
+  for(const [id,w] of Object.entries(WALLS)){
+    const prev=new Set((state.walls?.[id]||[]).filter(c=>c[2]>=REMOVED).map(c=>`${c[0]},${c[1]}`));
+    const gone=(next[id]||[]).filter(c=>c[2]>=REMOVED);const now=new Set(gone.map(c=>`${c[0]},${c[1]}`));
+    if([...prev].some(k=>!now.has(k)))debris=debris.filter(d=>d.source!==id);
+    if(started)for(const [c,r] of gone)if(!prev.has(`${c},${r}`)){
+      const cell=cellBox(w,c,r);for(let j=0;j<4;j++){
+        const p=cell.p.map((x,i)=>x+(Math.random()-.5)*cell.s[i]*.42);
+        debris.push({source:id,kind:'wallChip',variant:j,p,s:cell.s.map(x=>x*(.25+Math.random()*.22)),v:[(Math.random()-.5)*1.2,.3+Math.random()*.7,(Math.random()-.5)*1.2],c:rgb(j%2?'b8a794':'d3ccc1'),m:null,r:Math.random()*6});
+      }
+    }
+  }
+  const sig=JSON.stringify(Object.entries(next).map(([id,cells])=>[id,cells.filter(c=>c[2]>=REMOVED)]));
+  if(wallSignatures!==sig){wallSignatures=sig;wallSolids=Object.entries(WALLS).flatMap(([id,w])=>solidRuns(w,next[id]||[]));}
+  renderer?.syncWalls?.(next);physicsWorld?.syncWalls?.(next);
+}
+function collisionRoom(){return [...room.filter(o=>!o.surfaceId||!WALLS[o.surfaceId]),...wallSolids];}
+function sync(s){for(const [id,o] of Object.entries(spec)){let hp=s.objects[id];if(!bodies[id]||((state.objects[id]||0)===0&&hp>0)){bodies[id]={p:[...o.p],v:[0,0,0]};debris=debris.filter(d=>d.source!==id);}if(state.objects[id]>0&&hp===0){let p=id==='window'?[-4.45,1.52,-1]:bodies[id].p;for(let i=0;i<8;i++)debris.push({source:id,p:[...p],v:[(Math.random()-.5)*4,2+Math.random()*3,(Math.random()-.5)*4],s:id==='window'?[.035,.07+Math.random()*.09,.09+Math.random()*.12]:[.10+Math.random()*.15,.045+Math.random()*.08,.10+Math.random()*.18],c:rgb(o.c),m:id==='window'?'glass':mat(o.c),r:Math.random()*6});if(held===id)held=null;}}syncWallState(s.walls||{});state=s; $('worldstate').textContent=s.unlocked?'Testbereich freigeschaltet':'Welt noch nicht erschlossen';}
 let mutationVersion=0;async function refresh(){const v=mutationVersion;let s=await api('/api/game');if(!busy&&v===mutationVersion)sync(s);}
-async function action(action,id,mark){if(busy)return;busy=true;mutationVersion++;try{const result=await api('/api/game',{action,id,...(mark?{mark}:{})});sync(result);$('notice').textContent=action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';}catch(e){$('notice').textContent=e.message;}finally{busy=false;}}
+async function action(action,id,mark){if(busy)return;busy=true;mutationVersion++;try{const result=await api('/api/game',{action,id,...(mark?{mark}:{})});sync(result);$('notice').textContent=action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Wandsegment entfernt':result.wall_result?'Wand beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';}catch(e){$('notice').textContent=e.message;}finally{busy=false;}}
 function dir(){let a=player.yaw,p=player.pitch;return [-Math.sin(a)*Math.cos(p),-Math.sin(p),-Math.cos(a)*Math.cos(p)];}
 function rotateInverse(v,q){if(!q)return v;const [x,y,z,w]=q,u=[-x,-y,-z],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],t=cross(u,v).map(n=>2*n),c=cross(u,t);return v.map((n,i)=>n+w*t[i]+c[i]);}
 function rayBox(eye,d,p,s,q=null){let pos=rotateInverse(eye.map((v,i)=>v-p[i]),q),dir=rotateInverse(d,q),lo=0,hi=8;for(let i=0;i<3;i++){if(Math.abs(dir[i])<1e-8){if(Math.abs(pos[i])>s[i]/2)return Infinity;}else{let a=(-s[i]/2-pos[i])/dir[i],z=(s[i]/2-pos[i])/dir[i];lo=Math.max(lo,Math.min(a,z));hi=Math.min(hi,Math.max(a,z));if(lo>hi)return Infinity;}}return lo;}
-function aim(ray=null,includeDestroyed=true){let d=ray?.direction||dir(),eye=ray?.origin||[player.x,player.y+1.65,player.z],best=8.01,id=null;for(const o of room)best=Math.min(best,rayBox(eye,d,o.p,o.s));if(!state.unlocked)best=Math.min(best,rayBox(eye,d,[0,1.1,-4.95],[1.85,2.2,.18]));for(const [k,b] of Object.entries(bodies)){if(k===held)continue;const live=state.objects[k]>0;if(!live&&!includeDestroyed)continue;const dist=rayBox(eye,d,live?b.p:spec[k].p,spec[k].s,live?b.q:null);if(dist<best){best=dist;id=k;}}return {id,dist:best};}
+function aim(ray=null,includeDestroyed=true){let d=ray?.direction||dir(),eye=ray?.origin||[player.x,player.y+1.65,player.z],best=8.01,id=null;for(const o of collisionRoom())best=Math.min(best,rayBox(eye,d,o.p,o.s));if(!state.unlocked)best=Math.min(best,rayBox(eye,d,[0,1.1,-4.95],[1.85,2.2,.18]));for(const [k,b] of Object.entries(bodies)){if(k===held)continue;const live=state.objects[k]>0;if(!live&&!includeDestroyed)continue;const dist=rayBox(eye,d,live?b.p:spec[k].p,spec[k].s,live?b.q:null);if(dist<best){best=dist;id=k;}}return {id,dist:best};}
 function chooseWeapon(id){if(!['pistol','rifle','none'].includes(id))return;if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Testmodus':equipped==='rifle'?'Gewehr · Testmodus':'Unbewaffnet';}
 function arsenal(){document.exitPointerLock?.();clearControls();active=false;$('arsenal').hidden=false;}
 $('closearsenal').onclick=()=>{$('arsenal').hidden=true;active=true;clearControls();};
@@ -102,7 +111,7 @@ for(const id of ['pistol','rifle','none'])$('equip-'+id).onclick=()=>{chooseWeap
 chooseWeapon('none');
 function phone(){if(renderer?.xrMode?.active){renderer.xrMode.end().then(()=>phone()).catch(e=>$('notice').textContent=e.message);return;}document.exitPointerLock?.();clearControls();$('phone').hidden=false;active=false;}
 function interact(){if(Math.abs(player.x)<1.7&&player.z<-3.2&&!state.unlocked){phone();return;}let a=aim();if(held){let d=dir();bodies[held].v=d.map(v=>v*6);held=null;}else if(a.id&&a.dist<3&&state.objects[a.id]>0&&!['window','sofa'].includes(a.id))held=a.id;}
-function coll(x,z){if(Math.abs(x)>4.65||z>4.65||z<(state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return room.some(b=>b.p[1]<1.6&&b.p[1]+b.s[1]/2>.1&&Math.abs(x-b.p[0])<b.s[0]/2+.28&&Math.abs(z-b.p[2])<b.s[2]/2+.28)||Object.entries(bodies).some(([id,b])=>id!==held&&state.objects[id]>0&&b.p[1]-spec[id].s[1]/2<1.5&&Math.abs(x-b.p[0])<spec[id].s[0]/2+.28&&Math.abs(z-b.p[2])<spec[id].s[2]/2+.28);}
+function coll(x,z){if(Math.abs(x)>4.65||z>4.65||z<(state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]<1.6&&b.p[1]+b.s[1]/2>.1&&Math.abs(x-b.p[0])<b.s[0]/2+.28&&Math.abs(z-b.p[2])<b.s[2]/2+.28)||Object.entries(bodies).some(([id,b])=>id!==held&&state.objects[id]>0&&b.p[1]-spec[id].s[1]/2<1.5&&Math.abs(x-b.p[0])<spec[id].s[0]/2+.28&&Math.abs(z-b.p[2])<spec[id].s[2]/2+.28);}
 $('start').onclick=async()=>{if(!graphicsReady)return;token=$('token').value;try{await refresh();sessionStorage.setItem('second_live_token',token);$('welcome').hidden=true;started=true;active=true;document.body.classList.add('playing');if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});}catch(e){$('loginerror').textContent=e.message;}};
 $('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('unlock').onclick=()=>action('unlock');$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';}catch(e){$('notice').textContent=e.message;}};
 canvas.onclick=()=>{if(mobile||!started||!$('phone').hidden||!$('arsenal').hidden)return;if(document.pointerLockElement!==canvas){if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;return;}fire();};
@@ -117,9 +126,16 @@ function fire(ray=null){
   ammo[equipped]--;updateAmmo();
   renderer.shot(equipped,{origin,direction,distance:Math.min(8,a.dist),impact:a.dist<=8});
   $('cross').classList.add('pulse');setTimeout(()=>$('cross').classList.remove('pulse'),100);
-  if(a.id&&state.objects[a.id]>0){physicsWorld.impulse(a.id,direction);action('hit',a.id,a.mark);}else if(a.id?.startsWith('surface_'))action('mark_surface',a.id,a.mark);else $('notice').textContent=a.dist<=8?'Oberfläche ohne Schadensspeicher':'Kein Objekt getroffen';
+  if(a.id&&state.objects[a.id]>0){physicsWorld.impulse(a.id,direction);action('hit',a.id,a.mark);}else if(WALLS[a.id])action('damage_wall',a.id,a.mark);else if(a.id?.startsWith('surface_'))action('mark_surface',a.id,a.mark);else $('notice').textContent=a.dist<=8?'Oberfläche ohne Schadensspeicher':'Kein Objekt getroffen';
 }
-function repair(ray=null){if(!canPlay())return;const origin=ray?.origin||[player.x,player.y+1.65,player.z],direction=ray?.direction||dir();const surface=renderer.surfaceHit(origin,direction,held);const a=aim(ray);if(a.id&&state.objects[a.id]===0&&a.dist<3&&a.dist<=surface.dist+.01){action('repair',a.id);return;}if(surface.id&&surface.dist<3){if(surface.id.startsWith('surface_'))action('repair_surface',surface.id);else action('repair',surface.id);}};
+function repair(ray=null){
+  if(!canPlay())return;const origin=ray?.origin||[player.x,player.y+1.65,player.z],direction=ray?.direction||dir();
+  const surface=renderer.surfaceHit(origin,direction,held),a=aim(ray);let wall=null,dist=3;
+  for(const [id,w] of Object.entries(WALLS)){if(!state.walls?.[id]?.some(c=>c[2]>=REMOVED))continue;const d=rayBox(origin,direction,w.p,w.s);if(d<dist&&d<=surface.dist+.01){dist=d;wall=id;}}
+  if(a.id&&state.objects[a.id]===0&&a.dist<Math.min(3,dist)&&a.dist<=surface.dist+.01){action('repair',a.id);return;}
+  if(wall){action('repair_surface',wall);return;}
+  if(surface.id&&surface.dist<3){if(surface.id.startsWith('surface_'))action('repair_surface',surface.id);else action('repair',surface.id);}
+}
 $('mode').onclick=()=>setMode(!mobile);setMode(mobile);
 const stick=$('stick');let stickId=null;function moveStick(e){let r=stick.getBoundingClientRect(),x=(e.clientX-r.left-r.width/2)/(r.width*.36),y=(e.clientY-r.top-r.height/2)/(r.height*.36),l=Math.max(1,Math.hypot(x,y));touchMove=[x/l,-y/l];stick.style.setProperty('--jx',`${x/l*33}px`);stick.style.setProperty('--jy',`${y/l*33}px`);}stick.addEventListener('pointerdown',e=>{if(!canPlay()||stickId!==null)return;e.preventDefault();stickId=e.pointerId;stick.setPointerCapture(e.pointerId);moveStick(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId&&canPlay())moveStick(e);});for(const n of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(n,e=>{if(e.pointerId===stickId){stickId=null;touchMove=[0,0];stick.style.setProperty('--jx','0px');stick.style.setProperty('--jy','0px');}});
 canvas.addEventListener('pointerdown',e=>{if(!canPlay()||(!mobile&&document.pointerLockElement===canvas))return;if(look)return;look={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!look||look.id!==e.pointerId||!canPlay())return;player.yaw-=(e.clientX-look.x)*.005;player.pitch=Math.max(-1.2,Math.min(1.2,player.pitch+(e.clientY-look.y)*.005));look.x=e.clientX;look.y=e.clientY;});for(const n of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(n,e=>{if(look?.id===e.pointerId)look=null;});
@@ -188,8 +204,8 @@ qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListe
     renderer=new RoomRenderer(canvas,q,lightChoice.value,t=>status.textContent=t);
     await renderer.load(spec,objects);
     for(const id of ['pistol','rifle']){
-      const img=$('photo-'+id),fallback=$('fallback-'+id),url=renderer.photoPaths?.[id];
-      if(url){img.onerror=()=>{img.hidden=true;fallback.hidden=false;};img.onload=()=>{img.hidden=false;fallback.hidden=true;};img.src=url;}
+      const img=$('photo-'+id),fallback=$('fallback-'+id),url=renderer.previewPaths?.[id]||renderer.photoPaths?.[id];
+      if(url){let alternate=renderer.photoPaths?.[id];if(alternate===url)alternate=null;img.onerror=()=>{if(alternate){img.src=alternate;alternate=null;return;}img.hidden=true;fallback.hidden=false;};img.onload=()=>{img.hidden=false;fallback.hidden=true;};img.src=url;}
     }
     for(const id of ['pistol','rifle']){ $('model-'+id).textContent=renderer.propPaths?.[id]?'Fototexturiertes Originalmodell':'Lokales Ersatzmodell'; }
     $('realismstatus').textContent=(renderer.realismStatus?.outside==='ready'?'Fotografischer Fensterausblick':'Fensterausblick: Ersatz')+' · Schlafzone: '+(renderer.realismStatus?.bed==='ready'?'Originalmodell':'Lokales Stoffmodell')+' · Nachttisch: '+(renderer.realismStatus?.nightstand==='ready'?'Originalmodell':'Lokales Modell');

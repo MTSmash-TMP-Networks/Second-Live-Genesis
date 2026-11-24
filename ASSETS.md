@@ -46,3 +46,9 @@ Die ausgewählten Poly-Haven-IDs `residential_garden`, `service_pistol` und `bol
 - Alternative für eine spätere stilisierte Asset-Auswahl: [Quaternius Sci-Fi Modular Gun Pack](https://quaternius.com/packs/scifimodularguns.html) (CC0, glTF, zusammengebaute fiktive Spielmodelle); nicht in diesem Build integriert.
 - Poly Haven weist in seiner [FAQ](https://docs.polyhaven.com/de/faq) auf mögliche Rechte an realen Designs hin. CC0 betrifft das bereitgestellte Asset, nicht automatisch fremde Marken-/Designrechte.
 - Treffermarkierungen: selbst erzeugte kosmetische Texturen, [Three.js DecalGeometry](https://threejs.org/docs/pages/DecalGeometry.html) (MIT). Keine realen Waffendaten oder Ballistik.
+
+## v0.6.7 – Recherche und Darstellung
+
+- Die in v0.6.6 verwendeten Poly-Haven-Originalspielmodelle bleiben erhalten. Inventarbilder werden jetzt lokal aus ihnen bzw. dem Ersatzmodell gerendert.
+- Geprüfte Kandidaten für spätere echte Avatar-Rigs: [FPS arms, rigged only (para, CC0)](https://opengameart.org/content/fps-arms-rigged-only), FBX/Blend, keine fertige Produktionsanimation; [Posable anatomical right hand (CC0)](https://www.innerscene.com/tools/library/3d-parts/posable-anatomical-right-hand-f6098b4f), GLB. Die Dateien und Posen konnten hier nicht geladen und geprüft werden und werden deshalb noch nicht eingebunden.
+- Technikreferenz (keine übernommenen Spielassets): [EA über teilbasierte Frostbite-Zerstörung](https://www.ea.com/news/how-battlefield-6-redefined-destruction), [Rapier World API](https://www.rapier.rs/javascript3d/classes/World.html). Eigenständige abstrakte Spielzell-Implementierung, kein Frostbite-Code.

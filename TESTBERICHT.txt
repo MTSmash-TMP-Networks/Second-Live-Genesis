@@ -1,13 +1,16 @@
-Second Live v0.6.6 - Persistent Surface Damage
+Second Live v0.6.7 - Destruction Pass
 
-PASS: 58 Python-Tests (53 bisherige + 5 Markierungstests).
-PASS: SQLite-Neustart, Migration, Reparatur, Validierung, Begrenzung.
-PASS: Desktop-/Mobile-Clientsimulation, Treffer-Markierungsdaten, Nachladen.
-PASS: isolierter Renderer-Fotopfad-Test, JavaScript-Syntax.
+Lokal ausgefuehrt: 65 Python-Tests plus 9 Subtests; persistente Wandzellen,
+Reparatur, benachbarte Zellen, Kantenvalidierung, Markierungslimit, Migration,
+Updater-Preflight mit echtem lokalen Python-Server.
+Node: Desktop/Mobile-Simulation, Inventarbildpfade, freigelegte Wandzellen,
+Reparatur, gemeinsame Zellgeometrie/Kollisionslayout und zusammenhaengendes
+prozedurales Handmesh (synthetischer Test), JavaScript-Syntax.
 
-Der Docker-Build fuehrt zusaetzliche Three.js-Tests mit echten Bibliotheken
-auf synthetischen Meshes aus: einzelne Modellgruppe, Raycast, projizierte
-Markierung, Bewegung mit Objekt, Verdeckung und Reparatur. Hier nicht ausgefuehrt:
-Docker, npm-/Poly-Haven-Zugriff und echter WebGL-/VR-Lauf fehlen.
-Originalmodell-Isolierung und sichtbare Decals muessen im Browser abgenommen werden.
-Bestehender Host-Updater v0.6.5 und UPDATE_PROTOCOL 1 bleiben unveraendert.
+Zusaetzlich im Docker-Build: echte Three.js-Raycasts vor/nach Wandbruch,
+Decal-Neuerzeugung, Schnittflaechen und Rapier-Raycasts vor/nach Reparatur.
+Hier nicht ausgefuehrt: Docker und npm-Registry nicht erreichbar, kein
+WebGL- oder VR-Lauf. Originalmodelle und Handpose visuell abnehmen.
+Wandbruch ist rasterbasiertes Spielverhalten ohne Gebaeudestatik. Truemmer
+sind lokal, nicht persistent; Raumgrenze und Scanner-Freischaltung bleiben.
+Host-Updater 0.6.5 und UPDATE_PROTOCOL 1 unveraendert.

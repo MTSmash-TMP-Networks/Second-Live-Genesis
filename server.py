@@ -19,6 +19,7 @@ import threading
 from urllib.parse import unquote, urlsplit
 import uuid
 from updater_api import UpdateBridge
+import wall_damage
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -141,6 +142,9 @@ class GameStore:
     SURFACES = frozenset(f"surface_{i}" for i in range(11)) | {"surface_bed", "surface_nightstand", "surface_lamp", "surface_rug", "surface_wardrobe"}
     MARK_LIMIT = 64
     TOTAL_MARK_LIMIT = 384
+    CLUSTER_DISTANCE = 0.28
+    CLUSTER_NORMAL_DOT = 0.82
+    MAX_SEVERITY = 6
 
     @staticmethod
     def clean_mark(value):
@@ -158,10 +162,43 @@ class GameStore:
 
     def add_mark(self, db, target, mark):
         p,n = self.clean_mark(mark)
+        if target in self.SURFACES:
+            best = None
+            for mid, point_json, normal_json, severity in db.execute(
+                "SELECT id,point,normal,severity FROM impact_marks WHERE target=?", (target,)
+            ):
+                try:
+                    point = json.loads(point_json)
+                    normal = json.loads(normal_json)
+                    severity = max(1, int(severity or 1))
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    continue
+                if len(point) != 3 or len(normal) != 3:
+                    continue
+                dot = sum(a*b for a,b in zip(normal,n))
+                dist = math.sqrt(sum((a-b)**2 for a,b in zip(point,p)))
+                if dot < self.CLUSTER_NORMAL_DOT or dist > self.CLUSTER_DISTANCE:
+                    continue
+                score = dist - dot * 0.05
+                if best is None or score < best[0]:
+                    best = (score, mid, point, normal, severity)
+            if best is not None:
+                _, mid, point, normal, severity = best
+                weight = min(4, severity)
+                point = [round((point[i]*weight + p[i])/(weight + 1), 5) for i in range(3)]
+                blended = [normal[i]*weight + n[i] for i in range(3)]
+                length = math.sqrt(sum(x*x for x in blended)) or 1.0
+                normal = [round(x/length, 5) for x in blended]
+                severity = min(self.MAX_SEVERITY, severity + 1)
+                db.execute(
+                    "UPDATE impact_marks SET point=?, normal=?, severity=? WHERE id=?",
+                    (json.dumps(point), json.dumps(normal), severity, mid),
+                )
+                return True
         if (db.execute("SELECT count(*) FROM impact_marks WHERE target=?", (target,)).fetchone()[0] >= self.MARK_LIMIT
                 or db.execute("SELECT count(*) FROM impact_marks").fetchone()[0] >= self.TOTAL_MARK_LIMIT):
             return False # preserve existing damage instead of evicting old marks
-        db.execute("INSERT INTO impact_marks(target,point,normal) VALUES (?,?,?)", (target,json.dumps(p),json.dumps(n)))
+        db.execute("INSERT INTO impact_marks(target,point,normal,severity) VALUES (?,?,?,1)", (target,json.dumps(p),json.dumps(n)))
         return True
 
     MAX_HP = {"crate": 60, "table": 100, "window": 35, "chair": 60, "sofa": 150, "coffee_table": 100}
@@ -170,18 +207,22 @@ class GameStore:
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, hp INTEGER NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS progress (id INTEGER PRIMARY KEY CHECK(id=1), unlocked INTEGER NOT NULL)")
-            db.execute("CREATE TABLE IF NOT EXISTS impact_marks (id INTEGER PRIMARY KEY AUTOINCREMENT, target TEXT NOT NULL, point TEXT NOT NULL, normal TEXT NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS impact_marks (id INTEGER PRIMARY KEY AUTOINCREMENT, target TEXT NOT NULL, point TEXT NOT NULL, normal TEXT NOT NULL, severity INTEGER NOT NULL DEFAULT 1)")
+            if 'severity' not in {row[1] for row in db.execute("PRAGMA table_info(impact_marks)")}:
+                db.execute("ALTER TABLE impact_marks ADD COLUMN severity INTEGER NOT NULL DEFAULT 1")
             db.execute("CREATE INDEX IF NOT EXISTS impact_target ON impact_marks(target)")
+            wall_damage.create_schema(db)
             db.execute("INSERT OR IGNORE INTO progress VALUES (1,0)")
             db.executemany("INSERT OR IGNORE INTO objects VALUES (?,?)", self.MAX_HP.items())
     def state(self):
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("BEGIN")
-            return {"objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0]), "marks": [{"id":i,"target":t,"point":json.loads(p),"normal":json.loads(n)} for i,t,p,n in db.execute("SELECT id,target,point,normal FROM impact_marks ORDER BY id")]}
+            return {"objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0]), "walls": wall_damage.state(db), "marks": [{"id":i,"target":t,"point":json.loads(p),"normal":json.loads(n),"severity":max(1,int(s or 1))} for i,t,p,n,s in db.execute("SELECT id,target,point,normal,severity FROM impact_marks ORDER BY id")]}
     def action(self, data, scans):
         if not isinstance(data, dict): raise ValueError("JSON object required")
         op = data.get("action")
         mark_saved = None
+        wall_result = None
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
             if op == "unlock":
@@ -199,13 +240,23 @@ class GameStore:
                 else:
                     db.execute("UPDATE objects SET hp=? WHERE id=?", (self.MAX_HP[oid],oid))
                     db.execute("DELETE FROM impact_marks WHERE target=?", (oid,))
+            elif op == "damage_wall":
+                oid = data.get("id")
+                if not isinstance(oid,str) or oid not in wall_damage.WALLS: raise ValueError("Unbekannte Spielwand")
+                point,normal=self.clean_mark(data.get("mark"))
+                wall_result=wall_damage.damage(db,oid,point,normal)
+                if wall_result["changed"]:
+                    mark_saved=self.add_mark(db,oid,data["mark"])
             elif op in ("mark_surface", "repair_surface"):
                 oid = data.get("id")
                 if not isinstance(oid,str) or oid not in self.SURFACES: raise ValueError("Unbekannte Raumoberflaeche")
                 if op == "mark_surface": mark_saved = self.add_mark(db,oid,data.get("mark"))
-                else: db.execute("DELETE FROM impact_marks WHERE target=?", (oid,))
+                else:
+                    db.execute("DELETE FROM impact_marks WHERE target=?", (oid,))
+                    db.execute("DELETE FROM wall_cells WHERE target=?", (oid,))
             else: raise ValueError("Unbekannte Aktion")
         result = self.state()
+        if wall_result is not None: result["wall_result"] = wall_result
         if mark_saved is not None: result["mark_saved"] = mark_saved
         return result
 
@@ -214,7 +265,7 @@ def make_handler(store: ScanStore, token: str, updater=None):
     updater = updater or UpdateBridge(None, "")
     game = GameStore(store.path)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.6.6"
+        server_version = "SecondLive/0.6.7"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -280,7 +331,7 @@ def make_handler(store: ScanStore, token: str, updater=None):
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.6.6", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "requires_token": bool(token), "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.6.7", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "requires_token": bool(token), "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.7 – Destruction Pass
+- Fortschreitende lokale Spielwand-Zellen, echte Öffnungen mit sichtbaren Kanten und synchronen Rapier-Collidern, additive SQLite-Migration und gezielte Reparatur. Scanner-Grenze bleibt bestehen.
+- Schadensmarkierungen wachsen auch bei gleicher ID; lokale, begrenzte Rapier-Trümmer.
+- Inventarvorschauen direkt aus dem vorhandenen Renderer; zusammenhängende prozedurale Hände statt einzelner Platzhalterformen.
+- Erweiterte Backend-, Client- und verpflichtende Docker-Smoke-Tests; Host-Updater unverändert.
+
 ## 0.6.6 – Persistent Surface Damage
 - Fototexturierte optionale Original-Spielmodelle, Isolierung einer zusammenhängenden Mesh-Gruppe statt Anzeige aller Zubehör-/Variantenobjekte. Inventar zeigt Original- oder Ersatzmodell.
 - Treffer auf sichtbaren Mesh-Oberflächen statt nur groben Collider-Boxen; Three.js-Decals, materialabhängige kosmetische Spuren.
