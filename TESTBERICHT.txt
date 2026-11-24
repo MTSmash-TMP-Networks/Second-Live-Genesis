@@ -1,11 +1,9 @@
-Second Live v0.6.2 - GitHub Auto-Updater
+Second Live v0.6.4 - Immersion Pass
 
-PASS: 39 Python-Tests (27 Bestands- und 12 neue Update-Tests).
-- Admin-Authentifizierung, kein Spieltoken-Bypass, begrenzte Auftragsdaten, Dubletten, Offline-Status.
-- Exakte GitHub-Revision, tatsächlicher lokaler Git-Fetch/Checkout eines Test-Repos, inkompatibles Protokoll abgelehnt.
-- Simulierte Docker-CLI: erfolgreicher Wechsel, Buildfehler ohne Umschalten, Healthcheck-Fehler mit Rollback, Wiederherstellung eines unterbrochenen Wechsels, geänderter Head, Symlink-Auftrag.
-PASS: Desktop-/Mobile-Client-Smoke-Tests (Mock-Renderer und Mock-Physik).
+Lokal ausgeführt:
+PASS: 41 Python-Tests (39 Bestands- und 2 neue optionale Möbel-Importtests, inklusive Teilfehler/Prüfsummen/Wiederholung).
+PASS: Desktop-/Mobile-Clienttests mit Mock-Renderer/Physik: Treffer, Munitionszähler, Nachladen, Waffenwechsel, Smartphone.
 PASS: Isolierter Renderer-Fotopfad-Test.
-PASS: JavaScript/Python/Bash-Syntax.
+PASS: JavaScript-Syntax.
 
-NICHT lokal ausführbar: echter Docker-Build/Containerwechsel, GitHub-Git-Netzwerkzugriff, echte WebGL- und VR-Abnahme, Live-Asset-Downloads. Der verpflichtende Rapier-WASM-Test im Docker-Build bleibt erhalten. Healthcheck prüft Server und Grafikdateien, keine visuelle Browserabnahme. Image-Rollback reversiert keine inkompatiblen Datenmigrationen. Das Host-Updater-Programm/Compose-Infrastruktur selbst werden nicht automatisch aktualisiert. Der Entwicklungsstand ist nicht für ungeschützten öffentlichen Betrieb freigegeben.
+Docker-Build enthält weiterhin den verpflichtenden Rapier-WASM-Test und zusätzlich einen Three.js-Mesh-/VFX-Test mit echten Bibliotheken (Kissen/Decke, Möbelgrenzen, Fallback und Effekt-Lebensdauer). Beide wurden in dieser Umgebung nicht ausgeführt: Docker fehlt; npm und Originalasset-Domains sind wegen DNS-Sperre nicht erreichbar. Keine echte WebGL- oder Quest-Abnahme. Die externen Originalmöbel werden erst beim Build geladen. Visuelle Effekte (Leuchtspur, Licht, Hülsen, Nachladen) sind lokale, abstrahierte Spielanimationen; keine echte Ballistik oder persistente Munition. Bett/Lampe bleiben statische Ausstattung. Host-Updater/Compose unverändert, Update-Protokoll 1.

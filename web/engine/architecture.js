@@ -68,4 +68,6 @@ export function buildArchitecture(r,spec) {
   for(const [a,b] of [[-2.58,-1.99],[-.01,.58]])for(let i=0;i<7;i++){
     const ring=new THREE.Mesh(new THREE.TorusGeometry(.027,.004,6,14),satin);ring.position.set(-4.48,2.73,a+(b-a)*i/6);group.add(ring);
   }
+
 }
+

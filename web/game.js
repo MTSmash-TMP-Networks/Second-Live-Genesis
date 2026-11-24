@@ -1,7 +1,13 @@
-import { RoomRenderer, RoomPhysics } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, DECOR } from './engine/renderer.bundle.js';
 const $=id=>document.getElementById(id), canvas=$('world');
 let renderer=null, physicsWorld=null, graphicsReady=false;
 let equipped=null, xrEntering=false, xrReturnFirst=true;
+const clipSize={pistol:12,rifle:18}; // fictional game balance, not real weapon specifications
+const ammo={...clipSize};let reloadLeft=0,reloadId=null;
+const RELOAD_TIME=1.05;
+function updateAmmo(){const el=$('ammo');el.textContent=!equipped?'':reloadId?'Wird nachgeladen …':`${ammo[equipped]} / ${clipSize[equipped]} · T: Nachladen`;}
+function startReload(){if(!canPlay()||!equipped||reloadId||ammo[equipped]===clipSize[equipped])return;reloadId=equipped;reloadLeft=RELOAD_TIME;updateAmmo();}
+function stepReload(dt){if(!reloadId)return;reloadLeft=Math.max(0,reloadLeft-dt);renderer.reload?.(1-reloadLeft/RELOAD_TIME);if(reloadLeft===0){ammo[reloadId]=clipSize[reloadId];reloadId=null;renderer.reload?.(0);updateAmmo();}}
 const rgb=h=>[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
 function mat(c){
   return ['a58d72','aa8b67','b28f68'].includes(c)?'wooden_floor_01'
@@ -44,13 +50,8 @@ box(.94,1.1,-4.86,.13,.14,.03,'f0ede8');box(.94,1.1,-4.84,.055,.065,.015,'c6b8a1
 for(let x of [-.98,.98])box(x,1.11,-4.86,.1,2.22,.09,'f0ede8');
 box(0,2.25,-4.86,2.06,.10,.09,'f0ede8');
 
-// Rug and bed area.
-box(2.55,.02,2.45,3.15,.035,2.35,'ccd7df');
-solid(3.35,.27,2.42,2.55,.54,3.05,'7f6752');
-box(3.35,.6,2.42,2.46,.12,2.96,'f0ede8');
-box(3.35,.79,3.32,1.88,.22,.72,'f0ede8');
-box(2.78,.82,1.55,.58,.11,.46,'d6dce2');
-box(3.93,.82,1.56,.58,.11,.46,'d6dce2');
+// Furniture visuals and collision layout share the same dimensions.
+for(const slot of Object.values(DECOR))room.push({p:[slot.p[0],slot.p[1]+slot.s[1]/2,slot.p[2]],s:slot.s});
 
 // Wardrobe and shelf.
 solid(3.95,1.4,-3.62,1.44,2.8,.74,'967e64');
@@ -59,11 +60,6 @@ box(3.61,1.4,-3.26,.03,2.45,.04,'655343');
 box(4.29,1.4,-3.26,.03,2.45,.04,'655343');
 box(3.95,1.2,-3.28,.48,.06,.03,'252a2e');
 
-solid(-1.75,.42,3.05,.58,.84,.52,'967e64');
-box(-1.75,.88,3.05,.5,.11,.44,'f0ede8');
-box(-1.75,1.08,3.05,.12,.31,.12,'655343');
-box(-1.75,1.31,3.05,.5,.24,.5,'f0ede8');
-
 // Decorative radiator beneath the window.
 box(-4.72,.52,-.96,.12,.84,1.6,'f0ede8');
 for(let i=0;i<7;i++)box(-4.66,.53,-1.58+i*.26,.03,.78,.13,'f0ede8');
@@ -71,8 +67,6 @@ box(-4.61,.95,-1.72,.03,.14,.08,'c6b8a1');
 box(-4.61,.95,-.18,.03,.14,.08,'c6b8a1');
 
 // Small architectural and decor details.
-box(0,.015,1.08,4.15,.025,3.18,'536c76');
-box(0,2.95,0,1.8,.09,.62,'fff2cb');
 box(0,1.55,4.86,1.82,1.1,.08,'70553f');
 box(0,1.56,4.79,1.66,.95,.04,'9caeb3');
 for(let x of [-.63,-.21,.21,.63])box(x,1.56,4.75,.18,.68,.03,'75846b');
@@ -99,7 +93,7 @@ function dir(){let a=player.yaw,p=player.pitch;return [-Math.sin(a)*Math.cos(p),
 function rotateInverse(v,q){if(!q)return v;const [x,y,z,w]=q,u=[-x,-y,-z],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],t=cross(u,v).map(n=>2*n),c=cross(u,t);return v.map((n,i)=>n+w*t[i]+c[i]);}
 function rayBox(eye,d,p,s,q=null){let pos=rotateInverse(eye.map((v,i)=>v-p[i]),q),dir=rotateInverse(d,q),lo=0,hi=8;for(let i=0;i<3;i++){if(Math.abs(dir[i])<1e-8){if(Math.abs(pos[i])>s[i]/2)return Infinity;}else{let a=(-s[i]/2-pos[i])/dir[i],z=(s[i]/2-pos[i])/dir[i];lo=Math.max(lo,Math.min(a,z));hi=Math.min(hi,Math.max(a,z));if(lo>hi)return Infinity;}}return lo;}
 function aim(ray=null,includeDestroyed=true){let d=ray?.direction||dir(),eye=ray?.origin||[player.x,player.y+1.65,player.z],best=8.01,id=null;for(const o of room)best=Math.min(best,rayBox(eye,d,o.p,o.s));if(!state.unlocked)best=Math.min(best,rayBox(eye,d,[0,1.1,-4.95],[1.85,2.2,.18]));for(const [k,b] of Object.entries(bodies)){if(k===held)continue;const live=state.objects[k]>0;if(!live&&!includeDestroyed)continue;const dist=rayBox(eye,d,live?b.p:spec[k].p,spec[k].s,live?b.q:null);if(dist<best){best=dist;id=k;}}return {id,dist:best};}
-function chooseWeapon(id){if(!['pistol','rifle','none'].includes(id))return;equipped=id==='none'?null:id;$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Testmodus':equipped==='rifle'?'Gewehr · Testmodus':'Unbewaffnet';}
+function chooseWeapon(id){if(!['pistol','rifle','none'].includes(id))return;if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Testmodus':equipped==='rifle'?'Gewehr · Testmodus':'Unbewaffnet';}
 function arsenal(){document.exitPointerLock?.();clearControls();active=false;$('arsenal').hidden=false;}
 $('closearsenal').onclick=()=>{$('arsenal').hidden=true;active=true;clearControls();};
 for(const id of ['pistol','rifle','none'])$('equip-'+id).onclick=()=>{chooseWeapon(id);$('closearsenal').onclick();};
@@ -110,22 +104,31 @@ function coll(x,z){if(Math.abs(x)>4.65||z>4.65||z<(state.unlocked?-14.5:-4.65))r
 $('start').onclick=async()=>{if(!graphicsReady)return;token=$('token').value;try{await refresh();sessionStorage.setItem('second_live_token',token);$('welcome').hidden=true;started=true;active=true;document.body.classList.add('playing');if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});}catch(e){$('loginerror').textContent=e.message;}};
 $('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('unlock').onclick=()=>action('unlock');$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';}catch(e){$('notice').textContent=e.message;}};
 canvas.onclick=()=>{if(mobile||!started||!$('phone').hidden||!$('arsenal').hidden)return;if(document.pointerLockElement!==canvas){if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;return;}fire();};
-window.addEventListener('keydown',e=>{if(!active||!started||!$('updater').hidden)return;if(['Space','KeyW','KeyA','KeyS','KeyD'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyV')first=!first;if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyR'){let a=aim();if(a.id&&a.dist<3)action('repair',a.id);}});
+window.addEventListener('keydown',e=>{if(!active||!started||!$('updater').hidden)return;if(['Space','KeyW','KeyA','KeyS','KeyD'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyV')first=!first;if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR'){let a=aim();if(a.id&&a.dist<3)action('repair',a.id);}});
 window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>keys.clear());document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==canvas)keys.clear();});document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas){player.yaw-=e.movementX*.003;player.pitch=Math.max(-1.2,Math.min(1.2,player.pitch+e.movementY*.003));}});
 function part(p,s,c,r=0,q=null){draw({p,s,c:rgb(c),r,q,m:mat(c)});}
 function canPlay(){return started&&active&&$('phone').hidden&&$('arsenal').hidden&&$('updater').hidden;}
-function fire(ray=null){if(!canPlay()||!equipped||busy)return;renderer.shot();let a=aim(ray,false);$('cross').classList.add('pulse');setTimeout(()=>$('cross').classList.remove('pulse'),100);if(a.id&&state.objects[a.id]>0){physicsWorld.impulse(a.id,ray?.direction||dir());action('hit',a.id);}else $('notice').textContent='Kein Objekt getroffen';}
+function fire(ray=null){
+  if(!canPlay()||!equipped||busy||reloadId)return;
+  if(ammo[equipped]<=0){startReload();return;}
+  const direction=ray?.direction||dir(),origin=ray?.origin||[player.x,player.y+1.65,player.z],a=aim(ray,false);
+  ammo[equipped]--;updateAmmo();
+  renderer.shot(equipped,{origin,direction,distance:Math.min(8,a.dist),impact:a.dist<=8});
+  $('cross').classList.add('pulse');setTimeout(()=>$('cross').classList.remove('pulse'),100);
+  if(a.id&&state.objects[a.id]>0){physicsWorld.impulse(a.id,direction);action('hit',a.id);}else $('notice').textContent='Kein Objekt getroffen';
+}
 function repair(ray=null){if(!canPlay())return;let a=aim(ray);if(a.id&&a.dist<3)action('repair',a.id);}
 $('mode').onclick=()=>setMode(!mobile);setMode(mobile);
 const stick=$('stick');let stickId=null;function moveStick(e){let r=stick.getBoundingClientRect(),x=(e.clientX-r.left-r.width/2)/(r.width*.36),y=(e.clientY-r.top-r.height/2)/(r.height*.36),l=Math.max(1,Math.hypot(x,y));touchMove=[x/l,-y/l];stick.style.setProperty('--jx',`${x/l*33}px`);stick.style.setProperty('--jy',`${y/l*33}px`);}stick.addEventListener('pointerdown',e=>{if(!canPlay()||stickId!==null)return;e.preventDefault();stickId=e.pointerId;stick.setPointerCapture(e.pointerId);moveStick(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId&&canPlay())moveStick(e);});for(const n of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(n,e=>{if(e.pointerId===stickId){stickId=null;touchMove=[0,0];stick.style.setProperty('--jx','0px');stick.style.setProperty('--jy','0px');}});
 canvas.addEventListener('pointerdown',e=>{if(!canPlay()||(!mobile&&document.pointerLockElement===canvas))return;if(look)return;look={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!look||look.id!==e.pointerId||!canPlay())return;player.yaw-=(e.clientX-look.x)*.005;player.pitch=Math.max(-1.2,Math.min(1.2,player.pitch+(e.clientY-look.y)*.005));look.x=e.clientX;look.y=e.clientY;});for(const n of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(n,e=>{if(look?.id===e.pointerId)look=null;});
-for(const [id,fn] of [['touchInteract',interact],['touchFire',()=>fire()],['touchRepair',()=>repair()],['touchView',()=>first=!first],['touchPhone',phone],['touchArsenal',arsenal],['touchJump',()=>{if(player.y===0)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});window.addEventListener('blur',clearControls);document.addEventListener('visibilitychange',()=>{if(document.hidden)clearControls();});
+for(const [id,fn] of [['touchInteract',interact],['touchFire',()=>fire()],['touchReload',startReload],['touchRepair',()=>repair()],['touchView',()=>first=!first],['touchPhone',phone],['touchArsenal',arsenal],['touchJump',()=>{if(player.y===0)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});window.addEventListener('blur',clearControls);document.addEventListener('visibilitychange',()=>{if(document.hidden)clearControls();});
 
 let prev=performance.now();
 function frame(now,xrFrame){
   let dt=Math.max(0,Math.min(.035,(now-prev)/1000));prev=now;
   const vr=!!renderer.xrMode?.active;const xrInput=vr?renderer.xrMode.inputs(xrFrame):null;
   if(started&&active){
+    stepReload(dt);
     if(vr)player.yaw+=xrInput.turn;
     let f=vr?xrInput.move[1]:Number(keys.has('KeyW'))-Number(keys.has('KeyS'))+touchMove[1],s=vr?xrInput.move[0]:Number(keys.has('KeyD'))-Number(keys.has('KeyA'))+touchMove[0],a=player.yaw+(vr?xrInput.headYaw:0),m=(vr?1.6:3.4)*dt/Math.max(1,Math.hypot(f,s)),dx=(-Math.sin(a)*f+Math.cos(a)*s)*m,dz=(-Math.cos(a)*f-Math.sin(a)*s)*m;
     if(!coll(player.x+dx,player.z))player.x+=dx;
@@ -185,8 +188,8 @@ qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListe
       const img=$('photo-'+id),fallback=$('fallback-'+id),url=renderer.photoPaths?.[id];
       if(url){img.onerror=()=>{img.hidden=true;fallback.hidden=false;};img.onload=()=>{img.hidden=false;fallback.hidden=true;};img.src=url;}
     }
-    for(const id of ['pistol','rifle']){ $('model-'+id).textContent=renderer.propPaths?.[id]?'Texturiertes 3D-Modell':'Eingebautes 3D-Testmodell'; }
-    $('realismstatus').textContent=renderer.realismStatus?.outside==='ready'?'Fotografischer Fensterausblick geladen':'Fensterausblick: einfacher Ersatz (Original nicht verfügbar)';
+    for(const id of ['pistol','rifle']){ $('model-'+id).textContent='Zusammenhängendes 3D-Spielmodell'; }
+    $('realismstatus').textContent=(renderer.realismStatus?.outside==='ready'?'Fotografischer Fensterausblick':'Fensterausblick: Ersatz')+' · Schlafzone: '+(renderer.realismStatus?.bed==='ready'?'Originalmodell':'Lokales Stoffmodell')+' · Nachttisch: '+(renderer.realismStatus?.nightstand==='ready'?'Originalmodell':'Lokales Modell');
     status.textContent='Rapier-Physik wird geladen …';
     physicsWorld=await RoomPhysics.create(room,spec);
     status.textContent='Fotomaterialien und Rapier-Physik bereit';

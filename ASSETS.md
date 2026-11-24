@@ -30,3 +30,11 @@ Die Originalbilder werden beim Build lokal gespeichert, wenn verfuegbar. Bei ein
 ## Optionale v0.6.1-Assets
 
 Die ausgewählten Poly-Haven-IDs `residential_garden`, `service_pistol` und `bolt_action_rifle_7_62` werden im optionalen Importer geprüft; falls die API sie nicht liefert oder ein Download fehlschlägt, bleibt die lokale Ersatzdarstellung aktiv. Die tatsächliche Live-Verfügbarkeit wurde hier nicht getestet.
+
+## v0.6.4 – optionale Schlafzone
+
+- [Vintage Day Bed](https://polyhaven.com/a/vintage_day_bed) – Aron Łyczek, CC0; 1K-glTF und lokale Abhängigkeiten, für beide Profile.
+- [Painted Wooden Nightstand](https://polyhaven.com/a/painted_wooden_nightstand) – Kirill Sannikov, CC0; 1K-glTF.
+- Lokale Stoff-, Lampen-, Requisiten- und VFX-Geometrie: im Projektcode erzeugt. Bestehende PBR-Stofftexturen werden weiterverwendet.
+- Der optionale Downloader lädt diese Dateien beim Docker-Build, validiert Größe/Prüfsummen und fällt bei Fehlern auf die lokale Geometrie zurück. Die Modellseite wurde geprüft, die echten Downloads und visuelle Darstellung konnten in der Entwicklungsumgebung nicht geprüft werden.
+- Externe Mehrfach-Waffenmodelle werden nicht mehr im Viewmodel benutzt; die bisherigen optionalen Fotos bleiben ausschließlich Inventarbilder.
