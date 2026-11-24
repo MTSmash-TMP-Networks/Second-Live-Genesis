@@ -2,6 +2,8 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
+import socket
 import sys
 import tempfile
 import threading
@@ -17,7 +19,7 @@ from updater_api import UpdateBridge, atomic_json
 from host_updater import HostUpdater, UpdateError, REQUIRED
 from server import create_server
 
-OLD='a'*40; NEW='b'*40; CID='c'*64; IMG='sha256:'+'d'*64; ADMIN='e'*64
+OLD='a'*40; NEW='b'*40; CID='c'*64; IMG='sha256:'+'d'*64; NEW_IMG='sha256:'+'f'*64; ADMIN='e'*64
 
 class BridgeTests(unittest.TestCase):
     def setUp(self):
@@ -61,13 +63,34 @@ class BridgeTests(unittest.TestCase):
         with self.assertRaises(HTTPError): self.req('/api/update',{'action':'check'})
 
 class FakeDocker:
-    def __init__(self):self.calls=[];self.revision=OLD;self.head=NEW;self.fail_build=False;self.fail_start=False;self.fail_rollback=False
+    def __init__(self):
+        self.calls=[]; self.revision=OLD; self.head=NEW; self.image=IMG
+        self.fail_build=False; self.fail_start=False; self.fail_rollback=False
+        self.fail_preflight=False; self.bad_build_revision=False; self.bad_start_image=False
+        self.bad_health=False; self.exit_after_start=False; self.health_starting=False
+        self.rolled=False
     def __call__(self,args,**kw):
         self.calls.append(args)
         if args[:2]==['git','ls-remote']:return self.head+'\trefs/heads/main'
-        if args[:2]==['docker','inspect']:return IMG if args[3]=='{{.Image}}' else self.revision
+        if args[:3]==['docker','image','inspect']:
+            old=':rollback-' in args[-1]
+            rev=OLD if old else ('local' if self.bad_build_revision else NEW)
+            return json.dumps(IMG if old else NEW_IMG)+'\t'+json.dumps({'org.opencontainers.image.revision':rev})
+        if args[:2]==['docker','inspect']:
+            if args[3]=='{{.Image}}': return self.image
+            if args[3]=='{{json .State}}':
+                if self.revision==NEW and self.exit_after_start: return json.dumps({'Status':'exited','ExitCode':1})
+                if self.revision==NEW and self.bad_health: return json.dumps({'Status':'running','Health':{'Status':'unhealthy'}})
+                if self.revision==NEW and self.health_starting:
+                    self.health_starting=False;return json.dumps({'Status':'running','Health':{'Status':'starting'}})
+                return json.dumps({'Status':'running','Health':{'Status':'healthy'}})
+            return self.revision
         if args[:3]==['docker','image','tag']:return ''
-        if args[-3:]==['ps','-q','second-live']:return CID
+        if args[:2]==['docker','run']:
+            if self.fail_preflight: raise UpdateError('probe')
+            return ''
+        if args[:2] in (['docker','rm'],['docker','logs']):return ''
+        if args[-3:]==['ps','-q','second-live'] or args[-4:]==['ps','-a','-q','second-live']:return CID
         if args[-2:]==['build','second-live']:
             if self.fail_build:raise UpdateError('build')
             return ''
@@ -75,10 +98,10 @@ class FakeDocker:
             override=Path(args[args.index('up')-1]).name
             if override=='rollback.compose.json':
                 if self.fail_rollback:raise UpdateError('rollback')
-                self.revision=OLD
+                self.revision=OLD;self.image=IMG;self.rolled=True
             else:
                 if self.fail_start:raise UpdateError('start')
-                self.revision=NEW
+                self.revision=NEW;self.image=IMG if self.bad_start_image else NEW_IMG
             return ''
         raise AssertionError(args)
 
@@ -103,11 +126,16 @@ class HostTests(unittest.TestCase):
         build=next(i for i,x in enumerate(cmds) if x.endswith('build second-live'))
         start=next(i for i,x in enumerate(cmds) if ' up -d ' in x)
         self.assertLess(build,start);self.assertNotIn(' down ', ' '.join(cmds))
-        self.assertIn('--no-build --pull never --force-recreate --no-deps --wait',cmds[start])
+        self.assertIn('--no-build --pull never --force-recreate --no-deps',cmds[start])
+        probe=next(i for i,x in enumerate(cmds) if x.startswith('docker run --rm '))
+        self.assertLess(build,probe);self.assertLess(probe,start)
+        self.assertIn('--network none',cmds[probe])
+        self.assertNotIn('--volume',cmds[probe]);self.assertNotIn('PRIVATE=keep',cmds[probe])
         self.assertFalse(self.agent.transaction.exists())
     def test_build_failure_keeps_running_version(self):
         self.fake.fail_build=True
-        with self.assertRaises(UpdateError):self.agent.install(NEW)
+        self.agent.install(NEW)
+        self.assertEqual(self.agent.state['state'],'error')
         self.assertEqual(self.fake.revision,OLD)
         self.assertFalse(any('up' in x for x in self.fake.calls))
     def test_rollback(self):
@@ -125,6 +153,49 @@ class HostTests(unittest.TestCase):
         self.agent.recover()
         self.assertFalse(self.agent.transaction.exists())
         self.assertEqual(self.agent.state['state'],'rolled_back')
+    def test_preflight_failure_does_not_replace_game(self):
+        self.fake.fail_preflight=True;self.agent.install(NEW)
+        self.assertEqual(self.agent.state['state'],'error')
+        self.assertIn('Isolierter Starttest',self.agent.state['message'])
+        self.assertFalse(any('up' in x for x in self.fake.calls))
+        self.assertFalse(self.agent.transaction.exists())
+    def test_wrong_build_label_does_not_switch(self):
+        self.fake.bad_build_revision=True;self.agent.install(NEW)
+        self.assertEqual(self.agent.state['state'],'error')
+        self.assertIn('Revision',self.agent.state['message'])
+        self.assertFalse(any('up' in x for x in self.fake.calls))
+    def test_wrong_running_image_rolls_back(self):
+        self.fake.bad_start_image=True;self.agent.install(NEW)
+        self.assertEqual(self.agent.state['state'],'rolled_back')
+        self.assertIn('Falsches Docker-Image',self.agent.state['message'])
+        self.assertTrue(self.fake.rolled)
+    def test_unhealthy_candidate_diagnosed_before_rollback(self):
+        self.fake.bad_health=True;self.agent.install(NEW)
+        self.assertEqual(self.agent.state['state'],'rolled_back')
+        self.assertIn('unhealthy',self.agent.state['message'])
+        self.assertIn('unhealthy',(self.agent.work/'diagnostics.log').read_text())
+        log_i=next(i for i,x in enumerate(self.fake.calls) if x[:2]==['docker','logs'])
+        rollback_i=next(i for i,x in enumerate(self.fake.calls) if 'up' in x and any('rollback.compose.json' in p for p in x))
+        self.assertLess(log_i,rollback_i)
+    def test_exited_candidate_reports_exit_code(self):
+        self.fake.exit_after_start=True;self.agent.install(NEW)
+        self.assertEqual(self.agent.state['state'],'rolled_back')
+        self.assertIn('Exit 1',self.agent.state['message'])
+    def test_starting_health_is_not_yet_success(self):
+        self.fake.health_starting=True
+        with patch('host_updater.time.sleep'): self.agent.install(NEW)
+        self.assertEqual(self.agent.state['state'],'success')
+    def test_local_build_is_valid_rollback(self):
+        self.fake.revision='local';self.agent.check()
+        self.agent.install(NEW)
+        self.assertEqual(self.agent.state['state'],'success')
+    def test_recovery_does_not_recreate_healthy_previous_image(self):
+        rollback=self.agent.override('rollback.compose.json','second-live-update-genesis:rollback-'+IMG[-12:])
+        atomic_json(self.agent.transaction,{'project':'genesis','old':OLD,'new':NEW,'old_id':IMG})
+        self.agent.recover()
+        self.assertEqual(self.agent.state['state'],'rolled_back')
+        self.assertFalse(any('up' in x for x in self.fake.calls))
+        self.assertFalse(self.agent.transaction.exists())
     def test_head_moved_requires_check_again(self):
         self.fake.head='f'*40
         self.agent.install(NEW)
@@ -136,6 +207,31 @@ class HostTests(unittest.TestCase):
         self.agent.process();self.assertEqual(target.read_text(),'secret')
         self.assertFalse((self.agent.requests/'request.json').exists())
 
+class ProbeTest(unittest.TestCase):
+    def test_real_python_health_endpoint_from_probe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); fixture=root/'app'; fixture.mkdir(); install=root/'install';install.mkdir()
+            for name in ('server.py','updater_api.py'):shutil.copy2(ROOT/name,fixture/name)
+            for rel in ('web/assets/polyhaven/manifest.json','web/engine/renderer.bundle.js'):
+                path=fixture/rel;path.parent.mkdir(parents=True,exist_ok=True);path.write_text('{}')
+            with socket.socket() as sock:
+                sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+            def runner(args,**kw):
+                if args[:2]==['docker','rm']:return ''
+                self.assertEqual(args[:2],['docker','run'])
+                self.assertIn('--network',args);self.assertIn('none',args)
+                env={**os.environ,'SECOND_LIVE_BIND':'127.0.0.1','SECOND_LIVE_PORT':str(port),'SECOND_LIVE_REVISION':NEW,'SECOND_LIVE_DATA_DIR':str(fixture/'data'),'SECOND_LIVE_TOKEN':''}
+                # Only the fixture uses an ephemeral local port, rather than the
+                # container's fixed loopback port. The real health logic runs.
+                code=args[-2].replace('127.0.0.1:8765','127.0.0.1:'+str(port))
+                proc=subprocess.run([sys.executable,'-c',code,args[-1]],cwd=fixture,env=env,capture_output=True,text=True,timeout=12)
+                if proc.returncode:raise UpdateError(proc.stderr)
+                self.assertIn('Preflight: Server, Assets und Revision OK',proc.stdout)
+                return ''
+            agent=HostUpdater(install,'genesis',runner)
+            agent.preflight(NEW_IMG,NEW)
+            (fixture/'web/engine/renderer.bundle.js').unlink()
+            with self.assertRaisesRegex(UpdateError,'Isolierter Starttest'):agent.preflight(NEW_IMG,NEW)
 class GitCheckoutTest(unittest.TestCase):
     def test_actual_local_git_checkout_and_protocol(self):
         with tempfile.TemporaryDirectory() as tmp:

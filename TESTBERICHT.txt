@@ -1,9 +1,15 @@
-Second Live v0.6.4 - Immersion Pass
+Second Live v0.6.5 - Updater Reliability Hotfix
 
-Lokal ausgeführt:
-PASS: 41 Python-Tests (39 Bestands- und 2 neue optionale Möbel-Importtests, inklusive Teilfehler/Prüfsummen/Wiederholung).
-PASS: Desktop-/Mobile-Clienttests mit Mock-Renderer/Physik: Treffer, Munitionszähler, Nachladen, Waffenwechsel, Smartphone.
-PASS: Isolierter Renderer-Fotopfad-Test.
-PASS: JavaScript-Syntax.
+PASS: 53 Python-Tests (41 bisherige, 12 zusaetzliche Start-/Updater-Tests).
+PASS: Desktop- und Mobile-Clientsimulation und isolierter Renderer-Fotopfad-Test.
+PASS: Python-Syntax; echter lokaler Python-HTTP-Preflight mit Testdateien.
+PASS: echter lokaler Prozessneustart mit Dateisperren; parallele Operation verweigert.
+PASS (simulierte Docker-CLI): falsche Image-Revision, fehlgeschlagener Preflight,
+abweichendes gestartetes Image, unhealthy/exit, Health-Startphase, Rollback,
+Wiederherstellung eines bereits gesunden vorherigen Images, lokaler Build.
 
-Docker-Build enthält weiterhin den verpflichtenden Rapier-WASM-Test und zusätzlich einen Three.js-Mesh-/VFX-Test mit echten Bibliotheken (Kissen/Decke, Möbelgrenzen, Fallback und Effekt-Lebensdauer). Beide wurden in dieser Umgebung nicht ausgeführt: Docker fehlt; npm und Originalasset-Domains sind wegen DNS-Sperre nicht erreichbar. Keine echte WebGL- oder Quest-Abnahme. Die externen Originalmöbel werden erst beim Build geladen. Visuelle Effekte (Leuchtspur, Licht, Hülsen, Nachladen) sind lokale, abstrahierte Spielanimationen; keine echte Ballistik oder persistente Munition. Bett/Lampe bleiben statische Ausstattung. Host-Updater/Compose unverändert, Update-Protokoll 1.
+Docker fehlt in dieser Umgebung. Kein echter Docker-Build/Containerwechsel und
+keine WebGL-/VR-Abnahme. Der genaue Ausloeser des bisherigen Fehlers beim Nutzer
+ist ohne dessen Host-Log nicht belegt. Die neue Logik verbessert Vorabpruefung,
+explizite Verifikation, Fehlerprotokolle und Wiederherstellung; Update-Protokoll 1
+bleibt unveraendert. Host-Updater muss einmalig manuell ersetzt/neugestartet werden.

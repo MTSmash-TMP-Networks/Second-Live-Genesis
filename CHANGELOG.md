@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.5 – Updater Reliability Hotfix
+- Exakte Image-ID und Image-Revision vor Containerwechsel prüfen.
+- Isolierter HTTP-Starttest mit leerem Datenverzeichnis; kein Zugriff auf Produktionsvolume oder Host-Netz.
+- Containerstatus, Healthcheck und Revision explizit verifizieren statt nur Compose-Wait.
+- Fehlerursache und Docker-Logs vor Rollback sichern; vorherige Logs erhalten.
+- Gesundes vorheriges Image bei Wiederherstellung nicht erneut starten.
+- Sicherer einmaliger Neustart des Host-Updaters mittels `python3 scripts/restart_updater.py`; unverändertes Update-Protokoll 1.
+
 ## 0.6.4 – Immersion Pass
 - Entfernt doppelte alte Bett-, Lampen- und Teppichgeometrie. Gemeinsames visuelles und Kollisionslayout der neuen Schlafzone.
 - Optionale CC0-Originalmodelle für Bett und Nachttisch mit unabhängigem Download, Größenanpassung und lokalem Ersatz.
