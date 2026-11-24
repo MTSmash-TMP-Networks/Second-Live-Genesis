@@ -37,4 +37,12 @@ Die ausgewählten Poly-Haven-IDs `residential_garden`, `service_pistol` und `bol
 - [Painted Wooden Nightstand](https://polyhaven.com/a/painted_wooden_nightstand) – Kirill Sannikov, CC0; 1K-glTF.
 - Lokale Stoff-, Lampen-, Requisiten- und VFX-Geometrie: im Projektcode erzeugt. Bestehende PBR-Stofftexturen werden weiterverwendet.
 - Der optionale Downloader lädt diese Dateien beim Docker-Build, validiert Größe/Prüfsummen und fällt bei Fehlern auf die lokale Geometrie zurück. Die Modellseite wurde geprüft, die echten Downloads und visuelle Darstellung konnten in der Entwicklungsumgebung nicht geprüft werden.
-- Externe Mehrfach-Waffenmodelle werden nicht mehr im Viewmodel benutzt; die bisherigen optionalen Fotos bleiben ausschließlich Inventarbilder.
+- In v0.6.4 wurden externe Mehrfach-Waffenmodelle nicht im Viewmodel benutzt; ab v0.6.6 wird eine einzelne Darstellungsgruppe gefiltert. Fotos bleiben ausschließlich Inventarbilder.
+
+## v0.6.6 – Original-Spielrequisiten und Oberflächenmarkierungen
+
+- [Service Pistol](https://polyhaven.com/a/service_pistol) und [Bolt Action Rifle](https://polyhaven.com/a/bolt_action_rifle_7_62), Mateusz Sadek, laut jeweiligen Modellseiten CC0; rein visuelle Spielassets.
+- Diese bereits im optionalen Importer vorhandenen Originalmodelle werden jetzt tatsächlich für die Darstellung geladen. Die Szenen können Varianten und loses Zubehör enthalten. Der Renderer wählt eine zusammenhängende Mesh-Gruppe, skaliert sie auf die bisherige visuelle Referenz und verwirft nicht passende Importdaten. Die tatsächliche Gruppierung der Originaldateien konnte mangels DNS-Zugriff noch nicht visuell geprüft werden.
+- Alternative für eine spätere stilisierte Asset-Auswahl: [Quaternius Sci-Fi Modular Gun Pack](https://quaternius.com/packs/scifimodularguns.html) (CC0, glTF, zusammengebaute fiktive Spielmodelle); nicht in diesem Build integriert.
+- Poly Haven weist in seiner [FAQ](https://docs.polyhaven.com/de/faq) auf mögliche Rechte an realen Designs hin. CC0 betrifft das bereitgestellte Asset, nicht automatisch fremde Marken-/Designrechte.
+- Treffermarkierungen: selbst erzeugte kosmetische Texturen, [Three.js DecalGeometry](https://threejs.org/docs/pages/DecalGeometry.html) (MIT). Keine realen Waffendaten oder Ballistik.

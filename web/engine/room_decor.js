@@ -66,10 +66,10 @@ function lamp(r,g,baseY){
   const light=new THREE.PointLight(0xffe0b0,6,3.2,2);light.position.set(0,baseY+.36,0);g.add(light);
   const bulb=new THREE.Mesh(new THREE.SphereGeometry(.044,12,8),new THREE.MeshBasicMaterial({color:0xffe5b2}));bulb.position.copy(light.position);g.add(bulb);
 }
-function rug(r,g){const m=surface(r,0xa5a095,[7,6]);const o=rounded(g,[3.2,.018,2.22],[-.65,.012,1.4],m,.008);o.castShadow=false;
+function rug(r,g){const m=surface(r,0xa5a095,[7,6]);const o=rounded(g,[3.2,.018,2.22],[-.65,.012,1.4],m,.008);o.castShadow=false;r.impacts?.register('surface_rug',o,'fabric');
   const border=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([[-2.19,.023,.36],[.89,.023,.36],[.89,.023,2.44],[-2.19,.023,2.44]].map(p=>new THREE.Vector3(...p))),new THREE.LineBasicMaterial({color:0x77756b}));g.add(border);
 }
-function shadow(r,g,p,w,d){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({map:r.shadowTexture,transparent:true,opacity:.66,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1}));m.rotation.x=-Math.PI/2;m.position.set(p[0],.004,p[2]);g.add(m);}
+function shadow(r,g,p,w,d){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({map:r.shadowTexture,transparent:true,opacity:.66,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1}));m.rotation.x=-Math.PI/2;m.position.set(p[0],.004,p[2]);m.userData.noImpact=true;g.add(m);}
 
 // Optional original furniture replaces, rather than overlays, the local fallback.
 export function fitDecor(model,slot){
@@ -87,7 +87,8 @@ export async function buildRoomDecor(r,manifest,path,loader){
     const url=manifest.decor_models?.[id];if(url){try{const gltf=await loader.loadAsync(path(url));const f=fitDecor(gltf.scene,slot);group.add(f.root);height=f.height;imported=true;}catch(e){console.warn('Optionales Möbelmodell nicht verfügbar',id,e);}}
     r.realismStatus[id]=imported?'ready':'local';
     if(!imported){if(id==='bed')bed(r,group);else nightstand(r,group);}
-    if(id==='nightstand')lamp(r,group,imported?height:.64);
+    r.impacts?.register('surface_'+id,group,id==='bed'?'fabric':'wood');
+    if(id==='nightstand'){const lightGroup=new THREE.Group();group.add(lightGroup);lamp(r,lightGroup,imported?height:.64);r.impacts?.register('surface_lamp',lightGroup,'wall');}
     shadow(r,g,slot.p,slot.s[0]*1.35,slot.s[2]*1.30);
   }
   // Soft ceiling fixture with an actual curved diffuser.

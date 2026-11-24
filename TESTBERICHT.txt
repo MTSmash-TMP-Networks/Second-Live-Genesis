@@ -1,15 +1,13 @@
-Second Live v0.6.5 - Updater Reliability Hotfix
+Second Live v0.6.6 - Persistent Surface Damage
 
-PASS: 53 Python-Tests (41 bisherige, 12 zusaetzliche Start-/Updater-Tests).
-PASS: Desktop- und Mobile-Clientsimulation und isolierter Renderer-Fotopfad-Test.
-PASS: Python-Syntax; echter lokaler Python-HTTP-Preflight mit Testdateien.
-PASS: echter lokaler Prozessneustart mit Dateisperren; parallele Operation verweigert.
-PASS (simulierte Docker-CLI): falsche Image-Revision, fehlgeschlagener Preflight,
-abweichendes gestartetes Image, unhealthy/exit, Health-Startphase, Rollback,
-Wiederherstellung eines bereits gesunden vorherigen Images, lokaler Build.
+PASS: 58 Python-Tests (53 bisherige + 5 Markierungstests).
+PASS: SQLite-Neustart, Migration, Reparatur, Validierung, Begrenzung.
+PASS: Desktop-/Mobile-Clientsimulation, Treffer-Markierungsdaten, Nachladen.
+PASS: isolierter Renderer-Fotopfad-Test, JavaScript-Syntax.
 
-Docker fehlt in dieser Umgebung. Kein echter Docker-Build/Containerwechsel und
-keine WebGL-/VR-Abnahme. Der genaue Ausloeser des bisherigen Fehlers beim Nutzer
-ist ohne dessen Host-Log nicht belegt. Die neue Logik verbessert Vorabpruefung,
-explizite Verifikation, Fehlerprotokolle und Wiederherstellung; Update-Protokoll 1
-bleibt unveraendert. Host-Updater muss einmalig manuell ersetzt/neugestartet werden.
+Der Docker-Build fuehrt zusaetzliche Three.js-Tests mit echten Bibliotheken
+auf synthetischen Meshes aus: einzelne Modellgruppe, Raycast, projizierte
+Markierung, Bewegung mit Objekt, Verdeckung und Reparatur. Hier nicht ausgefuehrt:
+Docker, npm-/Poly-Haven-Zugriff und echter WebGL-/VR-Lauf fehlen.
+Originalmodell-Isolierung und sichtbare Decals muessen im Browser abgenommen werden.
+Bestehender Host-Updater v0.6.5 und UPDATE_PROTOCOL 1 bleiben unveraendert.

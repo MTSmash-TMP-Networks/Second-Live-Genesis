@@ -34,6 +34,8 @@ solid(0,1.5,5,10,3,.2,'d8d2c9');
 solid(-3.0,1.5,-5,4,3,.2,'d8d2c9');
 solid(3.0,1.5,-5,4,3,.2,'d8d2c9');
 solid(0,2.6,-5,2,.8,.2,'d8d2c9');
+// Stable identifiers for the original 11 structural surfaces.
+objects.forEach((o,i)=>{o.surfaceId='surface_'+i;});
 
 // Baseboards, crown details, outlet and switch.
 for(let x of [-4.86,4.86])box(x,.075,0,.08,.15,9.78,'f0ede8');
@@ -54,7 +56,7 @@ box(0,2.25,-4.86,2.06,.10,.09,'f0ede8');
 for(const slot of Object.values(DECOR))room.push({p:[slot.p[0],slot.p[1]+slot.s[1]/2,slot.p[2]],s:slot.s});
 
 // Wardrobe and shelf.
-solid(3.95,1.4,-3.62,1.44,2.8,.74,'967e64');
+solid(3.95,1.4,-3.62,1.44,2.8,.74,'967e64');objects[objects.length-1].surfaceId='surface_wardrobe';
 for(let y of [.36,1.03,1.72,2.38])box(3.95,y,-3.27,1.34,.025,.04,'655343');
 box(3.61,1.4,-3.26,.03,2.45,.04,'655343');
 box(4.29,1.4,-3.26,.03,2.45,.04,'655343');
@@ -88,7 +90,7 @@ let token=sessionStorage.getItem('second_live_token')||''; $('token').value=toke
 const api=async(path,data)=>{let r=await fetch(path,{headers:{'X-SecondLive-Token':token,'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});let j=await r.json();if(!r.ok)throw Error(j.error||r.status);return j;};
 function sync(s){for(const [id,o] of Object.entries(spec)){let hp=s.objects[id];if(!bodies[id]||((state.objects[id]||0)===0&&hp>0)){bodies[id]={p:[...o.p],v:[0,0,0]};debris=debris.filter(d=>d.source!==id);}if(state.objects[id]>0&&hp===0){let p=id==='window'?[-4.45,1.52,-1]:bodies[id].p;for(let i=0;i<8;i++)debris.push({source:id,p:[...p],v:[(Math.random()-.5)*4,2+Math.random()*3,(Math.random()-.5)*4],s:id==='window'?[.035,.07+Math.random()*.09,.09+Math.random()*.12]:[.10+Math.random()*.15,.045+Math.random()*.08,.10+Math.random()*.18],c:rgb(o.c),m:id==='window'?'glass':mat(o.c),r:Math.random()*6});if(held===id)held=null;}}state=s; $('worldstate').textContent=s.unlocked?'Testbereich freigeschaltet':'Welt noch nicht erschlossen';}
 let mutationVersion=0;async function refresh(){const v=mutationVersion;let s=await api('/api/game');if(!busy&&v===mutationVersion)sync(s);}
-async function action(action,id){if(busy)return;busy=true;mutationVersion++;try{sync(await api('/api/game',{action,id}));$('notice').textContent=action==='repair'?'Objekt repariert':action==='unlock'?'Testbereich freigeschaltet':'Treffer gespeichert';}catch(e){$('notice').textContent=e.message;}finally{busy=false;}}
+async function action(action,id,mark){if(busy)return;busy=true;mutationVersion++;try{const result=await api('/api/game',{action,id,...(mark?{mark}:{})});sync(result);$('notice').textContent=action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';}catch(e){$('notice').textContent=e.message;}finally{busy=false;}}
 function dir(){let a=player.yaw,p=player.pitch;return [-Math.sin(a)*Math.cos(p),-Math.sin(p),-Math.cos(a)*Math.cos(p)];}
 function rotateInverse(v,q){if(!q)return v;const [x,y,z,w]=q,u=[-x,-y,-z],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],t=cross(u,v).map(n=>2*n),c=cross(u,t);return v.map((n,i)=>n+w*t[i]+c[i]);}
 function rayBox(eye,d,p,s,q=null){let pos=rotateInverse(eye.map((v,i)=>v-p[i]),q),dir=rotateInverse(d,q),lo=0,hi=8;for(let i=0;i<3;i++){if(Math.abs(dir[i])<1e-8){if(Math.abs(pos[i])>s[i]/2)return Infinity;}else{let a=(-s[i]/2-pos[i])/dir[i],z=(s[i]/2-pos[i])/dir[i];lo=Math.max(lo,Math.min(a,z));hi=Math.min(hi,Math.max(a,z));if(lo>hi)return Infinity;}}return lo;}
@@ -104,20 +106,20 @@ function coll(x,z){if(Math.abs(x)>4.65||z>4.65||z<(state.unlocked?-14.5:-4.65))r
 $('start').onclick=async()=>{if(!graphicsReady)return;token=$('token').value;try{await refresh();sessionStorage.setItem('second_live_token',token);$('welcome').hidden=true;started=true;active=true;document.body.classList.add('playing');if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});}catch(e){$('loginerror').textContent=e.message;}};
 $('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('unlock').onclick=()=>action('unlock');$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';}catch(e){$('notice').textContent=e.message;}};
 canvas.onclick=()=>{if(mobile||!started||!$('phone').hidden||!$('arsenal').hidden)return;if(document.pointerLockElement!==canvas){if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;return;}fire();};
-window.addEventListener('keydown',e=>{if(!active||!started||!$('updater').hidden)return;if(['Space','KeyW','KeyA','KeyS','KeyD'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyV')first=!first;if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR'){let a=aim();if(a.id&&a.dist<3)action('repair',a.id);}});
+window.addEventListener('keydown',e=>{if(!active||!started||!$('updater').hidden)return;if(['Space','KeyW','KeyA','KeyS','KeyD'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyV')first=!first;if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR')repair();});
 window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>keys.clear());document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==canvas)keys.clear();});document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas){player.yaw-=e.movementX*.003;player.pitch=Math.max(-1.2,Math.min(1.2,player.pitch+e.movementY*.003));}});
 function part(p,s,c,r=0,q=null){draw({p,s,c:rgb(c),r,q,m:mat(c)});}
 function canPlay(){return started&&active&&$('phone').hidden&&$('arsenal').hidden&&$('updater').hidden;}
 function fire(ray=null){
   if(!canPlay()||!equipped||busy||reloadId)return;
   if(ammo[equipped]<=0){startReload();return;}
-  const direction=ray?.direction||dir(),origin=ray?.origin||[player.x,player.y+1.65,player.z],a=aim(ray,false);
+  const direction=ray?.direction||dir(),origin=ray?.origin||[player.x,player.y+1.65,player.z],a=renderer.surfaceHit(origin,direction,held);
   ammo[equipped]--;updateAmmo();
   renderer.shot(equipped,{origin,direction,distance:Math.min(8,a.dist),impact:a.dist<=8});
   $('cross').classList.add('pulse');setTimeout(()=>$('cross').classList.remove('pulse'),100);
-  if(a.id&&state.objects[a.id]>0){physicsWorld.impulse(a.id,direction);action('hit',a.id);}else $('notice').textContent='Kein Objekt getroffen';
+  if(a.id&&state.objects[a.id]>0){physicsWorld.impulse(a.id,direction);action('hit',a.id,a.mark);}else if(a.id?.startsWith('surface_'))action('mark_surface',a.id,a.mark);else $('notice').textContent=a.dist<=8?'Oberfläche ohne Schadensspeicher':'Kein Objekt getroffen';
 }
-function repair(ray=null){if(!canPlay())return;let a=aim(ray);if(a.id&&a.dist<3)action('repair',a.id);}
+function repair(ray=null){if(!canPlay())return;const origin=ray?.origin||[player.x,player.y+1.65,player.z],direction=ray?.direction||dir();const surface=renderer.surfaceHit(origin,direction,held);const a=aim(ray);if(a.id&&state.objects[a.id]===0&&a.dist<3&&a.dist<=surface.dist+.01){action('repair',a.id);return;}if(surface.id&&surface.dist<3){if(surface.id.startsWith('surface_'))action('repair_surface',surface.id);else action('repair',surface.id);}};
 $('mode').onclick=()=>setMode(!mobile);setMode(mobile);
 const stick=$('stick');let stickId=null;function moveStick(e){let r=stick.getBoundingClientRect(),x=(e.clientX-r.left-r.width/2)/(r.width*.36),y=(e.clientY-r.top-r.height/2)/(r.height*.36),l=Math.max(1,Math.hypot(x,y));touchMove=[x/l,-y/l];stick.style.setProperty('--jx',`${x/l*33}px`);stick.style.setProperty('--jy',`${y/l*33}px`);}stick.addEventListener('pointerdown',e=>{if(!canPlay()||stickId!==null)return;e.preventDefault();stickId=e.pointerId;stick.setPointerCapture(e.pointerId);moveStick(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId&&canPlay())moveStick(e);});for(const n of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(n,e=>{if(e.pointerId===stickId){stickId=null;touchMove=[0,0];stick.style.setProperty('--jx','0px');stick.style.setProperty('--jy','0px');}});
 canvas.addEventListener('pointerdown',e=>{if(!canPlay()||(!mobile&&document.pointerLockElement===canvas))return;if(look)return;look={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!look||look.id!==e.pointerId||!canPlay())return;player.yaw-=(e.clientX-look.x)*.005;player.pitch=Math.max(-1.2,Math.min(1.2,player.pitch+(e.clientY-look.y)*.005));look.x=e.clientX;look.y=e.clientY;});for(const n of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(n,e=>{if(look?.id===e.pointerId)look=null;});
@@ -149,8 +151,9 @@ function frame(now,xrFrame){
   }
   for(let b of debris)draw(b);
   if(!first&&!vr&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5){part([player.x,player.y+1,player.z],[.5,1.1,.32],'354d65');part([player.x,player.y+1.7,player.z],[.32,.34,.32],'cba384');}
+  renderer.syncMarks(state.marks||[]);
   renderer.equip(equipped,first&&started);renderer.render(canvas,eye,target,mobile,dt,player);
-  let a=aim();$('hint').textContent=held?'E: Werfen':Math.abs(player.x)<1.7&&player.z<-3.2&&!state.unlocked?'E: Tuer / Smartphone':a.id?`${a.id} · ${state.objects[a.id]} HP · R: Reparieren`:'P: Smartphone · I: Inventar';
+  let a=aim();$('hint').textContent=held?'E: Werfen':Math.abs(player.x)<1.7&&player.z<-3.2&&!state.unlocked?'E: Tuer / Smartphone':a.id?`${a.id} · ${state.objects[a.id]} HP · R: Reparieren`:'R: Oberfläche reparieren · P: Smartphone · I: Inventar';
 }
 setInterval(()=>{if(started&&!busy)refresh().catch(()=>{});},3000);
 
@@ -188,7 +191,7 @@ qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListe
       const img=$('photo-'+id),fallback=$('fallback-'+id),url=renderer.photoPaths?.[id];
       if(url){img.onerror=()=>{img.hidden=true;fallback.hidden=false;};img.onload=()=>{img.hidden=false;fallback.hidden=true;};img.src=url;}
     }
-    for(const id of ['pistol','rifle']){ $('model-'+id).textContent='Zusammenhängendes 3D-Spielmodell'; }
+    for(const id of ['pistol','rifle']){ $('model-'+id).textContent=renderer.propPaths?.[id]?'Fototexturiertes Originalmodell':'Lokales Ersatzmodell'; }
     $('realismstatus').textContent=(renderer.realismStatus?.outside==='ready'?'Fotografischer Fensterausblick':'Fensterausblick: Ersatz')+' · Schlafzone: '+(renderer.realismStatus?.bed==='ready'?'Originalmodell':'Lokales Stoffmodell')+' · Nachttisch: '+(renderer.realismStatus?.nightstand==='ready'?'Originalmodell':'Lokales Modell');
     status.textContent='Rapier-Physik wird geladen …';
     physicsWorld=await RoomPhysics.create(room,spec);

@@ -138,20 +138,50 @@ class ScanStore:
 
 
 class GameStore:
+    SURFACES = frozenset(f"surface_{i}" for i in range(11)) | {"surface_bed", "surface_nightstand", "surface_lamp", "surface_rug", "surface_wardrobe"}
+    MARK_LIMIT = 64
+    TOTAL_MARK_LIMIT = 384
+
+    @staticmethod
+    def clean_mark(value):
+        if not isinstance(value, dict) or set(value) != {"point", "normal"}:
+            raise ValueError("Ungueltige Treffermarkierung")
+        def vector(name):
+            v = value[name]
+            if not isinstance(v, list) or len(v) != 3 or any(type(x) not in (int,float) or abs(x)>12 or not math.isfinite(x) for x in v):
+                raise ValueError("Ungueltige Treffermarkierung")
+            return v
+        p, n = vector("point"), vector("normal")
+        length = math.sqrt(sum(x*x for x in n))
+        if not .95 <= length <= 1.05: raise ValueError("Ungueltige Oberflaechennormale")
+        return [round(x,5) for x in p], [round(x/length,5) for x in n]
+
+    def add_mark(self, db, target, mark):
+        p,n = self.clean_mark(mark)
+        if (db.execute("SELECT count(*) FROM impact_marks WHERE target=?", (target,)).fetchone()[0] >= self.MARK_LIMIT
+                or db.execute("SELECT count(*) FROM impact_marks").fetchone()[0] >= self.TOTAL_MARK_LIMIT):
+            return False # preserve existing damage instead of evicting old marks
+        db.execute("INSERT INTO impact_marks(target,point,normal) VALUES (?,?,?)", (target,json.dumps(p),json.dumps(n)))
+        return True
+
     MAX_HP = {"crate": 60, "table": 100, "window": 35, "chair": 60, "sofa": 150, "coffee_table": 100}
     def __init__(self, path):
         self.path = path / "world.sqlite3"
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, hp INTEGER NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS progress (id INTEGER PRIMARY KEY CHECK(id=1), unlocked INTEGER NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS impact_marks (id INTEGER PRIMARY KEY AUTOINCREMENT, target TEXT NOT NULL, point TEXT NOT NULL, normal TEXT NOT NULL)")
+            db.execute("CREATE INDEX IF NOT EXISTS impact_target ON impact_marks(target)")
             db.execute("INSERT OR IGNORE INTO progress VALUES (1,0)")
             db.executemany("INSERT OR IGNORE INTO objects VALUES (?,?)", self.MAX_HP.items())
     def state(self):
         with closing(sqlite3.connect(self.path)) as db, db:
-            return {"objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0])}
+            db.execute("BEGIN")
+            return {"objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0]), "marks": [{"id":i,"target":t,"point":json.loads(p),"normal":json.loads(n)} for i,t,p,n in db.execute("SELECT id,target,point,normal FROM impact_marks ORDER BY id")]}
     def action(self, data, scans):
         if not isinstance(data, dict): raise ValueError("JSON object required")
         op = data.get("action")
+        mark_saved = None
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
             if op == "unlock":
@@ -160,17 +190,31 @@ class GameStore:
             elif op in ("hit", "repair"):
                 oid = data.get("id")
                 if not isinstance(oid,str) or oid not in self.MAX_HP: raise ValueError("Unbekanntes Objekt")
-                if op == "hit": db.execute("UPDATE objects SET hp=max(0,hp-25) WHERE id=?", (oid,))
-                else: db.execute("UPDATE objects SET hp=? WHERE id=?", (self.MAX_HP[oid],oid))
+                if op == "hit":
+                    if "mark" in data:
+                        self.clean_mark(data["mark"])
+                        if db.execute("SELECT hp FROM objects WHERE id=?", (oid,)).fetchone()[0] > 0:
+                            mark_saved = self.add_mark(db,oid,data["mark"])
+                    db.execute("UPDATE objects SET hp=max(0,hp-25) WHERE id=?", (oid,))
+                else:
+                    db.execute("UPDATE objects SET hp=? WHERE id=?", (self.MAX_HP[oid],oid))
+                    db.execute("DELETE FROM impact_marks WHERE target=?", (oid,))
+            elif op in ("mark_surface", "repair_surface"):
+                oid = data.get("id")
+                if not isinstance(oid,str) or oid not in self.SURFACES: raise ValueError("Unbekannte Raumoberflaeche")
+                if op == "mark_surface": mark_saved = self.add_mark(db,oid,data.get("mark"))
+                else: db.execute("DELETE FROM impact_marks WHERE target=?", (oid,))
             else: raise ValueError("Unbekannte Aktion")
-        return self.state()
+        result = self.state()
+        if mark_saved is not None: result["mark_saved"] = mark_saved
+        return result
 
 
 def make_handler(store: ScanStore, token: str, updater=None):
     updater = updater or UpdateBridge(None, "")
     game = GameStore(store.path)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.6.5"
+        server_version = "SecondLive/0.6.6"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -236,7 +280,7 @@ def make_handler(store: ScanStore, token: str, updater=None):
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.6.5", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "requires_token": bool(token), "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.6.6", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "requires_token": bool(token), "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":

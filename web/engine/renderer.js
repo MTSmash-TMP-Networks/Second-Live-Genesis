@@ -7,6 +7,8 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { buildArchitecture } from './architecture.js';
 import { XRMode } from './xr.js';
 import { ShotEffects } from './shotfx.js';
+import { ImpactMarks } from './impact_marks.js';
+import { isolateDisplayProp } from './display_prop.js';
 import { buildRoomDecor } from './room_decor.js';
 export { DECOR } from './room_decor.js';
 
@@ -25,6 +27,7 @@ export class RoomRenderer {
     this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     this.scene=new THREE.Scene();
     this.effects=new ShotEffects(this.scene);
+    this.impacts=new ImpactMarks();
     this.scene.background=new THREE.Color(0xc8d6df);
     this.scene.fog=new THREE.Fog(0xc8d6df,70,300);
     this.camera=new THREE.PerspectiveCamera(65,1,.05,350);
@@ -192,8 +195,19 @@ export class RoomRenderer {
       tex.mapping=THREE.EquirectangularReflectionMapping;this.scene.background=tex;this.scene.backgroundIntensity=.85;this.outsideTexture=tex;
       this.realismStatus.outside='ready';
     }catch(e){this.realismStatus.outside='unavailable';console.warn('Aussenfoto fehlt',e);}}
-    // Imported multi-variant props are intentionally not loaded into the viewmodel.
-    // This prevents detached magazines/duplicate weapon assemblies from appearing in hand.
+    // Library scenes can contain alternate versions and detached display objects.
+    // Select and fit a single visual assembly rather than rendering the whole scene.
+    for(const id of ['pistol','rifle']){
+      const url=manifest.prop_models?.[this.quality]?.[id];if(!url){this.realismStatus[id]='local';continue;}
+      try{
+        const gltf=await loader.loadAsync(path(url));
+        const reference=this.weaponModels[id].clone(true);
+        reference.visible=true;
+        const root=isolateDisplayProp(gltf.scene,reference);
+        this.weaponRoot.remove(this.weaponModels[id]);this.weaponRoot.add(root);this.weaponModels[id]=root;
+        this.propPaths[id]=url;this.realismStatus[id]='ready';
+      }catch(e){this.realismStatus[id]='local';console.warn('Spielmodell konnte nicht isoliert werden; lokale Darstellung bleibt aktiv',id,e);}
+    }
 
   }
   async load(spec,objects){
@@ -270,9 +284,16 @@ export class RoomRenderer {
     for(const o of objects){
       const m=new THREE.Mesh(this.geometry(o),this.material(o));
       this.place(m,o);m.castShadow=o.m!=='glass';m.receiveShadow=true;this.staticGroup.add(m);
+      if(o.surfaceId)this.impacts.register(o.surfaceId,m,o.m==='wooden_floor_01'?'wood':'wall');
     }
     buildArchitecture(this,spec);
     await buildRoomDecor(this,manifest,path,loader);
+    // Keep the crate in its own stable scene root instead of the reusable box pool.
+    const c=spec.crate,crate=new THREE.Group(),crateMat=this.textured.oak_veneer_01.clone();
+    const crateMesh=new THREE.Mesh(this.geometry({s:c.s,p:c.p,m:'oak_veneer_01'}),crateMat);
+    crateMesh.position.y=c.s[1]/2;crateMesh.castShadow=true;crateMesh.receiveShadow=true;crate.add(crateMesh);crate.visible=false;
+    this.models.crate={root:crate,materials:[[crateMat,crateMat.color.clone()]],damage:null};this.dynamicGroup.add(crate);
+    for(const [id,m] of Object.entries(this.models))if(spec[id])this.impacts.register(id,m.root,id==='window'?'glass':id==='sofa'||id==='chair'?'fabric':'wood');
     for(const [id,o] of Object.entries(spec))if(id!=='window'){
       const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map:this.shadowTexture,transparent:true,depthWrite:false,opacity:.78,polygonOffset:true,polygonOffsetFactor:-1}));
       m.rotation.x=-Math.PI/2;m.position.y=.006;m.scale.set(o.s[0]*1.55,o.s[2]*1.55,1);this.scene.add(m);this.contactShadows[id]=m;
@@ -335,6 +356,8 @@ export class RoomRenderer {
     if(m.damage!==damage){for(const [mat,color] of m.materials)mat.color.copy(color).multiplyScalar(damage);m.damage=damage;}
     return true;
   }
+  surfaceHit(origin,direction,held){this.scene.updateMatrixWorld(true);return this.impacts.cast(origin,direction,[this.staticGroup,this.dynamicGroup],held);}
+  syncMarks(marks){this.impacts.sync(marks);}
   equip(id,first){this.currentWeapon=id||null;this.weaponRoot.visible=!!id&&first&&!this.xrMode.active;for(const [key,g] of Object.entries(this.weaponModels))g.visible=key===id;for(const [key,g] of Object.entries(this.viewHands))g.visible=key===id;this.xrMode.equip(this.xrMode.active?id:null);}
   setLoop(fn){this.renderer.setAnimationLoop(fn);}
   shot(kind,ray){
@@ -343,7 +366,8 @@ export class RoomRenderer {
       let source=null,caseSource=null;
       if(this.weaponRoot.visible&&!this.xrMode.active){
         this.camera.updateMatrixWorld(true);
-        const front=this.weaponRoot.localToWorld(new THREE.Vector3(0,.035,kind==='rifle'?-.79:-.20));
+        const anchor=this.weaponModels[kind]?.userData.front||[0,.035,kind==='rifle'?-.79:-.20];
+        const front=this.weaponRoot.localToWorld(new THREE.Vector3(...anchor));
         if(front.distanceTo(new THREE.Vector3(...ray.origin))<ray.distance)source=front.toArray();
         caseSource=this.weaponRoot.localToWorld(new THREE.Vector3(.055,.025,0)).toArray();
       }

@@ -2,7 +2,7 @@
 FROM node:22-bookworm-slim AS renderer
 WORKDIR /build
 RUN npm install --no-audit --no-fund --save-exact three@0.170.0 esbuild@0.25.10 @dimforge/rapier3d-compat@0.17.3
-COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/shotfx.js ./
+COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js ./
 COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs ./
 # Rapier 0.17.3 advertises a CJS entry that esbuild may interpret as ESM.
 # Bypass package entry resolution for both builds; use the same embedded-WASM ESM file.

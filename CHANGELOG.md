@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.6 – Persistent Surface Damage
+- Fototexturierte optionale Original-Spielmodelle, Isolierung einer zusammenhängenden Mesh-Gruppe statt Anzeige aller Zubehör-/Variantenobjekte. Inventar zeigt Original- oder Ersatzmodell.
+- Treffer auf sichtbaren Mesh-Oberflächen statt nur groben Collider-Boxen; Three.js-Decals, materialabhängige kosmetische Spuren.
+- SQLite-Migration für Objekt- und Raumflächenmarkierungen, lokale Objektkoordinaten, Erhalt beim Neustart, gezielte Reparatur mit R/Touch.
+- Begrenzung auf 64 Markierungen pro Ziel und 384 insgesamt, ohne alte Spuren zu verdrängen; unveränderte HP- und Rapier-Logik.
+- Fünf neue Backendtests und erweiterter verpflichtender Three.js-Test im Docker-Build; Update-Protokoll 1 unverändert.
+
 ## 0.6.5 – Updater Reliability Hotfix
 - Exakte Image-ID und Image-Revision vor Containerwechsel prüfen.
 - Isolierter HTTP-Starttest mit leerem Datenverzeichnis; kein Zugriff auf Produktionsvolume oder Host-Netz.
