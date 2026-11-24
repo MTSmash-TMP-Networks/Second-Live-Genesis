@@ -1,0 +1,4 @@
+https://{$SECOND_LIVE_TLS_HOST}:8443 {
+    tls internal
+    reverse_proxy second-live:8765
+}

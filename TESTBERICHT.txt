@@ -1,0 +1,11 @@
+Second Live v0.6.2 - GitHub Auto-Updater
+
+PASS: 39 Python-Tests (27 Bestands- und 12 neue Update-Tests).
+- Admin-Authentifizierung, kein Spieltoken-Bypass, begrenzte Auftragsdaten, Dubletten, Offline-Status.
+- Exakte GitHub-Revision, tatsächlicher lokaler Git-Fetch/Checkout eines Test-Repos, inkompatibles Protokoll abgelehnt.
+- Simulierte Docker-CLI: erfolgreicher Wechsel, Buildfehler ohne Umschalten, Healthcheck-Fehler mit Rollback, Wiederherstellung eines unterbrochenen Wechsels, geänderter Head, Symlink-Auftrag.
+PASS: Desktop-/Mobile-Client-Smoke-Tests (Mock-Renderer und Mock-Physik).
+PASS: Isolierter Renderer-Fotopfad-Test.
+PASS: JavaScript/Python/Bash-Syntax.
+
+NICHT lokal ausführbar: echter Docker-Build/Containerwechsel, GitHub-Git-Netzwerkzugriff, echte WebGL- und VR-Abnahme, Live-Asset-Downloads. Der verpflichtende Rapier-WASM-Test im Docker-Build bleibt erhalten. Healthcheck prüft Server und Grafikdateien, keine visuelle Browserabnahme. Image-Rollback reversiert keine inkompatiblen Datenmigrationen. Das Host-Updater-Programm/Compose-Infrastruktur selbst werden nicht automatisch aktualisiert. Der Entwicklungsstand ist nicht für ungeschützten öffentlichen Betrieb freigegeben.

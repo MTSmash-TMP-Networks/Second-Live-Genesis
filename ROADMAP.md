@@ -1,0 +1,14 @@
+# Roadmap
+
+| Stufe | Ziel | Stand |
+| --- | --- | --- |
+| 0.1–0.3 | Scanner, HTML5-Client, interaktive Tür, persistente HP, Touch, Docker | Prototyp |
+| 0.4–0.5.2 | Three.js, echte Fotomaterialien, glTF, Rapier, Download-Hotfixes | Auf Nutzer-Docker in früheren Versionen teilweise getestet |
+| 0.6–0.6.1 | Startraum, Fenster/Stoff, realistischere Props, erste WebXR-Integration | Code vorhanden; visuelle und Headset-Abnahme offen |
+| 0.6.2 | GitHub-Update im Spiel, separate Admin-Rechte, transaktionaler Docker-Wechsel | Host-/API-Regressionstests; Docker-End-to-End offen |
+| 0.7 | Hochwertiger Startraum, physikalisch plausible Interaktionen, echte Rekonstruktionspipeline mit begehbaren Testscans | Offen |
+| 0.8 | Geografische Chunk-Welt, Asset-Versionierung, Datenschutz und Moderation | Offen |
+| 0.9 | Autoritativer Multiplayer, Konten, Rechte, Persistenz auch für Bewegungen und Bruchstücke | Offen |
+| 1.0 | Öffentliche Domain, Wirtschaft, skalierbare Produktion, Desktop/Mobile/VR-Abnahme | Offen |
+
+Versionen sind Entwicklungsziele, keine Liefertermine. Änderungen an Host-Updater/Compose benötigen bis zu einem eigenen signierten Updater-Verfahren ein manuelles Update.

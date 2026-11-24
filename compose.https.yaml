@@ -1,0 +1,17 @@
+services:
+  https:
+    image: caddy:2
+    ports:
+      - "${SECOND_LIVE_HOST:-0.0.0.0}:8443:8443"
+    environment:
+      SECOND_LIVE_TLS_HOST: ${SECOND_LIVE_TLS_HOST:?Set LAN IP or hostname in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - second-live
+    restart: unless-stopped
+volumes:
+  caddy_data:
+  caddy_config:

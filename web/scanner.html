@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080d18">
+  <meta name="description" content="Second Live: Erstelle deine virtuelle Welt aus Fotos und GPS-Positionen.">
+  <title>Second Live | Scan Studio</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body><div class="game-return"><a href="/">Zurück zu Second Live</a></div>
+ <div class="app-shell">
+  <aside class="sidebar">
+   <div class="brand"><div class="brand-mark">S<span>L</span></div><div class="brand-text">SECOND <strong>LIVE</strong><small>WORLD CREATION SYSTEM</small></div></div>
+   <nav class="sidebar-links" aria-label="Navigation"><a href="/">3D-Spielwelt</a><a href="#scanner" class="active"><span class="nav-icon">01</span> Scanner</a><a href="#sammlung"><span class="nav-icon">02</span> Aufnahmen</a><a href="#projekt"><span class="nav-icon">03</span> Projekt</a></nav>
+   <div class="sidebar-bottom"><span class="green-dot"></span> <span id="serverStatus">Server wird gepr&uuml;ft</span><p>Build 0.1 &mdash; Prototype</p></div>
+  </aside>
+  <main class="main">
+   <header class="topbar"><div><div class="eyebrow">SECOND LIVE / WORLD BUILDER</div><h1>Scan Studio <span class="beta">BETA</span></h1><p>Reale Orte erfassen. Eine neue Welt erschaffen.</p></div><div class="header-actions"><span class="pill"><span class="green-dot"></span> Live Scanner</span></div></header>
+   <section id="scanner" class="scan-grid">
+    <div class="camera-area panel">
+      <div class="panel-header"><div><span class="section-id">01 / CAPTURE</span><h2>Kamera-Scanner</h2></div><span id="cameraState" class="status-tag">Kamera inaktiv</span></div>
+      <div class="viewfinder" id="viewfinder"><video id="camera" autoplay muted playsinline></video><img id="photoPreview" alt="Vorschau der letzten Aufnahme" hidden><div class="camera-placeholder" id="cameraPlaceholder"><div class="lens-icon"><span></span></div><strong>Bereit f&uuml;r deinen n&auml;chsten Scan</strong><small>Starte die Kamera oder w&auml;hle ein bestehendes Foto.</small></div><div class="scan-grid-overlay"></div><div class="vf-corner tl"></div><div class="vf-corner tr"></div><div class="vf-corner bl"></div><div class="vf-corner br"></div><div class="viewfinder-top"><span class="tag camera-live" id="liveLabel">STANDBY</span><span class="tag">JPEG / HIGH QUALITY</span></div><div class="viewfinder-bottom"><span id="coordsOverlay">GPS NOT ACTIVE</span><span id="clockOverlay">00:00:00</span></div></div>
+      <div class="camera-toolbar"><button class="btn secondary" id="startCamera"><span class="symbol">&#9673;</span> Kamera starten</button><label class="btn secondary file-button" for="fileInput"><span class="symbol">&#8593;</span> Foto w&auml;hlen</label><input id="fileInput" type="file" accept="image/*" hidden><button id="flipCamera" class="btn icon-btn secondary" title="Kamera wechseln" aria-label="Kamera wechseln">&#8635;</button></div>
+      <div class="capture-wrap"><button class="shutter" id="captureButton" aria-label="Foto aufnehmen" disabled><span></span></button><span>FOTO AUFNEHMEN</span></div>
+    </div>
+    <div class="right-stack">
+      <section class="panel location-panel"><div class="panel-header"><div><span class="section-id">02 / LOCATION</span><h2>GPS-Tracking</h2></div><span class="status-tag" id="gpsState">Deaktiviert</span></div><div class="location-map"><canvas id="miniMap" width="650" height="330" aria-label="Schematische Karte der Scanpunkte"></canvas><span class="map-label">LOCAL WORLD / METERS</span><span class="compass">N &uarr;</span></div><div class="gps-metrics"><div><span>BREITENGRAD</span><strong id="latitude">&mdash;</strong></div><div><span>L&Auml;NGENGRAD</span><strong id="longitude">&mdash;</strong></div><div><span>GENAUIGKEIT</span><strong id="accuracy">&mdash;</strong></div></div><button class="btn secondary wide" id="gpsButton">GPS-Tracking aktivieren</button><p class="info-note">Standortdaten werden nur mit deiner Zustimmung erfasst. GPS liefert Ortskoordinaten, aber keine 3D-Geometrie.</p></section>
+      <section class="panel details-panel"><div class="panel-header"><div><span class="section-id">03 / UPLOAD</span><h2>Aufnahme speichern</h2></div></div><label for="scanTitle">Name des Ortes</label><input class="text-input" id="scanTitle" maxlength="80" value="Meine Second Live Welt" placeholder="z.B. Marktplatz, Haupteingang"><div class="helper-row"><span id="photoStatus">Noch kein Foto ausgew&auml;hlt</span><span id="queueCount">0 ausstehend</span></div><button class="btn primary wide" id="saveScan" disabled>Scan zur Welt hinzuf&uuml;gen <span>&rarr;</span></button><button class="btn text-button wide" id="retryQueue">Ausstehende Uploads senden</button></section>
+    </div>
+   </section>
+   <section id="sammlung" class="panel library-panel"><div class="panel-header"><div><span class="section-id">04 / COLLECTION</span><h2>Erfasste Orte</h2></div><button id="refreshLibrary" class="btn secondary small">Aktualisieren &#8635;</button></div><div class="statline"><div><span>FOTOS</span><strong id="totalScans">0</strong></div><div><span>3D-ANKERPUNKTE</span><strong id="gpsScans">0</strong></div><div><span>LOKALE WARTESCHLANGE</span><strong id="pendingScans">0</strong></div></div><div id="scanList" class="scan-list"><p class="empty-state">Noch keine Aufnahmen gespeichert.</p></div></section>
+   <section id="projekt" class="panel project-panel"><div><span class="section-id">05 / WORLD ENGINE</span><h2>Vom Scan zur Spielwelt</h2><p>Godot liest deine hochgeladenen Fotos und GPS-Punkte als Texturtafeln in einer prozeduralen 3D-Stadt. Mehrbild-Photogrammetrie und detailgetreue 3D-Modelle sind der n&auml;chste Ausbauschritt.</p></div><div class="project-right"><label for="apiToken">Server-Zugriffsschl&uuml;ssel (falls eingerichtet)</label><input id="apiToken" class="text-input" type="password" autocomplete="off" placeholder="Nur f&uuml;r die aktuelle Sitzung"><button class="btn secondary" id="exportWorld">Welt-Daten herunterladen</button></div></section>
+   <footer>SECOND LIVE &copy; 2026 <span>SCAN IT. BUILD IT. LIVE IT.</span></footer>
+  </main>
+ </div>
+ <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

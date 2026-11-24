@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+second-live-ca*.crt
+second-live-ca.tmp.*
+data/
+*.tar.gz
+__pycache__/
+node_modules/
+web/assets/polyhaven/
+web/engine/renderer.bundle.js
+web/engine/THREE-LICENSE.txt
+
+.sl-update/

@@ -1,0 +1,32 @@
+services:
+  second-live:
+    build:
+      context: .
+      args:
+        SECOND_LIVE_REVISION: ${SECOND_LIVE_REVISION:-local}
+        SECOND_LIVE_PHOTO_REFRESH: ${SECOND_LIVE_PHOTO_REFRESH:-0}
+        SECOND_LIVE_WIKIMEDIA_CONTACT: ${SECOND_LIVE_WIKIMEDIA_CONTACT:-}
+    ports:
+      - "${SECOND_LIVE_HOST:-0.0.0.0}:${SECOND_LIVE_PORT:-8765}:8765"
+    environment:
+      SECOND_LIVE_BIND: 0.0.0.0
+      SECOND_LIVE_PORT: 8765
+      SECOND_LIVE_TOKEN: ${SECOND_LIVE_TOKEN:?Set a strong token in .env}
+      SECOND_LIVE_UPDATE_ADMIN_TOKEN: ${SECOND_LIVE_UPDATE_ADMIN_TOKEN:-}
+      SECOND_LIVE_UPDATE_BRIDGE: /app/update
+    volumes:
+      - second_live_data:/app/data
+      - ./.sl-update/status:/app/update/status:ro
+      - ./.sl-update/requests:/app/update/requests:rw
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, python, -c, "import json, urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8765/api/health',timeout=3))['graphics_assets']"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  second_live_data:
