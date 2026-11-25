@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.5 – Hotel Service Build Fix
+- Korrigiert Docker-Build-Abbruch durch Sprite.raycast ohne Kamera: Namensschilder von NPC und Gästen sind rein visuell und nicht raycastbar.
+- Regressionstest für sichtbare und unsichtbare Sprites bei kamerafreien rekursiven Strahltests; alle bisherigen Flur-, Wand- und Physiktests bleiben aktiv.
+
 ## 0.11.4 – Hotel Service & Movement
 - Erster gemeinsamer NPC: eigener stilisierter KI-Hotelmitarbeiter mit roter Uniform, goldenen Details, Mütze und serverseitiger Flurpatrouille.
 - „Hallo!“ bei Annäherung mit kurzer Geste, lokaler räumlicher Sprachausgabe und Untertitel; erneute Begrüßung erst nach Trennung und Abklingzeit.
