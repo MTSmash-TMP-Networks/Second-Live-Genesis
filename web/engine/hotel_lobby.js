@@ -42,7 +42,7 @@ export class HotelLobbyView{
    const segment=(a,b,slot=null)=>{
     if(b-a<.0001)return;
     const g=new THREE.Group();root.add(g);const z=(a+b)/2,n=b-a;
-    box(g,[x,L.height/2,z],[.17,L.height,n],wall);
+    g.wallSolid=box(g,[x,L.height/2,z],[.17,L.height,n],wall);
     box(g,[face,.07,z],[.04,.14,n],trim);
     box(g,[face,2.92,z],[.045,.09,n],wood);
     box(g,[face,2.82,z],[.028,.018,n],brass);
