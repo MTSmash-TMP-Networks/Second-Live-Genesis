@@ -11,6 +11,31 @@ from server import create_server, GameStore, HOTEL_LAYOUT
 from world_capture import CaptureStore
 
 class GameOnlyTest(unittest.TestCase):
+    def test_curtains_persist_and_preserve_other_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            game=GameStore(root)
+            # Simulate a pre-update database that has no curtain setting.
+            import sqlite3
+            with sqlite3.connect(game.path) as db:
+                db.execute("DROP TABLE curtain_settings")
+            game=GameStore(root)
+            before=game.state()
+            self.assertFalse(before['curtains_closed'])
+            closed=game.action({'action':'toggle_curtains','id':'surface_curtain_l'},None)
+            self.assertTrue(closed['curtains_closed'])
+            self.assertEqual({k:v for k,v in closed.items() if k!='curtains_closed'},{k:v for k,v in before.items() if k!='curtains_closed'})
+            self.assertTrue(GameStore(root).state()['curtains_closed'])
+            with self.assertRaises(ValueError):
+                game.action({'action':'toggle_curtains','id':'table'},None)
+            self.assertFalse(game.action({'action':'toggle_curtains','id':'window'},None)['curtains_closed'])
+            with sqlite3.connect(game.path) as db:
+                db.execute("INSERT INTO decor_damage(target,stage) VALUES('surface_curtainrod',4)")
+            with self.assertRaises(ValueError):
+                game.action({'action':'toggle_curtains','id':'surface_curtain_r'},None)
+            game.action({'action':'repair_surface','id':'surface_curtainrod'},None)
+            self.assertTrue(game.action({'action':'toggle_curtains','id':'surface_curtain_r'},None)['curtains_closed'])
+
     def test_hotel_default_layout_is_placeable(self):
         with tempfile.TemporaryDirectory() as tmp:
             game=GameStore(Path(tmp))
