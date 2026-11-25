@@ -11,7 +11,8 @@ LEASE=LAYOUT['leaseSeconds']
 
 def door(slot):
     side=-1 if slot<LAYOUT['roomsPerSide'] else 1
-    z=LAYOUT['firstDoorZ']+(slot%LAYOUT['roomsPerSide'])*LAYOUT['doorSpacing']
+    i=slot%LAYOUT['roomsPerSide']
+    z=LAYOUT['firstDoorZ']+i*LAYOUT['doorSpacing']+(i//2)*LAYOUT['pairGap']
     return side,z
 
 def spawn(slot):
@@ -34,6 +35,10 @@ class HotelLobby:
     def prune(self,now):
         for player,row in list(self.players.items()):
             if now-row['seen']>=LEASE:del self.players[player]
+    def observe(self,player,profile,directory):
+        with self.lock:
+            self.prune(self.clock())
+            return self.snapshot(player,{'slot':profile['slot']},directory)
     def snapshot(self,player,row,directory):
         peers=[{'slot':r['slot'],'position':list(r['position']),'yaw':r['yaw'],'nickname':r['nickname'],'avatar':r['avatar']}
                for key,r in self.players.items() if key!=player]
