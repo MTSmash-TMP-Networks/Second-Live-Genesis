@@ -22,7 +22,7 @@ import { HOTEL_LAYOUT, hotelMaterials, applyPhotoMaterials, createHotelModel } f
 export { HOTEL_LAYOUT };
 import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
 import { HotelLobbyView } from './hotel_lobby.js';
-import { NeighborRoomView, hotelOpenings } from './hotel_connections.js';
+import { NeighborRoomView, HallFacadeViews, hotelOpenings } from './hotel_connections.js';
 export { hotelOpenings } from './hotel_connections.js';
 import { CharacterStudio, createCharacter, animateCharacter, disposeCharacter } from './character.js';
 export { CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter } from './character.js';
@@ -416,6 +416,7 @@ export class RoomRenderer {
     this.hotelHallLights=new THREE.Group();this.hotelViewRoot.add(this.hotelHallLights);this.hotelHallLights.visible=false;
     for(const x of [-2.5,2.5]){const light=new THREE.PointLight(0xffe0ba,10,4.5,2);light.position.set(x,2.7,-7.05);this.hotelHallLights.add(light);}
     this.neighborView=new NeighborRoomView(this,spec);
+    this.hallFacades=new HallFacadeViews(this,spec);
     this.hotelSlot=null;this.hotelHallOpen=false;
     this.status('Fotomaterialien und 3D-Modelle bereit · '+this.quality.toUpperCase());
   }
@@ -543,6 +544,7 @@ export class RoomRenderer {
     return {hall,neighbor};
   }
   setNeighborSnapshot(snapshot){this.neighborView?.setSnapshot(snapshot);}
+  syncHallFacades(rows,ownSlot,state){this.hallFacades?.sync(rows,ownSlot,state);}
   setCharacter(profile){
     if(this.localCharacter)disposeCharacter(this.localCharacter);
     this.localCharacter=createCharacter(profile.avatar);this.localCharacter.visible=false;this.scene.add(this.localCharacter);
