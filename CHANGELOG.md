@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.6 – Furniture Placement & Rotation
+- Bett und Schrank lassen sich wie die bisherigen fünf Gegenstände aufnehmen, verschieben und abstellen.
+- Q/F und kontextabhängige Touch-Buttons drehen gehaltene Möbel um jeweils 90 Grad.
+- Drehung und Position werden pro Spielwelt gespeichert; additive SQLite-Tabelle, alte Positionen ohne Winkel bleiben gültig.
+- Gedrehte Kollisionsabmessungen und Stellplatzprüfung, bestehende Einrichtungs-Schadensstufen und lokale Treffermarkierungen bleiben erhalten.
+- Keine Änderungen am Host-Updater oder der CSP.
+
 ## 0.7.5 – CSP & Door Loading Hotfix
 - KTX2/Basis-Dekodierung ausschliesslich beim Docker-Build; eingebettete PNG-Texturen und unveraenderte Meshopt-Geometrie in neuen lokalen GLBs.
 - Separater Lademanager und Deadline fuer optionale Originaltuer; lokales Ersatzmodell bei Fehler oder Timeout.
