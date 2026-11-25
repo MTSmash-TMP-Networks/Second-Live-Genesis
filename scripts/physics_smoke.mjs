@@ -74,13 +74,53 @@ assert.ok(Math.abs(cb.custom.p[1]-.4)<.06);
 cs.objects.custom=0;cp.step(1/60,cb,cs,null,null,[]);assert.ok(!cp.entries.has('custom'));
 cs.objects.custom=100;cp.step(1/60,cb,cs,null,null,[]);assert.ok(cp.entries.has('custom'));
 delete cb.custom;delete customSpec.custom;delete cs.objects.custom;cp.step(1/60,cb,cs,null,null,[]);assert.ok(!cp.entries.has('custom'));
+
+// A thin wall-mounted object may land upright, on its side or flat.
+// Its valid centre height depends on the final orientation.
+function bottomOfBox(body,size){
+ const [x,y,z,w]=body.q;
+ const vertical=[2*(x*y+w*z),1-2*(x*x+z*z),2*(y*z-w*x)];
+ return body.p[1]-vertical.reduce((sum,v,i)=>sum+Math.abs(v)*size[i]/2,0);
+}
+function assertReleasedToFloor(label){
+ const height=cb.custom.p[1];
+ cp.step(1/60,cb,cs,null,null,[]);
+ assert.ok(cp.entries.get('custom').body.isDynamic(),label+': released body must be dynamic');
+ assert.equal(cp.entries.get('custom').col.isSensor(),false,label+': contact collider restored');
+ for(let i=0;i<24;i++)cp.step(1/60,cb,cs,null,null,[]);
+ assert.ok(cb.custom.p[1]<height-.10,label+': gravity must move body downward');
+ // Allow the narrow cuboid time to finish tipping. Still require actual floor
+ // contact and negligible vertical motion; a floating/falling body fails.
+ let floorContact=false;
+ for(let i=0;i<600;i++){
+  cp.step(1/60,cb,cs,null,null,[]);
+  const bottom=bottomOfBox(cb.custom,customSpec.custom.s);
+  assert.ok(bottom>-.10,label+': fell through floor '+JSON.stringify(cb.custom));
+  if(i>=180&&Math.abs(bottom)<.035&&Math.abs(cb.custom.v[1])<.08){
+   floorContact=true;break;
+  }
+ }
+ assert.ok(floorContact,label+': did not reach floor '+JSON.stringify(cb.custom));
+ console.log(label+': dynamic, gravity and rotated box floor contact OK');
+}
 customSpec.custom={p:[0,1.5,0],s:[.8,.6,.1],imported:true,mounted:true};
 cb.custom={p:[0,1.5,0],q:[0,0,0,1],v:[0,0,0]};cs.objects.custom=100;
 for(let i=0;i<120;i++)cp.step(1/60,cb,cs,null,null,[]);
-assert.ok(Math.abs(cb.custom.p[1]-1.5)<.001);
+assert.ok(cp.entries.get('custom').body.isFixed());
+assert.ok(Math.abs(cb.custom.p[1]-1.5)<.001,'attached object must not fall');
+// Simulate the persisted support being removed without a grab.
+customSpec.custom.mounted=false;
+assertReleasedToFloor('Removed wall attachment');
+// Simulate a re-mounted picture, then picking it up and dropping it with
+// the authoritative new pose supplied by the room model store.
+customSpec.custom.mounted=true;
+cb.custom={p:[0,1.5,0],q:[0,0,0,1],v:[0,0,0]};
+cp.step(1/60,cb,cs,null,null,[]);
 for(let i=0;i<15;i++)cp.step(1/60,cb,cs,'custom',[1,1.5,0],[]);
 assert.equal(cp.entries.get('custom').held,true);
+assert.ok(cp.entries.get('custom').col.isSensor());
+assert.ok(Math.abs(cb.custom.p[0]-1)<.02,'mounted object follows grab');
 customSpec.custom.mounted=false;
-for(let i=0;i<180;i++)cp.step(1/60,cb,cs,null,null,[]);
-assert.ok(Math.abs(cb.custom.p[1]-.3)<.06);
+cb.custom={p:[1,1.5,0],q:[0,0,0,1],v:[0,0,0]};
+assertReleasedToFloor('Grabbed wall object');
 console.log('Rapier: runtime imported objects, gravity, grab/drop, destruction, repair, wall attachment and release');

@@ -242,7 +242,7 @@ def placement(data):
 def physical_pose(data):
     p=data.get('position');q=data.get('quaternion')
     need(isinstance(p,list) and len(p)==3 and isinstance(q,list) and len(q)==4,'Ungueltige Physikposition')
-    p=[number(p[0],-4.8,4.8),number(p[1],0,2.95),number(p[2],-4.8,4.8)]
+    p=[number(p[0],-4.9,4.9),number(p[1],0,2.95),number(p[2],-4.9,4.9)]
     q=[number(v,-1.001,1.001) for v in q]
     length=math.sqrt(sum(v*v for v in q))
     need(.98<=length<=1.02,'Ungueltige Physikrotation')

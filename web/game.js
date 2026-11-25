@@ -716,7 +716,7 @@ function syncRoomModelBodies(preserveId=null){
 }
 function importedMotion(id,body=bodies[id]){
  const o=spec[id],p=body.p,q=body.q||[0,0,0,1],h=boundsSize(o.s,q)[1];
- if(![...p,...q].every(Number.isFinite)||Math.abs(p[0])>4.8||Math.abs(p[2])>4.8||p[1]<0||p[1]>2.95)return null;
+ if(![...p,...q].every(Number.isFinite)||Math.abs(p[0])>4.9||Math.abs(p[2])>4.9||p[1]<0||p[1]>2.95)return null;
  return {position:p.map(v=>Math.round(v*10000)/10000),quaternion:q.map(v=>Math.round(v*1000000)/1000000),base_y:Math.max(0,Math.min(2.75,p[1]-h/2))};
 }
 async function importedAction(op,id,extra={}){

@@ -204,6 +204,11 @@ class GameOnlyTest(unittest.TestCase):
             again=store.action('a',{**data,'revision':loose['revision']},walls={})['models'][0]
             dropped=store.action('a',{'action':'motion','id':added,'revision':again['revision'],'position':[0,1,0],'quaternion':[0,0,0,1],'base_y':.7})['models'][0]
             self.assertIsNone(dropped['mount'])
+            near_wall=store.action('a',{'action':'motion','id':added,'revision':dropped['revision'],'position':[-4.86,.05,2],'quaternion':[0,0,0,1],'base_y':0})['models'][0]
+            self.assertEqual(near_wall['pose']['p'],[-4.86,.05,2])
+            self.assertIsNone(near_wall['mount'])
+            with self.assertRaises(ValueError):
+                store.action('a',{'action':'motion','id':added,'revision':near_wall['revision'],'position':[-5.1,.05,2],'quaternion':[0,0,0,1],'base_y':0})
             self.assertEqual(store.get('a',added),room_model_fixture())
 
     def test_private_room_model_validation_and_persistence(self):

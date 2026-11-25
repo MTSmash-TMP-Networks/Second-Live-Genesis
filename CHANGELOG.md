@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.9 – Wall Attachment Physics Regression Fix
+- Der Rapier-Test fuer abgeloeste Wandobjekte prueft Schwerkraft, dynamischen Starrkoerper und echten Bodenkontakt anhand der rotierten Kollisionsbox, statt eine feste aufrechte Endlage vorauszusetzen. Separate Tests fuer zerstoerte Befestigung und Aufheben/Loslassen; keine deaktivierten Build-Pruefungen.
+- Physikpositionen duennen Modelle koennen nach dem Herunterfallen auch unmittelbar an der inneren Wandflaeche gespeichert werden (bis 4,90 m vom Raumzentrum). Bestehende Begrenzung normaler Platzierung bleibt unveraendert.
+
 ## 0.12.8 – Wall Mounting & Blackout Curtains
 - Importierte GLB-Objekte können mit B oder „An Wand befestigen“ auf einer freien senkrechten Zimmerwand angebracht werden. Gespeicherte Befestigung hält den Starrkörper fest; Aufheben, Abstellen, Fallenlassen und Entfernen der tragenden Wandzelle lösen die Befestigung. Größenwahl und Schadenszustand bleiben erhalten.
 - Intakte geschlossene Vorhänge dimmen alle Tageslichtquellen einschließlich Sonne, Fensterlicht, Hemisphärenlicht und HDR-Umgebung auf null. Innenlampen bleiben separat schaltbar; zerstörte Vorhänge lassen Tageslicht wieder herein.
