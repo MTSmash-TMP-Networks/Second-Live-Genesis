@@ -8,5 +8,6 @@ for(const [,id] of game.matchAll(/\$\('([^']+)'\)/g))assert.ok(ids.includes(id),
 for(const obsolete of ['phone-app-capture','start-gps','/scanner.html','/panorama.html','/api/capture/locate','locationFix'])assert.ok(!(html+game).includes(obsolete),obsolete);
 assert.ok(game.includes('health.personal_world===true'));
 assert.ok(game.includes("api('/api/session',{})"));
-assert.ok(ids.includes('phone-app-world')&&ids.includes('update-open-phone'));
+assert.ok(ids.includes('phone-app-world')&&ids.includes('phone-page-world')&&ids.includes('update-open-phone'));
+assert.ok(html.includes('Eigene Welten')&&html.includes('Weltimport'));
 console.log('Game-only UI, session handling and DOM checks passed');
