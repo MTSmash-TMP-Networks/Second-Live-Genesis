@@ -1,6 +1,6 @@
 # Second Live – World Genesis
 
-**v0.8.0 · DA3 Multi-view Capture / Experimental**
+**v0.9.0 · Guided 360° Panorama Capture / Experimental**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spieler sollen ihre gemeinsame Welt aus realen Aufnahmen erschaffen, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
 
@@ -67,7 +67,11 @@ Die `.env`, ein zufälliger Scanner-/optionaler Spielschlüssel sowie ein unabh�
 
 **Update von älteren ZIP-Versionen:** Dateien in den bisherigen Projektordner kopieren, `.env` und Docker-Volume unverändert lassen; `chmod +x start.sh stop.sh && ./start.sh --build` (ohne aktive Ingame-Update-Konfiguration). Ordnername/Compose-Projektname beibehalten, damit das existierende Datenvolume verwendet wird. Nicht `docker compose down -v` ausführen.
 
-## World Capture – geführter Smartphone-Scan mit Live-3D
+## World Capture – geführte 360°-Panoramen
+
+Die Kamera im Spiel öffnet ab v0.9.0 die neue, private Panorama-Erfassung. Pro Standpunkt werden zwölf Richtungen auf Augenhöhe erfasst; optional kommen obere/untere Reihen und zwei steile Ansichten hinzu. Gespeicherte Panoramen lassen sich direkt im Browser rundum betrachten und zwischen Aufnahmepunkten wechseln. Smartphone-Sensoren sind optional, manuelle Aufnahme und Bildimport bleiben möglich. Die Bildwinkel und relativen Standortwechsel sind geschätzt; die Vorschau ist noch keine frei begehbare 3D-Szene. Originalaufnahmen bleiben lokal erhalten. [Anleitung und Grenzen](docs/PANORAMA.md). Die bisherige KI-Rekonstruktion ist weiterhin unter /scanner.html erreichbar; beide Arbeitsbereiche sind getrennt.
+
+## World Capture – bisherige Foto-/KI-Rekonstruktion mit Live-3D
 
 v0.8.0 unterstützt lokal Depth Anything 3 Small (Apache-2.0). Der optionale separate KI-Container wird bewusst nicht durch den Spiel-Updater gebaut. Nach Installation erkennt der Spielworker ihn automatisch über das private Compose-Netz. [DA3 installieren und testen](docs/DA3.md). Ohne aktiven Dienst bleibt der alte COLMAP-Fallback verfügbar. DA3 schätzt Tiefe, relative Kameraposen und Konfidenz gemeinsam; keine garantierte metrische Vermessung. Für die Live-Ansicht werden bis zu 8, für den Abschluss bis zu 16 chronologisch verteilte Schlüsselbilder gemeinsam verarbeitet. Es gibt noch keine globale fortlaufende DA3-Streaming-Fusion. Der Spieler kann mit brauchbarer DA3-Vorschau bereits ab vier Fotos abschließen; die Zahl 60 bleibt nur eine Speichergrenze.
 
