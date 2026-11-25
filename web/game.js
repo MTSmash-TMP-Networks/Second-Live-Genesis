@@ -40,7 +40,8 @@ solid(0,-1.46,0,10,.22,10,'605a50');
 // Baseboards, crown details, outlet and switch.
 for(let x of [-4.86,4.86]){const start=objects.length;box(x,.075,0,.08,.15,9.78,'f0ede8');groupSurface(x<0?'surface_trim_w':'surface_trim_e',start);}
 {const start=objects.length;box(0,.075,4.86,9.78,.15,.08,'252a2e');groupSurface('surface_trim_s',start);}
-for(let x of [-3,3]){const start=objects.length;box(x,.075,-4.86,3.85,.15,.08,'f0ede8');groupSurface(x<0?'surface_trim_nw':'surface_trim_ne',start);}
+// Continue the existing baseboards to the outer edge of the door casing (x=±.6225).
+for(let x of [-2.775,2.775]){const start=objects.length;box(x,.075,-4.86,4.30,.15,.08,'f0ede8');groupSurface(x<0?'surface_trim_nw':'surface_trim_ne',start);}
 for(let x of [-4.86,4.86]){const start=objects.length;box(x,2.965,0,.1,.08,9.8,'f0ede8');groupSurface(x<0?'surface_crown_w':'surface_crown_e',start);}
 for(let z of [-4.86,4.86]){const start=objects.length;box(0,2.965,z,9.8,.08,.1,'f0ede8');groupSurface(z<0?'surface_crown_n':'surface_crown_s',start);}
 {const start=objects.length;box(4.87,.33,-1.35,.03,.13,.19,'f0ede8');box(4.85,.33,-1.35,.012,.055,.095,'655343');groupSurface('surface_outlet',start);}
