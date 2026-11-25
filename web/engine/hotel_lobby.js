@@ -19,9 +19,17 @@ function plaque(g,text,p,yaw,w=.33,h=.124){
  const tex=labelTexture(text),m=new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide});
  const o=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m);o.position.set(...p);o.rotation.y=yaw;g.add(o);return o;
 }
+// A floating label is presentation only, not a selectable world surface.
+// Sprite.raycast requires a camera even if the sprite or its parent is hidden.
+// Explicitly exclude labels from all world-space geometry/interaction rays.
+function nameTag(name,y,width,height){
+ const tag=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture(name),depthTest:true,transparent:true}));
+ tag.raycast=()=>{};
+ tag.position.set(0,y,0);tag.scale.set(width,height,1);return tag;
+}
 function avatar(slot,profile){
  const g=createCharacter(profile?.avatar),name=profile?.nickname||'Gast '+lobbyDoor(slot).number;
- const nameMap=labelTexture(name),tag=new THREE.Sprite(new THREE.SpriteMaterial({map:nameMap,depthTest:true,transparent:true}));tag.position.set(0,2.03*g.userData.height,0);tag.scale.set(.83,.31,1);g.add(tag);g.userData.nameTag=tag;
+ const tag=nameTag(name,2.03*g.userData.height,.83,.31);g.add(tag);g.userData.nameTag=tag;
  return g;
 }
 export class HotelLobbyView{
@@ -84,7 +92,7 @@ export class HotelLobbyView{
   this.lights=[];for(let i=0;i<7;i++){const l=new THREE.PointLight(0xffdfb6,17,8,2);l.position.set(0,2.72,(i-3)*6);this.scene.add(l);this.lights.push(l);}
   this.local=null;
   this.npc=createHotelNpc();this.npc.name='KI-Hotelservice';this.npc.visible=false;this.npcTarget=null;this.npcGreeting=0;
-  const tag=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture('KI-Hotelservice'),depthTest:true,transparent:true}));tag.position.set(0,2.13,0);tag.scale.set(1.02,.35,1);this.npc.add(tag);
+  const tag=nameTag('KI-Hotelservice',2.13,1.02,.35);this.npc.add(tag);
   this.guestRoot.add(this.npc);
  }
  syncNpc(p){
