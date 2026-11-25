@@ -17,7 +17,7 @@ function releaseTrigger(){triggerHeld=false;triggerPointer=null;}
 function pressTrigger(){if(!canPlay()||posture)return;triggerHeld=equipped==='m16';fire();fireCooldown=AUTO_INTERVAL;}
 function stepTrigger(dt){fireCooldown=Math.max(0,fireCooldown-dt);if(!canPlay()||posture||equipped!=='m16'){releaseTrigger();return;}if(triggerHeld&&!reloadId&&!busy&&fireCooldown<=0){fire();fireCooldown=AUTO_INTERVAL;}}
 function updateAmmo(){const el=$('ammo');el.textContent=!equipped?'':reloadId?'Wird nachgeladen …':`${ammo[equipped]} / ${clipSize[equipped]} · T: Nachladen`;}
-function startReload(){if(!canPlay()||posture||!equipped||reloadId||ammo[equipped]===clipSize[equipped])return;reloadId=equipped;reloadLeft=RELOAD_TIME;audio.play('reload',null,0);updateAmmo();}
+function startReload(){if(!canPlay()||posture||!equipped||reloadId||ammo[equipped]===clipSize[equipped])return;setScopeZoom(false);reloadId=equipped;reloadLeft=RELOAD_TIME;audio.play('reload',null,0);updateAmmo();}
 function stepReload(dt){if(!reloadId)return;const before=reloadLeft;reloadLeft=Math.max(0,reloadLeft-dt);if(before>RELOAD_TIME*.48&&reloadLeft<=RELOAD_TIME*.48)audio.play('reload',null,1);renderer.reload?.(1-reloadLeft/RELOAD_TIME);if(reloadLeft===0){ammo[reloadId]=clipSize[reloadId];audio.play('click');reloadId=null;renderer.reload?.(0);updateAmmo();}}
 const rgb=h=>[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
 function mat(c){
@@ -139,13 +139,13 @@ function rotateInverse(v,q){if(!q)return v;const [x,y,z,w]=q,u=[-x,-y,-z],cross=
 function rayBox(eye,d,p,s,q=null){let pos=rotateInverse(eye.map((v,i)=>v-p[i]),q),dir=rotateInverse(d,q),lo=0,hi=8;for(let i=0;i<3;i++){if(Math.abs(dir[i])<1e-8){if(Math.abs(pos[i])>s[i]/2)return Infinity;}else{let a=(-s[i]/2-pos[i])/dir[i],z=(s[i]/2-pos[i])/dir[i];lo=Math.max(lo,Math.min(a,z));hi=Math.min(hi,Math.max(a,z));if(lo>hi)return Infinity;}}return lo;}
 function aim(ray=null,includeDestroyed=true){let d=ray?.direction||dir(),eye=ray?.origin||playerEye(),best=8.01,id=null;for(const o of collisionRoom())best=Math.min(best,(solidRay(o,eye,d)??rayBox(eye,d,o.p,o.s)));if(!state.unlocked)best=Math.min(best,rayBox(eye,d,[0,1.1,-4.95],[1.85,2.2,.18]));for(const [k,b] of Object.entries(bodies)){if(k===held)continue;const live=state.objects[k]>0;if(!live&&!includeDestroyed)continue;const dist=rayBox(eye,d,live?b.p:(state.placements?.[k]||spec[k].p),spec[k].s,live?b.q:yawQuat(state.rotations?.[k]||0));if(dist<best){best=dist;id=k;}}return {id,dist:best};}
 function setScopeZoom(on){
- scopeZoom=!!on&&equipped==='rifle'&&!held&&!posture&&canPlay()&&!renderer?.xrMode?.active&&first;
+ scopeZoom=!!on&&equipped==='rifle'&&!held&&!posture&&!reloadId&&canPlay()&&!renderer?.xrMode?.active&&first;
  $('scope-overlay').hidden=!scopeZoom;
  $('touchZoom').textContent=scopeZoom?'Zoom aus':'Zoom';
  $('touchZoom').setAttribute('aria-pressed',String(scopeZoom));
  document.body.classList.toggle('scope-zoom',scopeZoom);
 }
-function toggleScope(){if(equipped!=='rifle'||held||posture||!canPlay()||renderer?.xrMode?.active)return;if(!first)first=true;setScopeZoom(!scopeZoom);}
+function toggleScope(){if(equipped!=='rifle'||held||posture||reloadId||!canPlay()||renderer?.xrMode?.active)return;if(!first)first=true;setScopeZoom(!scopeZoom);}
 function chooseWeapon(id){if((held||posture)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Testmodus':equipped==='rifle'?'Gewehr · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer (Spielmodus)':'Unbewaffnet';}
 function arsenal(){document.exitPointerLock?.();clearControls();active=false;$('arsenal').hidden=false;}
 $('closearsenal').onclick=()=>{$('arsenal').hidden=true;active=true;clearControls();};
@@ -271,7 +271,7 @@ function updateInteractionHint(vr=false){
   if(actionButton.textContent!==short)actionButton.textContent=short;
   actionButton.disabled=!canAct||busy;repairButton.disabled=!canRepair||busy;
   const extra=$('touchSecondary');extra.hidden=!secondary;extra.disabled=busy;extra.textContent=secondary||'Weitere Aktion';
-  $('touchZoom').hidden=equipped!=='rifle'||!!posture||!!held;
+  $('touchZoom').hidden=equipped!=='rifle'||!!posture||!!held;$('touchZoom').disabled=!!reloadId;
   $('touchFire').disabled=!!posture;$('touchJump').disabled=!!posture;
   $('touchReload').disabled=!!posture||!equipped;
   $('hint').textContent=started?(mobile?'Handy · Inventar':'P: Smartphone · I: Inventar · Mausrad: Waffenwechsel'):'Spiel starten';
@@ -387,11 +387,11 @@ function frame(now,xrFrame){
   }
   if(posture){
     const pose=furniturePose(posture.id,bodies[posture.id]);
-    if(!movable(posture.id)||!pose||Math.hypot(player.x-pose.x,player.z-pose.z)>.25||groundAt(pose.x,pose.z)<-.1)leavePosture();
+    if(!movable(posture.id)||!pose||pose.y<-.05||pose.y>.25||Math.hypot(player.x-pose.x,player.z-pose.z)>.25||groundAt(pose.x,pose.z)<-.1)leavePosture();
     else{player.x=pose.x;player.z=pose.z;player.y=pose.y;player.vy=0;}
   }
   let d=dir(),eye=playerEye(),target=eye.map((v,i)=>v+d[i]);
-  if(!first&&!vr){let t=eye.map((v,i)=>v-d[i]*2.1);if(!coll(t[0],t[2])){eye=t;target=eye.map((v,i)=>v+d[i]);}}
+  if(!first&&!vr&&!posture){let t=eye.map((v,i)=>v-d[i]*2.1);if(!coll(t[0],t[2])){eye=t;target=eye.map((v,i)=>v+d[i]);}}
   renderer.begin();
   renderer.setDoorOpen?.(state.unlocked);
   renderer.advanceCurtains?.(dt,state.decor||{});
