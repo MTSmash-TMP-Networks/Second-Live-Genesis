@@ -92,7 +92,7 @@ function showProfile(){$('home').textContent='Dein privater Startraum · '+profi
 function stopCamera(){generation++;if(timer)clearTimeout(timer);timer=null;stream?.getTracks().forEach(t=>t.stop());stream=null;$('video').srcObject=null;$('live').textContent='Standby';$('pause').disabled=true;$('snap').disabled=true;previous=null;last=null;lastTime=0;cameraUI();}
 function active(){return current?.status==='capturing'&&current.mine;}
 function render(s){const was=current?.id;if(!s.worker&&current?.worker)s={...s,worker:current.worker};current=s;if(was&&was!==s.id){stopCamera();clearLive();captured.clear();previewDispose?.();previewDispose=null;previewId=null;previewAttempt=null;}if(!active()&&(stream||openingCamera))stopCamera();
- $('worker').textContent=s.worker?.online?'Worker · '+s.worker.device:'Worker noch nicht bereit / offline';
+ $('worker').textContent=s.worker?.online?'Worker · '+s.worker.device+' · DA3 '+(s.worker.da3?.status==='ready'?'bereit ('+(s.worker.da3.device||'CPU')+')':s.worker.da3?.status==='loading'?'lädt':s.worker.da3?.status==='error'?'Fehler':'offline'):'Worker noch nicht bereit / offline';
  const labels={unexplored:'Noch nicht erzeugt – Scan möglich',capturing:s.mine?'Scanauftrag reserviert':'Anderer Spieler erfasst dieses Gebiet',queued:'Auftrag wartet auf Verarbeitung',processing:'3D-Rekonstruktion läuft',review:'Rekonstruktionsvorschau bereit',published:'Vorschau bestätigt · Scanner gesperrt',failed:'Weitere Perspektiven oder Fehlerprüfung erforderlich',needs_location:'Für ein gemeinsames Testgebiet zuerst den Standort bestimmen.',loading:'Scanbereich wird geprüft …'};
  report(labels[s.status]||s.status);const frames=s.frames||[];const n=frames.length;const locked=isBusy();
  $('reserve').disabled=s.status!=='unexplored'||!$('consent').checked||locked;$('scope').disabled=Boolean(stream)||locked;$('evaluation').disabled=s.status!=='unexplored'||locked;$('gps').disabled=Boolean(stream)||locked;
@@ -116,7 +116,7 @@ function render(s){const was=current?.id;if(!s.worker&&current?.worker)s={...s,w
  if(s.status==='queued'&&done<n){$('processing-progress').max=Math.max(1,n);$('processing-progress').value=done;}else $('processing-progress').removeAttribute('value');
  $('result').hidden=!['review','failed','published'].includes(s.status)||(!s.mine&&!s.preview);
  $('publish').hidden=!s.mine||s.status!=='review';$('publish').disabled=$('publish').hidden||locked||previewId!==s.id;
- $('retry').hidden=!s.mine||s.status!=='failed';$('retry').disabled=$('retry').hidden||locked;
+ $('retry').hidden=!s.mine||s.status!=='failed';$('retry').disabled=$('retry').hidden||locked;$('retry').textContent=s.worker?.da3?.status==='ready'?'Vorhandene Fotos mit DA3 erneut prüfen':'Weitere Fotos aufnehmen';
  $('preview-area').hidden=!s.preview;$('load-preview').disabled=!s.preview||!!previewPending;$('preview-reset').disabled=previewId!==s.id;
  $('result-title').textContent=s.status==='failed'?'Die Fotos konnten nicht vollständig verbunden werden':s.status==='published'?'Deine gespeicherte 3D-Vorschau':'Deine 3D-Vorschau ist bereit';
  $('result-explanation').textContent=s.status==='failed'?'Nimm weitere Fotos von denselben Stellen aus seitlich versetzten Positionen auf. Achte auf Licht, Schärfe und gemeinsame Bilddetails.':s.status==='published'?'Diese Vorschau wurde bestätigt.':'Drehe und zoome das Modell. Bestätige es erst, wenn die Vorschau für dich brauchbar ist.';
