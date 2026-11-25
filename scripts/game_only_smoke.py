@@ -7,10 +7,21 @@ import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
-from server import create_server, GameStore
+from server import create_server, GameStore, HOTEL_LAYOUT
 from world_capture import CaptureStore
 
 class GameOnlyTest(unittest.TestCase):
+    def test_hotel_default_layout_is_placeable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            game=GameStore(Path(tmp))
+            for key, spec in HOTEL_LAYOUT.items():
+                if 'max' not in spec or key=='window':
+                    continue
+                result=game.action({'action':'place_object','id':key,'position':spec['p'],'rotation':0},None)
+                self.assertEqual(result['placements'][key],spec['p'])
+            self.assertEqual(len(game.state()['placements']),7)
+
+
     def test_preserve_home_and_disable_capture(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
