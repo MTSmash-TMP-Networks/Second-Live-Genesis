@@ -208,15 +208,29 @@ class GameStore:
 
     MAX_HP = {"crate": 60, "table": 100, "window": 35, "chair": 60, "sofa": 150, "coffee_table": 100}
     MOVABLE = {"crate": ((-1.4,.45,-2.05),(.9,.9,.9)), "table": ((2.25,.39,-1.7),(1.6,.78,.85)), "chair": ((2.15,.5,.15),(.86,1,.9)), "sofa": ((-3.32,.55,2.84),(2.5,1.1,1.4)), "coffee_table": ((-3.3,.25,1.22),(1.4,.5,.76))}
+    MOVABLE_DECOR = {"surface_bed": ((3.4,.6,3.71),(1.56,1.2,2.26)), "surface_wardrobe": ((3.95,1.4,-3.62),(1.44,2.8,.74))}
+    @staticmethod
+    def turned_size(size, rotation):
+        return (size[2],size[1],size[0]) if rotation in (90,270) else size
+
     @classmethod
-    def placement(cls, db, oid, position):
-        if not isinstance(oid,str) or oid not in cls.MOVABLE or db.execute("SELECT hp FROM objects WHERE id=?",(oid,)).fetchone()[0]<=0:
+    def placement(cls, db, oid, position, rotation=0):
+        movable={**cls.MOVABLE,**cls.MOVABLE_DECOR}
+        if not isinstance(oid,str) or oid not in movable:
             raise ValueError("Gegenstand nicht bewegbar")
-        if not isinstance(position,list) or len(position)!=3 or any(type(v) not in (int,float) or not math.isfinite(v) or abs(v)>10 for v in position):
+        hp=dict(db.execute("SELECT id,hp FROM objects"))
+        decor=dict(db.execute("SELECT target,stage FROM decor_damage"))
+        def alive(k):
+            return decor.get(k,0)<wall_damage.REMOVED if k in cls.MOVABLE_DECOR else hp.get(k,0)>0
+        if not alive(oid):
+            raise ValueError("Gegenstand nicht bewegbar")
+        if type(rotation) is not int or rotation not in (0,90,180,270):
+            raise ValueError("Ungueltige Drehung")
+        if not isinstance(position,list) or len(position)!=3 or any(type(v) not in (int,float) or abs(v)>10 or not math.isfinite(v) for v in position):
             raise ValueError("Ungueltige Position")
-        size=cls.MOVABLE[oid][1]; p=[round(v,4) for v in position]
-        # Explicit placement is upright on the room floor or lower safety level.
-        if abs(p[0])+size[0]/2>4.84 or abs(p[2])+size[2]/2>4.84 or min(abs(p[1]-size[1]/2),abs(p[1]-size[1]/2+1.35))>.015:
+        size=cls.turned_size(movable[oid][1],rotation); p=[round(v,4) for v in position]
+        # Upright placement; use the rotated footprint for boundaries and floor support.
+        if abs(p[0])+size[0]/2>4.84001 or abs(p[2])+size[2]/2>4.84001 or min(abs(p[1]-size[1]/2),abs(p[1]-size[1]/2+1.35))>.015:
             raise ValueError("Position ausserhalb der Raumflaeche")
         floor=wall_damage.WALLS['surface_0']
         removed={(c,r) for c,r in db.execute("SELECT col,row FROM wall_cells WHERE target='surface_0' AND stage>=?",(wall_damage.REMOVED,))}
@@ -226,15 +240,15 @@ class GameStore:
             missing=bool(removed) and wall_damage.nearest(floor,x,z) in removed
             if missing!=lower:raise ValueError("Stellplatz nicht durchgehend begehbar")
         saved={k:json.loads(v) for k,v in db.execute("SELECT id,position FROM placements")}
+        angles=dict(db.execute("SELECT id,rotation FROM placement_rotations"))
         def overlaps(q,t):return all(abs(p[i]-q[i])<(size[i]+t[i])/2-.015 for i in range(3))
-        hp=dict(db.execute("SELECT id,hp FROM objects"))
-        for k,(q,t) in cls.MOVABLE.items():
-            if k!=oid and hp[k]>0 and overlaps(saved.get(k,q),t):raise ValueError("Stellplatz belegt")
-        # Fixed room furniture (client additionally checks actual wall/floor geometry).
-        decor=dict(db.execute("SELECT target,stage FROM decor_damage"))
-        for k,q,t in [('surface_bed',(3.4,.6,3.71),(1.56,1.2,2.26)),('surface_nightstand',(2.24,.32,4.53),(.55,.64,.52)),('surface_wardrobe',(3.95,1.4,-3.62),(1.44,2.8,.74))]:
-            if decor.get(k,0)<wall_damage.REMOVED and overlaps(q,t):raise ValueError("Stellplatz belegt")
+        for k,(q,t) in movable.items():
+            if k!=oid and alive(k) and overlaps(saved.get(k,q),cls.turned_size(t,angles.get(k,0))):
+                raise ValueError("Stellplatz belegt")
+        if decor.get('surface_nightstand',0)<wall_damage.REMOVED and overlaps((2.24,.32,4.53),(.55,.64,.52)):
+            raise ValueError("Stellplatz belegt")
         db.execute("INSERT INTO placements VALUES (?,?) ON CONFLICT(id) DO UPDATE SET position=excluded.position",(oid,json.dumps(p)))
+        db.execute("INSERT INTO placement_rotations VALUES (?,?) ON CONFLICT(id) DO UPDATE SET rotation=excluded.rotation",(oid,rotation))
     def __init__(self, path):
         self.path = path / "world.sqlite3"
         with closing(sqlite3.connect(self.path)) as db, db:
@@ -248,12 +262,13 @@ class GameStore:
             db.execute("CREATE TABLE IF NOT EXISTS room_settings (id INTEGER PRIMARY KEY CHECK(id=1), lights_on INTEGER NOT NULL)")
             db.execute("INSERT OR IGNORE INTO room_settings VALUES (1,1)")
             db.execute("CREATE TABLE IF NOT EXISTS placements (id TEXT PRIMARY KEY, position TEXT NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS placement_rotations (id TEXT PRIMARY KEY, rotation INTEGER NOT NULL DEFAULT 0 CHECK(rotation IN (0,90,180,270)))")
             db.execute("INSERT OR IGNORE INTO progress VALUES (1,0)")
             db.executemany("INSERT OR IGNORE INTO objects VALUES (?,?)", self.MAX_HP.items())
     def state(self):
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("BEGIN")
-            return {"lights_on": bool(db.execute("SELECT lights_on FROM room_settings WHERE id=1").fetchone()[0]), "placements": {k:json.loads(v) for k,v in db.execute("SELECT id,position FROM placements")}, "objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0]), "walls": wall_damage.state(db), "decor": dict(db.execute("SELECT target,stage FROM decor_damage")), "marks": [{"id":i,"target":t,"point":json.loads(p),"normal":json.loads(n),"severity":max(1,int(s or 1))} for i,t,p,n,s in db.execute("SELECT id,target,point,normal,severity FROM impact_marks ORDER BY id")]}
+            return {"lights_on": bool(db.execute("SELECT lights_on FROM room_settings WHERE id=1").fetchone()[0]), "placements": {k:json.loads(v) for k,v in db.execute("SELECT id,position FROM placements")}, "rotations": dict(db.execute("SELECT id,rotation FROM placement_rotations")), "objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0]), "walls": wall_damage.state(db), "decor": dict(db.execute("SELECT target,stage FROM decor_damage")), "marks": [{"id":i,"target":t,"point":json.loads(p),"normal":json.loads(n),"severity":max(1,int(s or 1))} for i,t,p,n,s in db.execute("SELECT id,target,point,normal,severity FROM impact_marks ORDER BY id")]}
     def action(self, data, scans):
         if not isinstance(data, dict): raise ValueError("JSON object required")
         op = data.get("action")
@@ -271,7 +286,7 @@ class GameStore:
                 if row and row[0]>=wall_damage.REMOVED:raise ValueError("Lichtschalter zerstoert; zuerst reparieren")
                 db.execute("UPDATE room_settings SET lights_on=1-lights_on WHERE id=1")
             elif op == "place_object":
-                self.placement(db,data.get("id"),data.get("position"))
+                self.placement(db,data.get("id"),data.get("position"),data.get("rotation",0))
             elif op in ("hit", "repair"):
                 oid = data.get("id")
                 if not isinstance(oid,str) or oid not in self.MAX_HP: raise ValueError("Unbekanntes Objekt")
@@ -323,7 +338,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     game = GameStore(store.path) # preserve the original legacy world unchanged in personal mode
     capture = CaptureStore(store.path) if world_capture else None
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.7.5"
+        server_version = "SecondLive/0.7.6"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -488,7 +503,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.7.5", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.7.6", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
