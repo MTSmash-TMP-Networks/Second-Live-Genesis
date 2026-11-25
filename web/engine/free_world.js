@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import layout from './free_world_layout.json';
 import {createCharacter,animateCharacter,disposeCharacter,normalizeCharacter} from './character.js';
+import {resetRoomAvatarPose,applyRoomAvatarPose,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
 export const FREE_LAYOUT=layout;
 const H=layout.half,Y=layout.height,G=layout.grid;
 export function freeBounds(block){return {p:block.cell.map((v,i)=>(v+block.dims[i]/2)*G),s:block.dims.map(v=>v*G)};}
 export function freeOverlap(a,s,b,t){return a.every((v,i)=>v<b[i]+t[i]&&v+s[i]>b[i]);}
 export function validFreeGrid(cell,dims){
- return cell.length===3&&dims.length===3&&cell.every(Number.isInteger)&&dims.every(v=>layout.sizes.includes(v))&&cell.every((v,i)=>v>=[-H/G,0,-H/G][i]&&v+dims[i]<=[H/G,Y/G,H/G][i])&&!freeOverlap(cell,dims,[-6,0,68],[12,Y/G,12]);
+ return cell.length===3&&dims.length===3&&cell.every(Number.isInteger)&&dims.every(v=>layout.sizes.includes(v))&&cell.every((v,i)=>v>=[-H/G,0,-H/G][i]&&v+dims[i]<=[H/G,Y/G,H/G][i])&&!freeOverlap(cell,dims,[-6,0,H/G-12],[12,Y/G,12]);
 }
 export function freeRayBox(origin,direction,min,size,limit=layout.reach){
  let lo=0,hi=limit,normal=null;
@@ -68,15 +69,16 @@ function textSprite(value,width=1.5,height=.4){
 }
 export class FreeWorldView{
  constructor(){
-  this.scene=new THREE.Scene();this.scene.background=new THREE.Color(0xf4f5f5);this.scene.fog=new THREE.Fog(0xf4f5f5,50,112);
+  this.scene=new THREE.Scene();this.scene.background=new THREE.Color(0xf4f5f5);this.scene.fog=new THREE.Fog(0xf4f5f5,145,330);
   this.scene.add(new THREE.HemisphereLight(0xffffff,0xd1d6db,2.0));
   const light=new THREE.DirectionalLight(0xffffff,2.1);light.position.set(-24,35,-18);this.scene.add(light);
   this.cube=new THREE.BoxGeometry(1,1,1);this.materials=new Map();this.textures=new Map();this.meshes=[];this.peers=new Map();this.local=null;this.revision=-1;this.generation=0;
   const room=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1});
   const box=(p,s,m=room)=>{const o=new THREE.Mesh(this.cube,m);o.position.set(...p);o.scale.set(...s);this.scene.add(o);return o;};
-  box([0,-.15,0],[2*H,.3,2*H]);box([0,Y+.15,0],[2*H,.3,2*H]);
+  const floor=new THREE.MeshStandardMaterial({color:0x6b7075,roughness:.98,metalness:0});
+  box([0,-.15,0],[2*H,.3,2*H],floor);box([0,Y+.15,0],[2*H,.3,2*H]);
   for(const side of [-1,1]){box([side*(H+.15),Y/2,0],[.3,Y,2*H]);box([0,Y/2,side*(H+.15)],[2*H,Y,.3]);}
-  const grid=new THREE.GridHelper(2*H,2*H/G,0xc5ced3,0xe1e6e8);grid.position.y=.003;this.scene.add(grid);
+  const grid=new THREE.GridHelper(2*H,2*H/G,0x8b9094,0x777c80);grid.position.y=.003;this.scene.add(grid);
   const dark=new THREE.MeshStandardMaterial({color:0x405a68,roughness:.8});box([0,1.25,H-.045],[2,2.5,.09],dark);
   const sign=textSprite('HOTEL',2.3,.55);sign.position.set(0,2.98,H-.18);this.scene.add(sign);
   this.preview=new THREE.Mesh(this.cube,new THREE.MeshBasicMaterial({color:0x37c4a1,transparent:true,opacity:.28,depthWrite:false}));
@@ -122,27 +124,29 @@ export class FreeWorldView{
   for(const p of peers){
    if(!Number.isInteger(p.slot)||!Array.isArray(p.position)||p.position.length!==3||!p.position.every(Number.isFinite))continue;
    seen.add(p.slot);const signature=JSON.stringify([p.nickname,normalizeCharacter(p.avatar),p.life]);let a=this.peers.get(p.slot);
-   if(a&&a.signature!==signature){disposeCharacter(a.g);a=null;}
+   if(a&&a.signature!==signature){clearRoomAvatarProps(a.g);disposeCharacter(a.g);a=null;}
    if(!a){const g=this.avatar(p);g.position.set(...p.position);g.rotation.y=p.yaw;a={g,signature};this.peers.set(p.slot,a);}
    a.target=p;
   }
-  for(const [slot,a] of this.peers)if(!seen.has(slot)){disposeCharacter(a.g);this.peers.delete(slot);}
+  for(const [slot,a] of this.peers)if(!seen.has(slot)){clearRoomAvatarProps(a.g);disposeCharacter(a.g);this.peers.delete(slot);}
  }
- step(dt,player,profile,third){
+ step(dt,player,profile,third,models=null,weapon=null){
   const t=1-Math.exp(-dt*12);
   for(const a of this.peers.values()){
    const g=a.g,p=a.target,d=new THREE.Vector3(...p.position),moving=g.position.distanceTo(d)>.035;
-   g.position.lerp(d,t);g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;animateCharacter(g,dt,moving,p.stance);
+   g.position.lerp(d,t);g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;
+   resetRoomAvatarPose(g);animateCharacter(g,dt,moving,p.stance);applyRoomAvatarPose(g,null,p.weapon);updateRoomAvatarProp(g,models,p.weapon);
   }
   if(third&&profile){
    if(!this.local)this.local=this.avatar(profile);
    this.local.visible=true;const moving=Math.hypot(this.local.position.x-player.x,this.local.position.z-player.z)>.005;
-   this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=player.yaw;animateCharacter(this.local,dt,moving,player.stance);
+   this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=player.yaw;
+   resetRoomAvatarPose(this.local);animateCharacter(this.local,dt,moving,player.stance);applyRoomAvatarPose(this.local,null,weapon);updateRoomAvatarProp(this.local,models,weapon);
   }else if(this.local)this.local.visible=false;
  }
  clear(){
   this.generation++;this.revision=-1;this.showPreview(null);this.sync([]);
-  if(this.local){disposeCharacter(this.local);this.local=null;}
+  if(this.local){clearRoomAvatarProps(this.local);disposeCharacter(this.local);this.local=null;}
   for(const mesh of this.meshes){this.scene.remove(mesh);mesh.dispose?.();}this.meshes=[];
   for(const m of this.materials.values())m.dispose();this.materials.clear();
   for(const t of this.textures.values())t.dispose();this.textures.clear();

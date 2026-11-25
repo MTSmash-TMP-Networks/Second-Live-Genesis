@@ -357,12 +357,14 @@ import {freeWorldDoorAt} from './lobby_layout.js';
  assert.ok(freeBlocked(blocks,0,.1,0));
  assert.ok(!freeBlocked(blocks,0,1,0));
  assert.equal(freeBounds(stacked).s[1],.5);
- assert.ok(!validFreeGrid([0,0,70],[2,2,2]));
- assert.ok(freeExitAt([0,1.5,38],[0,0,1]));
+ assert.ok(validFreeGrid([0,0,70],[2,2,2]));
+ assert.ok(!validFreeGrid([0,0,290],[2,2,2]));
+ assert.ok(freeExitAt([0,1.5,148],[0,0,1]));
  assert.ok(freeWorldDoorAt([0,1.5,-64],[0,0,-1]));
  assert.ok(!freeWorldDoorAt([0,1.5,-64],[0,0,1]));
- const wall=freeRay([38,1.5,0],[1,0,0],[]);
+ const wall=freeRay([148,1.5,0],[1,0,0],[]);
  assert.equal(wall.normal[0],-1);
- assert.equal(freePlacement(wall,[1,4,4],[]).cell[0],79);
+ assert.equal(freePlacement(wall,[1,4,4],[]).cell[0],299);
+ assert.ok(!freeBlocked([],149,0,149));assert.ok(freeBlocked([],150,0,150));
 }
 console.log('Free World raster, wall/floor placement, stacking, collision and portal tests passed');

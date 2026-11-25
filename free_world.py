@@ -9,6 +9,7 @@ L=json.loads((Path(__file__).resolve().parent/'web/engine/free_world_layout.json
 HALF=int(L['half']/L['grid']);HEIGHT=int(L['height']/L['grid'])
 SIZES=tuple(L['sizes'])
 SPAWN=L['spawn']
+GAME_PROPS=frozenset(('pistol','rifle','m16'))
 
 def need(ok,message,status=400):
     if not ok:raise CaptureError(message,status)
@@ -25,7 +26,7 @@ def grid_box(cell,dims):
     need(isinstance(dims,list) and len(dims)==3 and all(type(x) is int and x in SIZES for x in dims),'Ungueltige Blockgroesse')
     need(all(lo<=c and c+d<=hi for c,d,lo,hi in zip(cell,dims,[-HALF,0,-HALF],[HALF,HEIGHT,HALF])),'Block ausserhalb der Free World')
     # Keep the entrance and respawn area permanently unobstructed.
-    need(not overlap(cell,dims,[-6,0,68],[12,HEIGHT,12]),'Eingang und Spawn bleiben frei')
+    need(not overlap(cell,dims,[-6,0,HALF-12],[12,HEIGHT,12]),'Eingang und Spawn bleiben frei')
     return cell,dims
 
 def overlap(a,s,b,t):
@@ -74,7 +75,7 @@ class FreeWorld:
         with closing(sqlite3.connect(self.path)) as db:
             return [{'id':i,'name':n} for i,n in db.execute('SELECT id,name FROM textures WHERE owner=? ORDER BY rowid',(player,))]
     def snapshot(self,player,row,revision=-1,corrected=False,notice=''):
-        peers=[{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life','score')} for key,r in self.players.items() if key!=player]
+        peers=[{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life','score','weapon')} for key,r in self.players.items() if key!=player]
         out={'slot':row['slot'],'hp':row['hp'],'life':row['life'],'score':row['score'],'position':row['position'],'yaw':row['yaw'],'corrected':corrected,'peers':peers,'online':len(self.players),'revision':self.revision,'notice':notice,'textures':self.own_textures(player)}
         if revision!=self.revision:
             out['blocks']=[{k:v for k,v in b.items() if k!='owner'} for b in self.blocks.values()]
@@ -82,7 +83,7 @@ class FreeWorld:
     def enter(self,player,profile):
         with self.lock:
             now=self.clock();self.prune(now)
-            row={'slot':profile['slot'],'nickname':profile['nickname'],'avatar':profile['avatar'],'lease':secrets.token_urlsafe(24),'seen':now,'move_at':now,'edit_at':-100.,'pulse_at':-100.,'position':list(SPAWN),'yaw':0.,'stance':'walk','hp':100,'life':1,'score':0,'shield':now+3}
+            row={'slot':profile['slot'],'nickname':profile['nickname'],'avatar':profile['avatar'],'lease':secrets.token_urlsafe(24),'seen':now,'move_at':now,'edit_at':-100.,'pulse_at':-100.,'position':list(SPAWN),'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,'shield':now+3}
             self.players[player]=row
             return {**self.snapshot(player,row),'lease':row['lease']}
     def body_box(self,p,height=1.6):
@@ -95,6 +96,9 @@ class FreeWorld:
         if type(data.get('life')) is not int or data['life']!=row['life']:return True
         p=vec(data.get('position'));yaw=data.get('yaw');stance=data.get('stance','walk')
         need(numeric(yaw) and stance in ('walk','sprint','crouch'),'Ungueltige Bewegung')
+        weapon=data.get('weapon')
+        need(weapon is None or isinstance(weapon,str) and weapon in GAME_PROPS,'Unbekannte Spielwaffe')
+        row['weapon']=weapon
         elapsed=min(1.5,max(.05,now-row['move_at']));old=row['position']
         height=1.12 if stance=='crouch' else 1.6
         if math.hypot(p[0]-old[0],p[2]-old[2])>elapsed*6.4+.48 or abs(p[1]-old[1])>elapsed*9+.5 or self.blocked(p,height):return True
@@ -129,8 +133,11 @@ class FreeWorld:
         del self.blocks[i];self.revision+=1;row['edit_at']=now
         return 'Block entfernt'
     def pulse(self,player,row,data,now):
-        # Abstract game-only tag mechanic, identical for all participants.
-        need(now-row['pulse_at']>=.50,'Impuls laedt noch',429)
+        # The selected cosmetic game prop uses the existing shared PvP balance.
+        # Damage, target detection and cooldown remain controlled by the host.
+        weapon=data.get('weapon')
+        need(isinstance(weapon,str) and weapon in GAME_PROPS and weapon==row['weapon'],'Bitte eine Spielwaffe auswaehlen')
+        need(now-row['pulse_at']>=.50,'Spielaktion laedt noch',429)
         direction=vec(data.get('direction'));norm=math.sqrt(sum(x*x for x in direction))
         need(.99<=norm<=1.01,'Ungueltige Blickrichtung')
         direction=[x/norm for x in direction];row['pulse_at']=now

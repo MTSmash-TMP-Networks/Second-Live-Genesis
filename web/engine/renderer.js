@@ -582,6 +582,9 @@ export class RoomRenderer {
   }
   render(canvas,eye,target,mobile,dt=1/60,player=null,scopeZoom=false,inLobby=false,worldScene=null){
     const scene=worldScene||(inLobby?this.lobby.scene:this.scene);
+    // Camera-attached inventory models must belong to the scene being rendered.
+    const rigScene=worldScene||this.scene;
+    if(this.rig.parent!==rigScene)rigScene.add(this.rig);
     if(this.roomMirror)this.roomMirror.reflector.visible=!this.xrMode.active;
     this.swayTime+=dt;
     const idle=Math.sin(this.swayTime*1.4)*.004;

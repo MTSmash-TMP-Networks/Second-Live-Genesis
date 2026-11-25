@@ -212,7 +212,7 @@ class GameOnlyTest(unittest.TestCase):
             self.assertEqual(store.get('a',added),room_model_fixture())
 
     def test_free_world_shared_build_pvp_and_persistence(self):
-        from free_world import FreeWorld, grid_box
+        from free_world import FreeWorld, grid_box, SPAWN, HALF
         from hotel_lobby import HotelLobby
         import base64
         now=[10.]
@@ -227,12 +227,16 @@ class GameOnlyTest(unittest.TestCase):
             a=world.enter('a',profile(0));b=world.enter('b',profile(1))
             def req(who,session,op,**kw):
                 return world.request(who,{'action':op,'lease':session['lease'],'life':session['life'],**kw})
-            with self.assertRaises(CaptureError):req('a',b,'update',position=[0,0,36],yaw=0)
-            with self.assertRaises(CaptureError):grid_box([-1,0,70],[2,2,2])
-            with self.assertRaises(CaptureError):grid_box([80,0,0],[2,2,2])
+            with self.assertRaises(CaptureError):req('a',b,'update',position=[0,0,146],yaw=0)
+            with self.assertRaises(CaptureError):grid_box([-1,0,HALF-10],[2,2,2])
+            with self.assertRaises(CaptureError):grid_box([HALF,0,0],[2,2,2])
             now[0]+=4
-            req('a',a,'update',position=[0,0,32],yaw=0,revision=1)
-            req('b',b,'update',position=[2,0,32],yaw=0,revision=1)
+            self.assertEqual(SPAWN,[0,0,146]);self.assertEqual(HALF,300)
+            self.assertEqual(grid_box([79,0,79],[2,2,2]),([79,0,79],[2,2,2]))
+            self.assertEqual(grid_box([-2,0,58],[2,2,2]),([-2,0,58],[2,2,2]))
+            with self.assertRaises(CaptureError):req('a',a,'update',position=[0,0,142],yaw=0,weapon='unknown')
+            req('a',a,'update',position=[0,0,142],yaw=0,revision=1,weapon='pistol')
+            req('b',b,'update',position=[2,0,142],yaw=0,revision=1)
             # Server stores canonical half-metre cells. Another guest sees the
             # same block but may not delete the builder's creation.
             jpeg=base64.b64decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAACAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKgEhT//2Q==')
@@ -241,26 +245,29 @@ class GameOnlyTest(unittest.TestCase):
             self.assertEqual(world.add_texture('a',a['lease'],'Same.jpg',jpeg)['added'],tex)
             with self.assertRaises(CaptureError):world.add_texture('b',a['lease'],'bad.jpg',jpeg)
             with self.assertRaises(CaptureError):world.add_texture('a',a['lease'],'bad.jpg',b'not jpeg')
-            with self.assertRaises(CaptureError):req('b',b,'place',cell=[-2,0,58],dims=[2,2,2],texture=tex)
-            built=req('a',a,'place',cell=[-2,0,58],dims=[2,2,2],texture=tex)
+            with self.assertRaises(CaptureError):req('b',b,'place',cell=[-2,0,278],dims=[2,2,2],texture=tex)
+            built=req('a',a,'place',cell=[-2,0,278],dims=[2,2,2],texture=tex)
             with self.assertRaises(CaptureError):req('a',a,'texture_delete',id=tex)
             item=built['blocks'][0];self.assertNotIn('owner',item)
-            self.assertEqual(req('b',b,'update',position=[2,0,32],yaw=0,revision=1)['blocks'],built['blocks'])
+            self.assertEqual(req('b',b,'update',position=[2,0,142],yaw=0,revision=1)['blocks'],built['blocks'])
             with self.assertRaises(CaptureError):req('b',b,'remove',id=item['id'])
             now[0]+=.3
-            with self.assertRaises(CaptureError):req('b',b,'place',cell=[-2,0,58],dims=[2,2,2],texture=None)
+            with self.assertRaises(CaptureError):req('b',b,'place',cell=[-2,0,278],dims=[2,2,2],texture=None)
             # Shared construction survives a process restart.
             reopened=FreeWorld(tmp)
             self.assertEqual(len(reopened.blocks),1)
             self.assertEqual(reopened.own_textures('a')[0]['id'],tex)
-            # A separate fictional tag game: fixed damage, spawn reset and score.
-            for _ in range(4):
+            # All three selectable game props retain the existing PvP balance.
+            with self.assertRaises(CaptureError):req('a',a,'pulse',direction=[1,0,0],weapon='unknown')
+            with self.assertRaises(CaptureError):req('a',a,'pulse',direction=[1,0,0],weapon='m16')
+            for weapon in ('pistol','rifle','m16','pistol'):
                 now[0]+=.6
-                result=req('a',a,'pulse',direction=[1,0,0])
+                req('a',a,'update',position=[0,0,142],yaw=0,weapon=weapon)
+                result=req('a',a,'pulse',direction=[1,0,0],weapon=weapon)
             self.assertEqual(result['score'],1)
-            respawn=req('b',b,'update',position=[2,0,32],yaw=0,revision=result['revision'])
+            respawn=req('b',b,'update',position=[2,0,142],yaw=0,revision=result['revision'])
             self.assertEqual(respawn['life'],2);self.assertEqual(respawn['hp'],100)
-            self.assertEqual(respawn['position'],[0,0,36])
+            self.assertEqual(respawn['position'],[0,0,146])
             self.assertTrue(respawn['corrected'])
             now[0]+=.3
             req('a',a,'remove',id=item['id'])
@@ -296,13 +303,13 @@ class GameOnlyTest(unittest.TestCase):
                 time.sleep(1)
                 req('/api/lobby',{'action':'update','lease':hall['lease'],'position':[0,0,-64.5],'yaw':0})
                 world=req('/api/free-world',{'action':'enter','lease':hall['lease']})
-                self.assertEqual(world['position'],[0,0,36]);self.assertEqual(world['hp'],100)
+                self.assertEqual(world['position'],[0,0,146]);self.assertEqual(world['hp'],100)
                 with self.assertRaises(urllib.error.HTTPError) as err:req('/api/lobby',{'action':'update','lease':hall['lease'],'position':[0,0,-64.5],'yaw':0})
                 self.assertEqual(err.exception.code,409)
                 back=req('/api/free-world',{'action':'leave','lease':world['lease']})
                 self.assertEqual(back['position'],[0,0,-64.5])
                 req('/api/lobby',{'action':'update','lease':back['lease'],'position':[0,0,-64.5],'yaw':0})
-                with self.assertRaises(urllib.error.HTTPError) as err:req('/api/free-world',{'action':'update','lease':world['lease'],'life':1,'position':[0,0,36],'yaw':0})
+                with self.assertRaises(urllib.error.HTTPError) as err:req('/api/free-world',{'action':'update','lease':world['lease'],'life':1,'position':[0,0,146],'yaw':0})
                 self.assertEqual(err.exception.code,409)
             finally:srv.shutdown();srv.server_close();thread.join(5)
 

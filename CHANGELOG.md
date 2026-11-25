@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.14.2 – Free World Expansion & PvP Inventory
+- Free World auf 300 × 300 × 24 m vergrößert, matt steingrauer Boden mit dezentem Raster, weiße Wände und Decke. Eingang, Spawn, Kollisionsgrenzen und Karte angepasst; vorhandene Bauwerke und Texturen bleiben gespeichert.
+- Vorhandenes Waffeninventar, Auswahl mit 1–3, Ablegen mit 0, Nachladen mit T und Spielmodelle im PvP-Modus aktiviert. Baumodus behält die Größenwahl. Gemeinsame serverseitige PvP-Spielbalance, Prüfung der gewählten Spielklasse und automatische Entwaffnung bei der Rückkehr zum Hotel.
+- Tests für neue Raumgrenzen, alten Baubereich, Inventar und PvP-Auswahl angepasst.
+
 ## 0.14.1 – Free World Runtime Permissions
 - `free_world.py` und der neue Free-World-Grundriss werden in die obligatorische Runtime-Prüfung aufgenommen. Auch künftig neu hinzukommende Python-Dateien direkt unter `/app` werden normalisiert und als unprivilegierter Benutzer überprüft.
 - Programmdateien bleiben für `appuser` schreibgeschützt (0644, Verzeichnisse 0755); Datenbank und Datenverzeichnis werden nicht verändert. Regressionstest für restriktive Checkout-Modi und bislang nicht registrierte Module.

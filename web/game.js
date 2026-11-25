@@ -5,7 +5,7 @@ const $=id=>document.getElementById(id), canvas=$('world');
 let renderer=null, physicsWorld=null, graphicsReady=false;
 let equipped=null, xrEntering=false, xrReturnFirst=true, posture=null, scopeZoom=false, lastWheel=-Infinity;
 let lobbyEnabled=false,lobbyState=null,lobbyTransition=false;
-let freeEnabled=false,freeState=null,freeView=null,freeTool='build',freeSize=2,freeShape='cube',freeTexture=null;
+let freeEnabled=false,freeState=null,freeView=null,freeTool='build',freeSize=2,freeShape='cube',freeTexture=null,freeLastWeapon='pistol';
 let hotelHallPending=false,hotelNeighborPending=false,hotelViewEpoch=0,hotelViewMask='',hotelNeighborAt=0;
 let accountsEnabled=false,accountProfile=null,authMode='login',studioOpen=false,editingFromGame=false,characterDraft=null,accountBusy=false;
 const weaponIds=['pistol','rifle','m16'];
@@ -203,10 +203,10 @@ function setScopeZoom(on){
  document.body.classList.toggle('scope-zoom',scopeZoom);
 }
 function toggleScope(){if(equipped!=='rifle'||held||posture||reloadId||!canPlay()||renderer?.xrMode?.active)return;if(!first)first=true;setScopeZoom(!scopeZoom);}
-function chooseWeapon(id){if((held||posture||lobbyState||freeState||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Einzelfeuer':equipped==='rifle'?'Scharfschützengewehr · Einzelschuss · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer':'Unbewaffnet';}
-function arsenal(){if(freeState){phone('free');return;}if(!started||studioOpen||lobbyState||lobbyTransition){$('notice').textContent='Das Inventar ist in deinem Hotelzimmer verfügbar.';return;}phone('inventory');}
-$('closearsenal').onclick=()=>showPhonePage('home');
-for(const id of [...weaponIds,'none'])$('equip-'+id).onclick=()=>{if(!started||studioOpen||lobbyState||lobbyTransition)return;chooseWeapon(id);$('closephone').onclick();};
+function chooseWeapon(id){if((held||posture||lobbyState||(freeState&&freeTool!=='pvp')||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;if(freeState&&freeTool==='pvp')freeLastWeapon=id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Einzelfeuer':equipped==='rifle'?'Scharfschützengewehr · Einzelschuss · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer':'Unbewaffnet';}
+function arsenal(){if(freeState){phone(freeTool==='pvp'?'inventory':'free');return;}if(!started||studioOpen||lobbyState||lobbyTransition){$('notice').textContent='Das Inventar ist in deinem Hotelzimmer verfügbar.';return;}phone('inventory');}
+$('closearsenal').onclick=()=>showPhonePage(freeState?'free':'home');
+for(const id of [...weaponIds,'none'])$('equip-'+id).onclick=()=>{if(!started||studioOpen||lobbyState||lobbyTransition||(freeState&&freeTool!=='pvp'))return;chooseWeapon(id);$('closephone').onclick();};
 chooseWeapon('none');
 function phone(page='home'){if(!started||studioOpen)return;if(renderer?.xrMode?.active){renderer.xrMode.end().then(()=>phone(page)).catch(e=>$('notice').textContent=e.message);return;}document.exitPointerLock?.();clearControls();$('phone').hidden=false;active=false;audio.stopAll();audio.play('phone');showPhonePage(page);updatePhone();}
 const movable=id=>id&&id!=='window'&&Object.hasOwn(spec,id)&&state.objects[id]>0;
@@ -741,7 +741,7 @@ async function enterFreeWorld(){
   lobbyState=null;resetHotelViews();renderer.lobby.clear();resetGreeting();chooseWeapon('none');
   freeView??=new FreeWorldView();freeView.clear();
   freeState={lease:result.lease,life:0,blocks:[],peers:[],textures:[],revision:-1,online:1,hp:100,score:0,lastOK:performance.now(),pending:null,editing:false};
-  freeTool='build';freeSize=2;freeShape='cube';freeTexture=null;
+  freeTool='build';freeSize=2;freeShape='cube';freeTexture=null;freeLastWeapon='pistol';document.body.classList.remove('free-pvp');
   document.body.classList.add('free-playing');$('free-hud').hidden=false;
   applyFreeSnapshot(freeState,result,true);audio.play('door');$('notice').textContent='Willkommen in der Free World · B: Baumodus / PvP · P: Texturen';
  }catch(e){$('notice').textContent=e.message||'Free World nicht erreichbar';}
@@ -754,7 +754,7 @@ async function leaveFreeWorld(){
   if(s.pending)await s.pending.catch(()=>{});
   const result=await freeRequest({action:'leave',lease:s.lease});
   if(freeState!==s)return;
-  freeState=null;freeView?.clear();document.body.classList.remove('free-playing');$('free-hud').hidden=true;
+  chooseWeapon('none');freeState=null;freeView?.clear();document.body.classList.remove('free-playing','free-pvp');$('free-hud').hidden=true;
   lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
   resetHotelViews();renderer.lobby.restoreProjection();renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);renderer.lobby.syncNpc(result.npc);renderer.syncHallFacades(result.facades||[],result.slot,state);
   Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0,stance:'walk',eyeHeight:1.65});
@@ -763,7 +763,7 @@ async function leaveFreeWorld(){
  }catch(e){$('notice').textContent=e.message;if(e.status===401||e.status===409)location.reload();}
  finally{lobbyTransition=false;clearControls();}
 }
-function freeMove(s){return {action:'update',lease:s.lease,revision:s.revision,life:s.life,position:[player.x,player.y,player.z],yaw:player.yaw,stance:player.stance};}
+function freeMove(s){return {action:'update',lease:s.lease,revision:s.revision,life:s.life,position:[player.x,player.y,player.z],yaw:player.yaw,stance:player.stance,weapon:freeTool==='pvp'?equipped:null};}
 function freePoll(){
  const s=freeState;if(!s||s.pending||s.editing||lobbyTransition)return;
  const p=freeRequest(freeMove(s)).then(result=>applyFreeSnapshot(s,result)).catch(e=>{
@@ -773,32 +773,50 @@ function freePoll(){
  }).finally(()=>{if(s.pending===p)s.pending=null;});
  s.pending=p;
 }
-async function freeEdit(op){
+async function freeEdit(op,weapon=null){
  const s=freeState;if(!s||!canPlay()||s.editing||lobbyTransition)return;
- if((op==='pulse')!==(freeTool==='pvp'))return;
+ if((op==='pulse')!==(freeTool==='pvp')||(op==='pulse'&&(!weapon||weapon!==equipped)))return;
  s.editing=true;
  try{
   if(s.pending)await s.pending;
   if(freeState!==s||lobbyTransition||!canPlay())return;
   const life=s.life;
   applyFreeSnapshot(s,await freeRequest(freeMove(s)));
-  if(freeState!==s||lobbyTransition||s.life!==life||!canPlay())return;
+  if(freeState!==s||lobbyTransition||s.life!==life||!canPlay()||(op==='pulse'&&(freeTool!=='pvp'||weapon!==equipped)))return;
   let extra={};
   if(op==='place'){const c=freeCandidate();if(!c){$('notice').textContent='Kein freier Bauplatz';return;}extra={...c,texture:freeTexture||null};}
   else if(op==='remove'){const hit=freeRay(playerEye(),dir(),s.blocks);if(!hit?.id){$('notice').textContent='Kein Block ausgewählt';return;}extra={id:hit.id};}
-  else if(op==='pulse'){extra={direction:dir()};$('cross').classList.add('pulse');setTimeout(()=>$('cross').classList.remove('pulse'),100);}
+  else if(op==='pulse'){extra={direction:dir(),weapon};}
   const result=await freeRequest({action:op,lease:s.lease,revision:s.revision,life:s.life,...extra});
-  applyFreeSnapshot(s,result);audio.play('click');
+  applyFreeSnapshot(s,result);
+  if(op==='pulse'&&freeState===s){
+   ammo[weapon]=Math.max(0,ammo[weapon]-1);fireCooldown=Math.max(fireCooldown,.55);updateAmmo();
+   renderer.shot(weapon);audio.play('shot',null,weaponIds.indexOf(weapon));
+   $('cross').classList.add('pulse');setTimeout(()=>$('cross').classList.remove('pulse'),100);
+   if(equipped===weapon&&ammo[weapon]===0)startReload(true);
+  }else audio.play('click');
  }catch(e){$('notice').textContent=e.message;if(e.status===401)location.reload();}
  finally{s.editing=false;}
 }
-function freePrimary(){void freeEdit(freeTool==='build'?'remove':'pulse');}
+function freePrimary(){if(freeTool==='build'){void freeEdit('remove');return;}if(!equipped){$('notice').textContent='Wähle zuerst eine Spielwaffe (I oder 1–3).';return;}pressTrigger();}
 function setFreeTool(mode){
  if(!freeState)return;
- freeTool=mode==='pvp'?'pvp':'build';updateFreeUI();updateFreeHint(false);
+ const next=mode==='pvp'?'pvp':'build';if(next!==freeTool){
+  freeTool=next;document.body.classList.toggle('free-pvp',next==='pvp');
+  chooseWeapon(next==='pvp'?freeLastWeapon:'none');
+ }
+ updateFreeUI();updateFreeHint(false);
 }
 function freeKey(code){
  if(code==='KeyB'){setFreeTool(freeTool==='build'?'pvp':'build');return true;}
+ if(freeTool==='pvp'){
+  if(/^Digit[0-3]$/.test(code)){chooseWeapon(({Digit0:'none',Digit1:'pistol',Digit2:'rifle',Digit3:'m16'})[code]);return true;}
+  if(code==='KeyI'){arsenal();return true;}
+  if(code==='KeyT'){startReload();return true;}
+  if(code==='KeyE'){void interact();return true;}
+  if(['KeyQ','KeyG','KeyR','KeyF','Digit4'].includes(code))return true;
+  return false;
+ }
  if(code==='KeyQ'){const shapes=['cube','wall-z','wall-x','floor'];freeShape=shapes[(shapes.indexOf(freeShape)+1)%shapes.length];updateFreeUI();return true;}
  if(/^Digit[1-4]$/.test(code)){freeSize=FREE_LAYOUT.sizes[Number(code.at(-1))-1];updateFreeUI();return true;}
  if(code==='KeyE'){void interact();return true;}
@@ -814,7 +832,7 @@ function updateFreeUI(){
  if(!s)return;
  $('free-online').textContent=s.online+' Spieler';$('free-health-bar').style.width=Math.max(0,Math.min(100,s.hp))+'%';
  $('free-hud-detail').textContent=s.hp+' HP · '+(freeTool==='build'?'Baumodus':'PvP')+' · '+s.score+' Punkte';
- $('free-hud-size').textContent=(freeSize*FREE_LAYOUT.grid).toFixed(2).replace('.',',')+' m · '+freeShapeLabel();
+ $('free-hud-size').textContent=freeTool==='pvp'?(({pistol:'Pistole',rifle:'Scharfschützengewehr',m16:'M16'})[equipped]||'Unbewaffnet')+(equipped?' · '+ammo[equipped]+' / '+clipSize[equipped]:''):(freeSize*FREE_LAYOUT.grid).toFixed(2).replace('.',',')+' m · '+freeShapeLabel();
  $('free-size').value=String(freeSize);$('free-shape').value=freeShape;
  $('free-build-mode').disabled=freeTool==='build';$('free-pvp-mode').disabled=freeTool==='pvp';
  const key=JSON.stringify(s.textures);if(key!==freeTextureKey){
@@ -832,24 +850,26 @@ function updateFreeHint(vr=false){
  const s=freeState;if(!s)return;
  const playing=canPlay()&&!vr,exit=freeExitAt(playerEye(),dir()),candidate=playing&&freeTool==='build'?freeCandidate():null;
  const panel=$('interaction-prompt');panel.hidden=!playing;
- $('held-model-size').hidden=true;$('touchRotateLeft').hidden=$('touchRotateRight').hidden=true;$('touchZoom').hidden=true;
+ $('held-model-size').hidden=true;$('touchRotateLeft').hidden=$('touchRotateRight').hidden=true;
+ $('touchZoom').hidden=freeTool!=='pvp'||equipped!=='rifle';$('touchZoom').disabled=!!reloadId;
  $('touchSecondary').hidden=true;$('touchFreeMode').hidden=false;
- $('touchFire').disabled=!playing||s.editing;$('touchFire').textContent=freeTool==='build'?'Abbauen':'Impuls';
+ $('touchFire').disabled=!playing||s.editing||(freeTool==='pvp'&&(!equipped||!!reloadId));$('touchFire').textContent=freeTool==='build'?'Abbauen':'Feuer';
  $('touchInteract').disabled=!playing||(!exit&&!candidate)||s.editing;$('touchInteract').textContent=exit?'Hotel':'Setzen';
- $('touchRepair').disabled=$('touchReload').disabled=true;$('touchArsenal').disabled=false;$('touchArsenal').textContent='Bauen';
+ $('touchRepair').disabled=true;$('touchReload').disabled=freeTool!=='pvp'||!equipped||!!reloadId;$('touchArsenal').disabled=false;$('touchArsenal').textContent=freeTool==='pvp'?'Inventar':'Bauen';
  $('touchJump').disabled=player.stance==='crouch';$('touchSprint').disabled=$('touchCrouch').disabled=!playing;
  $('touchSprint').setAttribute('aria-pressed',String(player.stance==='sprint'||touchSprint));$('touchCrouch').setAttribute('aria-pressed',String(player.stance==='crouch'||touchCrouch));
  $('interaction-name').textContent=exit?'HOTEL · Ausgang':freeTool==='build'?(candidate?'Bauplatz frei':'Baumodus'):'PvP-Modus';
- $('interaction-actions').textContent=exit?'E · Zum Hotel':freeTool==='build'?'E / Rechtsklick: setzen · G / Linksklick: abbauen · B: PvP':'Linksklick: Spielimpuls · B: Bauen';
+ $('interaction-actions').textContent=exit?'E · Zum Hotel':freeTool==='build'?'E / Rechtsklick: setzen · G / Linksklick: abbauen · B: PvP':'Linksklick: Spielwaffe · I / 1–3: Auswahl · T: Nachladen · B: Bauen';
  $('cross').classList.toggle('actionable',playing&&(exit||!!candidate));
- $('hint').textContent='Free World · B: Bauen / PvP · I: Bauwerkzeug';
+ $('hint').textContent=freeTool==='pvp'?'Free World · B: Bauen / PvP · I: Inventar':'Free World · B: Bauen / PvP · I: Bauwerkzeug';
  updateFreeUI();
 }
 $('free-size').onchange=()=>{freeSize=Number($('free-size').value);updateFreeUI();};
 $('free-shape').onchange=()=>{freeShape=$('free-shape').value;updateFreeUI();};
 $('free-texture-select').onchange=()=>{freeTexture=$('free-texture-select').value||null;updateFreeUI();};
 $('free-build-mode').onclick=()=>{setFreeTool('build');$('closephone').onclick();};
-$('free-pvp-mode').onclick=()=>{setFreeTool('pvp');$('closephone').onclick();};
+$('free-pvp-mode').onclick=()=>{setFreeTool('pvp');showPhonePage('inventory');};
+$('free-inventory').onclick=()=>{setFreeTool('pvp');showPhonePage('inventory');};
 $('free-leave').onclick=()=>void leaveFreeWorld();
 $('free-texture-upload').onclick=async()=>{
  const s=freeState,file=$('free-texture-file').files[0];if(!s||s.editing||!file)return;
@@ -1124,9 +1144,9 @@ $('closephone').onclick=()=>{if(!started||studioOpen||!$('updater').hidden)retur
 canvas.onclick=()=>{if(mobile||!canPlay())return;void audio.unlock();if(document.pointerLockElement!==canvas){canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;}};
 canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.pointerLockElement===canvas&&canPlay()){if(freeState)freePrimary();else pressTrigger();}});
 canvas.addEventListener('contextmenu',e=>{if(canPlay()&&!mobile)e.preventDefault();});
-window.addEventListener('mousedown',e=>{if(e.button===2&&!mobile&&document.pointerLockElement===canvas&&canPlay()){e.preventDefault();if(freeState){if(freeTool==='build')void freeEdit('place');}else toggleScope();}});
+window.addEventListener('mousedown',e=>{if(e.button===2&&!mobile&&document.pointerLockElement===canvas&&canPlay()){e.preventDefault();if(freeState&&freeTool==='build')void freeEdit('place');else toggleScope();}});
 window.addEventListener('wheel',e=>{
- if(!canPlay()||lobbyState||freeState||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
+ if(!canPlay()||lobbyState||(freeState&&freeTool!=='pvp')||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
  e.preventDefault();
  const now=performance.now();if(now-lastWheel<140)return;lastWheel=now;
  chooseWeapon(nextWeapon(equipped,e.deltaY));
@@ -1143,6 +1163,7 @@ function fire(ray=null){
   if(!canPlay()||lobbyState||lobbyTransition||posture||!equipped||busy||reloadId||fireCooldown>0)return false;
   const weapon=equipped;
   if(ammo[weapon]<=0){startReload(true);return false;}
+  if(freeState){if(freeTool!=='pvp'||freeState.editing)return false;void freeEdit('pulse',weapon);return true;}
   const direction=ray?.direction||dir(),origin=ray?.origin||playerEye(),a=renderer.surfaceHit(origin,direction,held);
   ammo[weapon]--;fireCooldown=FIRE_INTERVAL[weapon];updateAmmo();
   renderer.shot(weapon,{origin,direction,distance:Math.min(8,a.dist),impact:a.dist<=8});
@@ -1179,7 +1200,7 @@ function repair(ray=null){
 $('mode').onclick=()=>setMode(!mobile);setMode(mobile);
 const stick=$('stick');let stickId=null;function moveStick(e){let r=stick.getBoundingClientRect(),x=(e.clientX-r.left-r.width/2)/(r.width*.36),y=(e.clientY-r.top-r.height/2)/(r.height*.36),l=Math.max(1,Math.hypot(x,y));touchMove=[x/l,-y/l];stick.style.setProperty('--jx',`${x/l*33}px`);stick.style.setProperty('--jy',`${y/l*33}px`);}stick.addEventListener('pointerdown',e=>{if(!canPlay()||stickId!==null)return;e.preventDefault();stickId=e.pointerId;stick.setPointerCapture(e.pointerId);moveStick(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId&&canPlay())moveStick(e);});for(const n of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(n,e=>{if(e.pointerId===stickId){stickId=null;touchMove=[0,0];stick.style.setProperty('--jx','0px');stick.style.setProperty('--jy','0px');}});
 canvas.addEventListener('pointerdown',e=>{if(!canPlay()||posture?.sleeping||(!mobile&&document.pointerLockElement===canvas))return;if(look)return;look={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!look||look.id!==e.pointerId||!canPlay()||posture?.sleeping)return;const sensitivity=scopeZoom ? .002 : .005;player.yaw-=(e.clientX-look.x)*sensitivity;player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch+(e.clientY-look.y)*sensitivity));look.x=e.clientX;look.y=e.clientY;});for(const n of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(n,e=>{if(look?.id===e.pointerId)look=null;});
-for(const [id,fn] of [['touchFreeMode',()=>setFreeTool(freeTool==='build'?'pvp':'build')],['touchInteract',interact],['touchSecondary',secondaryInteraction],['touchZoom',toggleScope],['touchRotateLeft',()=>turnHeld(-90)],['touchRotateRight',()=>turnHeld(90)],['touchReload',startReload],['touchRepair',()=>repair()],['touchView',()=>{if(!posture){setScopeZoom(false);first=!first;}}],['touchPhone',phone],['touchArsenal',arsenal],['touchSprint',()=>{if(!posture&&!held&&!scopeZoom){touchSprint=!touchSprint;if(touchSprint)touchCrouch=false;}}],['touchCrouch',()=>{if(!posture){touchCrouch=!touchCrouch;if(touchCrouch)touchSprint=false;}}],['touchJump',()=>{if(!posture&&player.stance!=='crouch'&&!wantsCrouch()&&Math.abs(player.y-groundAt(player.x,player.z))<1e-5)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});const fireButton=$('touchFire');fireButton.addEventListener('pointerdown',e=>{e.preventDefault();if(!canPlay()||triggerPointer!==null)return;void audio.unlock();if(freeState){freePrimary();return;}pressTrigger();if(triggerHeld){triggerPointer=e.pointerId;fireButton.setPointerCapture?.(e.pointerId);}});
+for(const [id,fn] of [['touchFreeMode',()=>setFreeTool(freeTool==='build'?'pvp':'build')],['touchInteract',interact],['touchSecondary',secondaryInteraction],['touchZoom',toggleScope],['touchRotateLeft',()=>turnHeld(-90)],['touchRotateRight',()=>turnHeld(90)],['touchReload',startReload],['touchRepair',()=>repair()],['touchView',()=>{if(!posture){setScopeZoom(false);first=!first;}}],['touchPhone',phone],['touchArsenal',arsenal],['touchSprint',()=>{if(!posture&&!held&&!scopeZoom){touchSprint=!touchSprint;if(touchSprint)touchCrouch=false;}}],['touchCrouch',()=>{if(!posture){touchCrouch=!touchCrouch;if(touchCrouch)touchSprint=false;}}],['touchJump',()=>{if(!posture&&player.stance!=='crouch'&&!wantsCrouch()&&Math.abs(player.y-groundAt(player.x,player.z))<1e-5)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});const fireButton=$('touchFire');fireButton.addEventListener('pointerdown',e=>{e.preventDefault();if(!canPlay()||triggerPointer!==null)return;void audio.unlock();if(freeState)freePrimary();else pressTrigger();if(triggerHeld){triggerPointer=e.pointerId;fireButton.setPointerCapture?.(e.pointerId);}});
 for(const event of ['pointerup','pointercancel','lostpointercapture'])fireButton.addEventListener(event,e=>{if(triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('blur',()=>{clearControls();audio.stopAll();});document.addEventListener('visibilitychange',()=>{if(document.hidden)clearControls();});
 
@@ -1219,7 +1240,7 @@ function updateMinimap(now,vr=false){
  ctx.setTransform(res/192,0,0,res/192,0,0);ctx.clearRect(0,0,192,192);
  ctx.save();ctx.beginPath();ctx.arc(96,96,91,0,Math.PI*2);ctx.clip();
  ctx.fillStyle='#101923';ctx.fillRect(0,0,192,192);
- const scale=freeState?5:lobbyState?8:13;
+ const scale=freeState?3.5:lobbyState?8:13;
  const box=(p,s,color)=>{ctx.fillStyle=color;ctx.fillRect(p[0]-s[0]/2,p[2]-s[2]/2,s[0],s[2]);};
  ctx.save();ctx.translate(96,96);ctx.scale(scale,scale);ctx.rotate(player.yaw);ctx.translate(-player.x,-player.z);
  if(freeState){
@@ -1267,7 +1288,7 @@ function frame(now,xrFrame){
   if(studioOpen){$('minimap').hidden=true;updateAvatarModelStatus();renderer.renderStudio(canvas,dt,$('character-preview'));return;}
   const vr=!!renderer.xrMode?.active;const xrInput=vr?renderer.xrMode.inputs(xrFrame):null;
   if(canPlay()&&!posture&&!lobbyTransition){
-    if(!freeState){stepReload(dt);stepTrigger(dt);}
+    if(!freeState||freeTool==='pvp'){stepReload(dt);stepTrigger(dt);}
     if(vr)player.yaw+=xrInput.turn;
     let f=vr?xrInput.move[1]:Number(keys.has('KeyW'))-Number(keys.has('KeyS'))+touchMove[1],s=vr?xrInput.move[0]:Number(keys.has('KeyD'))-Number(keys.has('KeyA'))+touchMove[0],a=player.yaw+(vr?xrInput.headYaw:0);
     const canStand=player.stance!=='crouch'||!coll(player.x,player.z,1.6);
@@ -1300,10 +1321,10 @@ function frame(now,xrFrame){
   if(!first&&!vr&&!posture){let t=eye.map((v,i)=>v-d[i]*2.1);if(!coll(t[0],t[2])){eye=t;target=eye.map((v,i)=>v+d[i]);}}
   renderer.begin();
   if(freeState){
-    $('npc-greeting').hidden=true;renderer.equip(null,false);
-    freeView.step(dt,player,accountProfile,!first&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5);
+    $('npc-greeting').hidden=true;renderer.equip(freeTool==='pvp'?equipped:null,first&&!scopeZoom);
+    freeView.step(dt,player,accountProfile,!first&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5,renderer.weaponModels,freeTool==='pvp'?equipped:null);
     if(canPlay()&&freeTool==='build')freeView.showPreview(freeCandidate());else freeView.showPreview(null);
-    audio.listener(eye,d);renderer.render(canvas,eye,target,mobile,dt,player,false,false,freeView.scene);
+    audio.listener(eye,d);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom,false,freeView.scene);
     updateMinimap(now,vr);
     if(now-lastInteractionHint>=100){lastInteractionHint=now;updateInteractionHint(vr);}return;
   }

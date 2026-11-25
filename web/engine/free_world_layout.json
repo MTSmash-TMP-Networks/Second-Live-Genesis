@@ -1,5 +1,5 @@
 {
-  "half": 40,
+  "half": 150,
   "height": 24,
   "grid": 0.5,
   "sizes": [
@@ -11,7 +11,7 @@
   "spawn": [
     0,
     0,
-    36
+    146
   ],
   "hallEnd": -66,
   "reach": 8,
