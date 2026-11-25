@@ -107,7 +107,7 @@ export class HotelLobbyView{
    this.npcGreeting=Math.max(0,this.npcGreeting-dt);
    const u=g.userData,weight=Math.min(1,this.npcGreeting*4);
    // A small greeting gesture while continuing the patrol.
-   u.arms[1].rotation.z=.1+weight*.65;u.arms[1].rotation.x-=weight*.35;u.elbows[1].rotation.x-=weight*.55;
+   u.arms[1].rotation.z=.1+weight*.65;u.arms[1].rotation.x+=(-.4-u.arms[1].rotation.x)*weight*.35;u.elbows[1].rotation.x+=(-.9-u.elbows[1].rotation.x)*weight*.35;
    if(player){
     const yaw=Math.atan2(g.position.x-player.x,g.position.z-player.z);
     const angle=Math.atan2(Math.sin(yaw-g.rotation.y),Math.cos(yaw-g.rotation.y));
