@@ -69,6 +69,7 @@ ARG SECOND_LIVE_ONNX_PACKAGE=onnxruntime==1.22.0
 RUN pip install --no-cache-dir numpy==2.2.6 Pillow==11.3.0 qrcode==8.2 opencv-python-headless==4.12.0.88 "${SECOND_LIVE_ONNX_PACKAGE}" && python -c "import cv2,numpy,PIL,onnxruntime; assert 'CPUExecutionProvider' in onnxruntime.get_available_providers()" && colmap -h >/dev/null
 ENV SECOND_LIVE_COMPUTE=cpu SECOND_LIVE_COMPUTE_THREADS=4
 COPY server.py updater_api.py wall_damage.py world_capture.py capture_compute.py /app/
+COPY tests/test_live_capture.py /app/tests/
 COPY web/ /app/web/
 COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bundle.js
 COPY --from=renderer /build/capture-view.bundle.js /app/web/engine/capture-view.bundle.js
@@ -85,7 +86,7 @@ RUN useradd -m appuser && mkdir -p /app/data && chown -R appuser:appuser /app/da
     && python /app/runtime_permissions.py --normalize /app
 USER appuser
 # Fail the image build if the actual runtime UID cannot read code and assets.
-RUN python /app/runtime_permissions.py --check /app && python -c "import server, capture_compute"
+RUN python /app/runtime_permissions.py --check /app && python -c "import server, capture_compute" && python -m unittest discover -s /app/tests -p test_live_capture.py
 VOLUME ["/app/data"]
 EXPOSE 8765
 CMD ["python", "server.py"]
