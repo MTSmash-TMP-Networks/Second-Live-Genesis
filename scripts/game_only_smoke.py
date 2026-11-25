@@ -1,6 +1,10 @@
 """Game-only deployment regression: no capture APIs; existing home identity survives."""
 import http.cookiejar
 import json
+import os
+import time
+from unittest.mock import patch
+from updater_api import UpdateBridge, atomic_json
 import tempfile
 import threading
 import unittest
@@ -15,6 +19,83 @@ from world_capture import CaptureError
 from game_accounts import AccountStore, DEFAULT_AVATAR, OPTIONS, password_hash, clean_avatar
 
 class GameOnlyTest(unittest.TestCase):
+    def test_update_admin_reserved_and_local_activation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);capture=CaptureStore(root)
+            email='owner@example.invalid';password='Owner-password-123'
+            data={'nickname':'Owner','email':email,'password':password}
+            accounts=AccountStore(capture,email)
+            with self.assertRaises(CaptureError):accounts.register(data,None,'guest')
+            self.assertFalse(accounts.admin_account_exists())
+            profile,key=accounts.register(data,None,'host',provision_admin=True)
+            player=accounts.identify(key)
+            self.assertFalse(accounts.is_update_admin(player))
+            with self.assertRaises(CaptureError):accounts.activate_update_admin('wrong-password')
+            self.assertFalse(accounts.is_update_admin(player))
+            self.assertEqual(accounts.activate_update_admin(password),profile)
+            self.assertTrue(AccountStore(capture,email.upper()).is_update_admin(player))
+            self.assertFalse(AccountStore(capture).is_update_admin(player))
+            self.assertFalse(AccountStore(capture,'another@example.invalid').is_update_admin(player))
+
+    def test_only_activated_account_can_use_update_api(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);capture=CaptureStore(root)
+            email='owner@example.invalid';password='Owner-password-123'
+            # Existing pre-update accounts retain their identities and sessions.
+            old=AccountStore(capture)
+            profile,key=old.register({'nickname':'Owner','email':email,'password':password},None,'owner')
+            _,guest=old.register({'nickname':'Other','email':'other@example.invalid','password':'Other-password-123'},None,'other')
+            work=root/'bridge';(work/'status').mkdir(parents=True);(work/'requests').mkdir()
+            revision='a'*40
+            def status(state='idle'):
+                atomic_json(work/'status'/'status.json',{'state':state,'heartbeat':time.time(),'current':'b'*40,'latest':revision})
+            status()
+            bridge=UpdateBridge(work,'k'*64)
+            with patch.dict(os.environ,{'SECOND_LIVE_UPDATE_ADMIN_EMAIL':email}):
+                srv=create_server(port=0,data_dir=root,token='test-token',guest_game=False,world_capture=True,updater=bridge)
+            thread=threading.Thread(target=srv.serve_forever,daemon=True);thread.start()
+            base=f'http://127.0.0.1:{srv.server_port}'
+            queue=work/'requests'/'request.json'
+            def req(path,key=None,data=None,extra=None,game_token=True):
+                headers={'Content-Type':'application/json'}
+                if game_token:headers['X-SecondLive-Token']='test-token'
+                if key:headers['Cookie']='sl_account='+key
+                if extra:headers.update(extra)
+                body=None if data is None else json.dumps(data).encode()
+                with urllib.request.urlopen(urllib.request.Request(base+path,data=body,headers=headers),timeout=8) as res:
+                    return res.status,json.load(res)
+            def denied(code,path,key=None,data=None,extra=None,game_token=True):
+                with self.assertRaises(urllib.error.HTTPError) as err:req(path,key,data,extra,game_token)
+                self.assertEqual(err.exception.code,code)
+                self.assertFalse(queue.exists())
+            try:
+                denied(401,'/api/update/status',extra={'X-SecondLive-Admin':'k'*64})
+                denied(401,'/api/update',data={'action':'check'},extra={'X-SecondLive-Admin':'k'*64})
+                denied(403,'/api/update/status',guest,extra={'X-SecondLive-Admin':'k'*64})
+                denied(403,'/api/update',guest,{'action':'check','email':email,'admin':True})
+                denied(403,'/api/update/status',key)
+                # An existing email is not enough until the host activates it.
+                accounts=AccountStore(capture,email)
+                accounts.activate_update_admin(password)
+                self.assertEqual(req('/api/update/status',key)[0],200)
+                denied(401,'/api/update/status',key,game_token=False)
+                denied(403,'/api/update',key,{'action':'check'},extra={'Origin':'https://evil.example.invalid','Sec-Fetch-Site':'cross-site'})
+                denied(403,'/api/update',guest,{'action':'check'},extra={'X-SecondLive-Admin':'k'*64})
+                self.assertEqual(req('/api/update',key,{'action':'check'})[0],202)
+                self.assertEqual(json.loads(queue.read_text()),{'action':'check','revision':None})
+                queue.unlink();status('available')
+                denied(409,'/api/update',key,{'action':'install','revision':'c'*40})
+                self.assertEqual(req('/api/update',key,{'action':'install','revision':revision})[0],202)
+                self.assertEqual(json.loads(queue.read_text()),{'action':'install','revision':revision})
+                queue.unlink()
+                self.assertEqual(req('/api/account',key,{'action':'logout'})[0],200)
+                denied(401,'/api/update/status',key)
+                self.assertEqual(req('/api/account',guest,{'action':'profile'})[1]['nickname'],'Other')
+                self.assertEqual(accounts.profile(old.identify(guest))['nickname'],'Other')
+            finally:
+                srv.shutdown();srv.server_close();thread.join(timeout=5)
+
+
     def test_lobby_capacity_leases_and_privacy(self):
         now=[100.0];lobby=HotelLobby(lambda:now[0])
         profiles={str(i):{'slot':i,'nickname':'Guest '+str(i),'avatar':DEFAULT_AVATAR} for i in range(CAPACITY)}
