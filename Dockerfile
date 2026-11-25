@@ -68,7 +68,7 @@ ENV QT_QPA_PLATFORM=offscreen
 ARG SECOND_LIVE_ONNX_PACKAGE=onnxruntime==1.22.0
 RUN pip install --no-cache-dir numpy==2.2.6 Pillow==11.3.0 qrcode==8.2 opencv-python-headless==4.12.0.88 "${SECOND_LIVE_ONNX_PACKAGE}" && python -c "import cv2,numpy,PIL,onnxruntime; assert 'CPUExecutionProvider' in onnxruntime.get_available_providers()" && colmap -h >/dev/null
 ENV SECOND_LIVE_COMPUTE=cpu SECOND_LIVE_COMPUTE_THREADS=4
-COPY server.py updater_api.py wall_damage.py world_capture.py capture_compute.py /app/
+COPY server.py updater_api.py wall_damage.py world_capture.py capture_compute.py da3_client.py /app/
 COPY --chmod=0644 tests/test_live_capture.py /app/test_live_capture.py
 COPY web/ /app/web/
 COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bundle.js
