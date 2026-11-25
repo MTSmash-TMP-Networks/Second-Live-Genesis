@@ -7,6 +7,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { buildArchitecture } from './architecture.js';
+export { curtainBounds } from './architecture.js';
 import { XRMode } from './xr.js';
 import { ShotEffects } from './shotfx.js';
 import { ImpactMarks } from './impact_marks.js';
@@ -102,7 +103,7 @@ export class RoomRenderer {
     windowFill.lookAt(.2,1.5,-1);
     this.scene.add(windowFill);
     // Soft window spill produces furniture shadows even when the exterior sun is occluded.
-    const spill=new THREE.SpotLight(0xffefd9,42,12,Math.PI/3,.72,2);spill.position.set(-4.51,2.36,-1.0);spill.target.position.set(-.8,.3,.4);spill.castShadow=true;spill.shadow.mapSize.set(shadowSize,shadowSize);spill.shadow.normalBias=.024;spill.shadow.bias=-.0002;spill.shadow.camera.near=.1;spill.shadow.camera.far=13;this.scene.add(spill,spill.target);
+    const spill=new THREE.SpotLight(0xffefd9,42,12,Math.PI/3,.72,2);spill.position.set(-4.51,2.36,-1.0);spill.target.position.set(-.8,.3,.4);spill.castShadow=true;spill.shadow.mapSize.set(shadowSize,shadowSize);spill.shadow.normalBias=.024;spill.shadow.bias=-.0002;spill.shadow.camera.near=.1;spill.shadow.camera.far=13;this.scene.add(spill,spill.target);this.windowDaylight={fill:windowFill,spill};
 
     const ceilingBounce=new THREE.PointLight(0xffefd9,2.0,10,2);
     ceilingBounce.position.set(0,2.75,.2);
@@ -444,6 +445,9 @@ export class RoomRenderer {
 
   place(mesh,o){mesh.position.set(...o.p);if(o.q)mesh.quaternion.set(...o.q);else mesh.rotation.set(0,o.r||0,0);}
   setDoorOpen(open){this.portalDoor?.setOpen(open);}
+  setCurtainsClosed(closed,immediate=false,decor={}){this.curtainControl?.setClosed(closed,immediate,decor);}
+  advanceCurtains(dt,decor={}){this.curtainControl?.step(dt,decor);}
+  get curtainProgress(){return this.curtainControl?.progress||0;}
   setRoomLight(on,decor={}){
     const ceiling=on&&(decor.surface_ceilinglamp||0)<4;
     if(this.ceilingLight)this.ceilingLight.intensity=ceiling?2.8:0;
