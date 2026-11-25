@@ -139,3 +139,12 @@ control.setClosed(false,true);
 assert.equal(control.progress,0);assert.equal(left.scale.z,1);assert.equal(right.scale.z,1);
 assert.equal(curtainRenderer.windowDaylight.spill.intensity,42);
 console.log('Curtain animation, centre coverage, ray hits and daylight OK');
+
+// Rug uses the same persistent impact ID; moving its root moves the mesh.
+const rugScene=new THREE.Group(),rugMarks=new ImpactMarks(),rugRenderer={quality:'1k',textured:{},staticGroup:rugScene,realismStatus:{},shadowTexture:null,impacts:rugMarks};
+await buildRoomDecor(rugRenderer,{},s=>s,{});
+const rugRoot=rugMarks.targets.get('surface_rug').root;const rugSpec=HOTEL_LAYOUT.surface_rug;
+assert.ok(rugSpec.decor&&rugSpec.s[1]<=.02);assert.ok(rugRoot.position.distanceTo(new THREE.Vector3(...rugSpec.p))<1e-6);
+rugRoot.position.set(0,.009,0);rugRoot.rotation.y=Math.PI/2;rugScene.updateMatrixWorld(true);
+const rugHit=rugMarks.cast([0,1.5,0],[0,-1,0],[rugScene]);assert.equal(rugHit.id,'surface_rug');
+console.log('Hotel rug root, persistent target and rotated ray hit OK');
