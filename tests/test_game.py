@@ -34,6 +34,24 @@ class GameTest(unittest.TestCase):
                 body=r.read()
                 if path.endswith('.jpg'): self.assertTrue(body.startswith(b'\xff\xd8'))
                 if path=='/': self.assertIn(b'id="stick"',body)
+    def test_furniture_rotation_and_persistence(self):
+        for oid,pos,angle in [('surface_bed',[0,.6,2.8],90),('surface_wardrobe',[0,1.4,-2.7],270),('table',[2.3,.39,-.9],180)]:
+            result=self.req('/api/game',{'action':'place_object','id':oid,'position':pos,'rotation':angle})
+            self.assertEqual(result['placements'][oid],pos)
+            self.assertEqual(result['rotations'][oid],angle)
+        restored=GameStore(Path(self.tmp.name)).state()
+        self.assertEqual(restored['rotations']['surface_bed'],90)
+        self.assertEqual(restored['rotations']['surface_wardrobe'],270)
+        for data in [
+            {'id':'surface_bed','position':[0,.6,2.8],'rotation':45},
+            {'id':'surface_bed','position':[4,.6,0],'rotation':90},
+            {'id':'surface_wardrobe','position':[0,1.4,2.8],'rotation':0},
+            {'id':'window','position':[0,.6,0],'rotation':90},
+        ]:
+            with self.assertRaises(urllib.error.HTTPError) as e:self.req('/api/game',{'action':'place_object',**data})
+            self.assertEqual(e.exception.code,400)
+        self.req('/api/game',{'action':'place_object','id':'crate','position':[0,.45,0]})
+        self.assertEqual(self.req('/api/game')['rotations']['crate'],0)
     def test_invalid(self):
         for data in [{'action':'hit','id':'invalid'},{'action':'unknown'},[]]:
             with self.assertRaises(urllib.error.HTTPError) as e:self.req('/api/game',data)
