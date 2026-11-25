@@ -1,7 +1,8 @@
-Second Live v0.7.4 - Room Interaction & Host Lifecycle
+Second Live v0.7.5 - CSP & Door Loading Hotfix
 115 Python-Tests und 31 Subtests erfolgreich (pytest).
-Host-Lifecycle: Projektzuordnung, Operationssperren, sicherer echter Agent-Prozess-Stopp, no-build-Start, Cleanup und Rollback-Schutz mit Docker-CLI-Testdoubles.
-Raum-Interaktion: additive SQLite-Migration, individueller Lichtzustand, freier Stellplatz, persistente Position, ungueltige Positionen/zerstoerte Objekte abgelehnt.
-Desktop-/Touch-Simulation inklusive Lichtschalter, Aufheben und Abstellen erfolgreich. Node: Audio, Kameraqualitaet, HTTPS/GPS, Wandpartitionen, Handmesh, optionale Foto-Assets. Bash-/JS-Syntax geprueft.
-Door: GLB-Validator akzeptiert Meshopt/KTX2 und Meshopt-Fallback-Buffer. Decoder-Dateien sind im Dockerfile aus Three.js 0.170.0 vorgesehen. Tevy-Download wegen DNS-Sperre nicht moeglich. Echte Docker-, WebGL- und VR-Abnahme offen; visuelle Originaltuer und Physikbewegungen nicht live getestet.
-Host-Hotfix separat installieren: keine automatische Ersetzung der Host-Skripte durch Ingame-Updater. Stopp wartet nicht auf einen laufenden Build, sondern verweigert konkurrierenden Stopp. Keine globale Docker-/BuildKit-Bereinigung.
+Alle acht Node-Testdateien erfolgreich, einschliesslich Desktop-/Touch-Simulation, optionaler Tuer-Deadline und CSP-Regressionspruefung.
+Neuer Build-Smoke-Test mit synthetischem Basis-Decoder: RGBA-Pixeltreue, PNG-CRC, GLB-Padding, Meshopt-Fallback-Buffer und Referenzen, Manifest-SHA256, fehlerhafte Textur und optionaler Konvertierungsfehler erfolgreich.
+API-Aufruf des Basis-Decoders gegen Three.js r170 KTX2Loader.js und basis_transcoder.js abgeglichen.
+Keine CSP-Lockerung, kein Basis-Worker zur Laufzeit, neuer Asset-Pfad und getrennte Lademanager; Timeout 8 Sekunden fuer optionale Tuer.
+Bash-/JS-Syntax geprueft. Keine Aenderung an Host-Skripten, Datenbank oder Caddy-Konfiguration.
+Docker-Daemon, npm-Netzwerk, echter Basis-WASM-/Tevy-Download und WebGL/Firefox-Abnahme in dieser Umgebung nicht verfuegbar; reale Texturdekodierung und Darstellung beim naechsten Docker-Build/Spielstart pruefen. Fehlgeschlagene optionale Konvertierung aktiviert den lokalen Tuer-Fallback.

@@ -81,3 +81,6 @@ Die ausgewählten Poly-Haven-IDs `residential_garden`, `service_pistol` und `bol
 
 ### Door decoder update (0.7.4)
 The pinned CC0 door source documents meshopt geometry and KTX2 textures: https://tevy.dev/docs . The matching Three.js 0.170.0 decoder and Basis transcoder are served locally; Draco remains unsupported. The original GLB is optional and the local door remains available. Actual source GLB/WebGL validation still requires a live Docker/browser test.
+
+### Door texture hotfix (0.7.5)
+The optional Tevy GLBs are normalized during the Docker build by `scripts/convert_door.mjs`, using the Basis Universal transcoder shipped with Three.js 0.170.0 only inside the Node build stage. LDR KTX2 textures become embedded RGBA PNGs; Meshopt geometry, source/license metadata and material references are retained. Output records include checksums and the original source SHA-256. The browser does not receive a Basis transcoder, so its existing CSP does not require `unsafe-eval`. File names change to `1k-png.glb` and `2k-png.glb`. Conversion failures omit the affected optional model; browser load timeouts preserve the procedural door. The synthetic conversion test checks PNG fidelity and GLB/manifest integrity; the actual source asset and native WebGL rendering have not been tested in the restricted development environment.

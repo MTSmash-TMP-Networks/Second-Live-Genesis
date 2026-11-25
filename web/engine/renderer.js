@@ -2,7 +2,6 @@ export { RoomPhysics } from './physics.js';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
@@ -341,8 +340,6 @@ export class RoomRenderer {
 
     const loader=new GLTFLoader(manager);
     loader.setMeshoptDecoder(MeshoptDecoder);
-    // Local, pinned Three.js Basis transcoder; no browser CDN dependency.
-    if(manifest.door_models&&Object.keys(manifest.door_models).length){try{this.ktx2=new KTX2Loader(manager).setTranscoderPath('/assets/decoders/').setWorkerLimit(2).detectSupport(this.renderer);loader.setKTX2Loader(this.ktx2);}catch(e){console.warn('Optional door texture decoder unavailable',e);}}
     await this.loadRealism(manifest,path,loader,manager);
     await this.loadM16(manifest,path,manager);
     this.ensureInventoryPreviews();
@@ -384,7 +381,10 @@ export class RoomRenderer {
     }
     buildArchitecture(this,spec);
     await buildRoomDecor(this,manifest,path,loader);
-    this.portalDoor=await buildPortalDoor(this,manifest,path,loader);
+    // Optional door must not block the core loading manager. KTX2 is converted during build.
+    this.status('Tuermodell wird vorbereitet');
+    const doorLoader=new GLTFLoader(new THREE.LoadingManager()).setMeshoptDecoder(MeshoptDecoder);
+    this.portalDoor=await buildPortalDoor(this,manifest,path,doorLoader);
     // Keep the crate in its own stable scene root instead of the reusable box pool.
     const c=spec.crate,crate=new THREE.Group(),crateMat=this.textured.oak_veneer_01.clone();
     const crateMesh=new THREE.Mesh(this.geometry({s:c.s,p:c.p,m:'oak_veneer_01'}),crateMat);

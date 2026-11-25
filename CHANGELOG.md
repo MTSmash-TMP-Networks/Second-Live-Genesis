@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.5 – CSP & Door Loading Hotfix
+- KTX2/Basis-Dekodierung ausschliesslich beim Docker-Build; eingebettete PNG-Texturen und unveraenderte Meshopt-Geometrie in neuen lokalen GLBs.
+- Separater Lademanager und Deadline fuer optionale Originaltuer; lokales Ersatzmodell bei Fehler oder Timeout.
+- Keine Lockerung der Content-Security-Policy, keine Host-Aktualisierung oder Datenmigration erforderlich.
+
 ## 0.7.4 – Room Interaction & Host Lifecycle
 - E / Touch schaltet die Raumbeleuchtung persistent; Tageslicht bleibt erhalten. Lichtschalter ausserhalb der Tuerzarge.
 - Fuenf bewegliche Spielobjekte aufheben und auf freiem Boden abstellen; validierte Position in der persoenlichen Welt gespeichert.

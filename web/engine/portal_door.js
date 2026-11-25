@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { withAssetDeadline } from './optional_asset.js';
 // Existing 2 m scan portal retains its wall layout and legacy damage IDs.
 export const DOOR_WIDTH=1.12, DOOR_HEIGHT=2.2;
 export const PORTAL_SIDES=[-.78,.78].map(x=>({p:[x,1.1,-5],s:[.44,2.2,.2]}));
@@ -34,7 +35,7 @@ export async function buildPortalDoor(renderer,manifest,path,loader){
   for(const side of PORTAL_SIDES)box(fixed,side.s,side.p,plaster,.002);
   const {frame,pivot}=localDoor(renderer);renderer.staticGroup.add(frame);let original=null;
   const url=manifest.door_models?.[renderer.quality]||manifest.door_models?.['1k']||manifest.door_models?.['2k'];
-  if(url)try{const gltf=await loader.loadAsync(path(url));original=fitDoor(gltf.scene);renderer.staticGroup.add(original);}catch(e){console.warn('Original door not usable; local panel door active',e);}
+  if(url)try{const gltf=await withAssetDeadline(()=>loader.loadAsync(path(url)));original=fitDoor(gltf.scene);renderer.staticGroup.add(original);}catch(e){console.warn('Original door not usable; local panel door active',e);}
   renderer.realismStatus.door=original?'ready':'local';
   let last=null;const setOpen=open=>{open=!!open;if(open===last)return;last=open;if(original)original.visible=!open;frame.visible=!original||open;pivot.rotation.y=open?-Math.PI/2:0;};
   setOpen(false);return {setOpen};

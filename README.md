@@ -1,8 +1,14 @@
 # Second Live – World Genesis
 
-**v0.7.4 · Room Interaction & Host Lifecycle / World Capture CPU-Testversion**
+**v0.7.5 · CSP & Door Loading Hotfix / World Capture CPU-Testversion**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spieler sollen ihre gemeinsame Welt aus realen Aufnahmen erschaffen, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.7.5
+
+- Die KTX2/Basis-Texturen der optionalen Tevy-Tuer werden beim Docker-Build in eingebettete PNG-Texturen konvertiert. Meshopt-Geometrie und Materialzuordnung bleiben erhalten. Die Browser-CSP bleibt unveraendert; kein `unsafe-eval`.
+- Die optionale Tuer nutzt einen separaten Lademanager und ein Zeitlimit von acht Sekunden. Bei Download-, Dekodierungs- oder Ladefehlern bleibt die lokale modellierte Tuer aktiv. Neue Asset-Dateinamen verhindern die Wiederverwendung der alten komprimierten GLBs aus dem Browsercache.
+- Keine Aenderungen an Host-Updater, SQLite, Scanauftraegen oder HTTPS-Konfiguration erforderlich. Bei blockiertem Spielstart das System-Update im Startmenue verwenden.
 
 ## Neu in 0.7.4
 
