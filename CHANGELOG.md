@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.7 – Avatar HTTP Build Fix
+- Behebt UnboundLocalError im GET-Handler durch Entfernen des lokalen unquote-Imports; Healthcheck und alle GET-Routen funktionieren wieder.
+- Avatar-Asset-Pfade werden nur einmal URL-dekodiert. Neuer HTTP-Regressionstest für Healthcheck, Modelldaten, kodierte Dateinamen und blockierte Pfadumgehungen; bisherige Build-Tests und CSP bleiben unverändert.
+
 ## 0.11.6 – Realistic Player Avatars
 - Realistische, texturierte MakeHuman-basierte Spielerfiguren mit Skelett und Animationen für Stehen, Gehen, Laufen und Ducken; lokale Erzeugung über Ara 3D Gen.
 - Neuer Standardlook: dunkle Jacke, graues Shirt, dunkle Jeans, helle Sneaker, kurze Haare und Bartstoppeln. Bestehende Charakterprofile bleiben erhalten.

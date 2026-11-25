@@ -344,6 +344,42 @@ class GameOnlyTest(unittest.TestCase):
             self.assertFalse(result['placements']);self.assertFalse(result['rotations']);self.assertEqual(result['objects']['crate'],hp)
 
 
+    def test_avatar_assets_and_health_share_get_handler(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            web = root / 'web'
+            assets = web / 'assets' / 'avatars' / 'data'
+            assets.mkdir(parents=True)
+            (assets / 'skin tone.json').write_bytes(b'{"skin":1}')
+            (assets / 'literal%20name.json').write_bytes(b'{"skin":2}')
+            (assets.parent / 'secret.json').write_bytes(b'private')
+            (assets / 'outside.json').symlink_to(assets.parent / 'secret.json')
+            with patch('server.WEB', web):
+                srv = create_server(port=0, data_dir=root / 'state', guest_game=True, world_capture=True)
+                thread = threading.Thread(target=srv.serve_forever, daemon=True)
+                thread.start()
+                base = f'http://127.0.0.1:{srv.server_port}'
+                try:
+                    with urllib.request.urlopen(base + '/api/health', timeout=5) as res:
+                        self.assertEqual(res.status, 200)
+                        self.assertTrue(json.load(res)['ok'])
+                        self.assertNotIn("'unsafe-eval'", res.headers['Content-Security-Policy'])
+                    for name, expected in [('skin%20tone.json', b'{"skin":1}'), ('literal%2520name.json', b'{"skin":2}')]:
+                        with urllib.request.urlopen(base + '/assets/avatars/data/' + name, timeout=5) as res:
+                            self.assertEqual(res.status, 200)
+                            self.assertEqual(res.headers.get_content_type(), 'application/json')
+                            self.assertEqual(res.read(), expected)
+                    for name in ('missing.json', '%2e%2e/secret.json', '%2e%2e%2fsecret.json', 'outside.json', '%00.json', 'folder%5cfile.json'):
+                        with self.assertRaises(urllib.error.HTTPError) as e:
+                            urllib.request.urlopen(base + '/assets/avatars/data/' + name, timeout=5)
+                        self.assertEqual(e.exception.code, 404, name)
+                    with urllib.request.urlopen(base + '/api/health', timeout=5) as res:
+                        self.assertTrue(json.load(res)['ok'])
+                finally:
+                    srv.shutdown()
+                    srv.server_close()
+                    thread.join(timeout=5)
+
     def test_preserve_home_and_disable_capture(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
