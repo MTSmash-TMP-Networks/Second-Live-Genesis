@@ -1,10 +1,11 @@
-import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
 let renderer=null, physicsWorld=null, graphicsReady=false;
 let equipped=null, xrEntering=false, xrReturnFirst=true, posture=null, scopeZoom=false, lastWheel=-Infinity;
 let lobbyEnabled=false,lobbyState=null,lobbyTransition=false;
+let accountsEnabled=false,accountProfile=null,authMode='login',studioOpen=false,editingFromGame=false,characterDraft=null,accountBusy=false;
 const weaponIds=['pistol','rifle','m16'];
 const weaponCycle=['none',...weaponIds];
 function nextWeapon(current,direction){const i=Math.max(0,weaponCycle.indexOf(current||'none'));return weaponCycle[(i+(direction>0?1:-1)+weaponCycle.length)%weaponCycle.length];}
@@ -90,7 +91,7 @@ let mobile=matchMedia('(pointer:coarse)').matches, touchMove=[0,0], look=null;
 function clearControls(){releaseTrigger();setScopeZoom(false);keys.clear();touchMove=[0,0];look=null;$('stick').classList.remove('moving');$('stick').style.removeProperty('--jx');$('stick').style.removeProperty('--jy');}
 function setMode(v){mobile=v;document.body.classList.toggle('mobile',v);$('mode').textContent=v?'Desktop-Modus':'Touch-Modus';clearControls();if(v)document.exitPointerLock?.();}
 let token=sessionStorage.getItem('second_live_token')||'';let protectedGame=false,personalWorld=false; $('token').value=token;
-const api=async(path,data)=>{let r=await fetch(path,{headers:{...(protectedGame?{'X-SecondLive-Token':token}:{}),'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});let j=await r.json();if(!r.ok)throw Error(j.error||r.status);return j;};
+const api=async(path,data)=>{let r=await fetch(path,{headers:{...(protectedGame?{'X-SecondLive-Token':token}:{}),'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});let j=await r.json();if(!r.ok){const e=Error(j.error||r.status);e.status=r.status;throw e;}return j;};
 function syncWallState(next){
   for(const [id,w] of Object.entries(WALLS)){
     const prev=new Set((state.walls?.[id]||[]).filter(c=>c[2]>=REMOVED).map(c=>`${c[0]},${c[1]}`));
@@ -133,7 +134,7 @@ function sync(s){
   syncWallState(s.walls||{});syncDecorState(s.decor||{});renderer?.setRoomLight?.(s.lights_on!==false,s.decor||{});
   const wasOpen=state.unlocked;state=s;renderer?.setCurtainsClosed?.(s.curtains_closed===true,!started,s.decor||{});renderer?.setDoorOpen?.(!lobbyEnabled&&s.unlocked);if(started&&!lobbyEnabled&&wasOpen!==s.unlocked)audio.play('door',[0,1.1,-4.95]); updateWorldStatus();
 }
-let mutationVersion=0;async function refresh(){const v=mutationVersion;let s=await api('/api/game');if(!busy&&v===mutationVersion)sync(s);}
+let mutationVersion=0;async function refresh(){const v=mutationVersion;try{let s=await api('/api/game');if(!busy&&v===mutationVersion)sync(s);}catch(e){if(started&&accountsEnabled&&e.status===401)location.reload();throw e;}}
 async function action(action,id,mark,extra={}){if(busy||lobbyState||lobbyTransition)return false;busy=true;mutationVersion++;try{const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);$('notice').textContent=action==='reset_hotel_layout'?'Hotelanordnung wiederhergestellt':action==='toggle_curtains'?(result.curtains_closed?'Vorhänge geschlossen':'Vorhänge geöffnet'):action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
 function dir(){let a=player.yaw,p=player.pitch;return [-Math.sin(a)*Math.cos(p),-Math.sin(p),-Math.cos(a)*Math.cos(p)];}
 function rotateInverse(v,q){if(!q)return v;const [x,y,z,w]=q,u=[-x,-y,-z],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],t=cross(u,v).map(n=>2*n),c=cross(u,t);return v.map((n,i)=>n+w*t[i]+c[i]);}
@@ -155,7 +156,7 @@ chooseWeapon('none');
 function phone(){if(renderer?.xrMode?.active){renderer.xrMode.end().then(()=>phone()).catch(e=>$('notice').textContent=e.message);return;}document.exitPointerLock?.();clearControls();$('phone').hidden=false;active=false;audio.stopAll();audio.play('phone');showPhonePage('home');updatePhone();}
 const movable=id=>id&&id!=='window'&&Object.hasOwn(spec,id)&&state.objects[id]>0;
 function updateWorldStatus(){
- const message=lobbyState?'Hotelflur · '+lobbyState.online+' / '+lobbyState.capacity+' Gäste · Zimmer '+lobbyDoor(lobbyState.slot).number:personalWorld?'Privater Startraum':state.unlocked?'Testbereich freigeschaltet':'Startraum';
+ const message=lobbyState?'Hotelflur · '+lobbyState.online+' / '+lobbyState.capacity+' Gäste · Zimmer '+lobbyDoor(lobbyState.slot).number:accountProfile?'Zimmer '+lobbyDoor(accountProfile.slot).number+' · '+accountProfile.nickname:personalWorld?'Privater Startraum':state.unlocked?'Testbereich freigeschaltet':'Startraum';
  $('worldstate').textContent=message;$('phone-worldstate').textContent=message;
 }
 async function lobbyRequest(data,keepalive=false){
@@ -172,7 +173,7 @@ async function enterLobby(){
   const result=await lobbyRequest({action:'enter'});
   if(!lobbyDoor(result.slot)||!Array.isArray(result.position)||!lobbyWalkable(result.position[0],result.position[2])||typeof result.lease!=='string')throw Error('Ungültige Flursitzung');
   lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
-  renderer.lobby.setOwn(result.slot);renderer.lobby.sync(result.peers||[]);
+  renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);
   Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0});
   audio.play('door');updateWorldStatus();$('notice').textContent='Willkommen im Hotelflur. Dein Zimmer: '+lobbyDoor(result.slot).number;
  }catch(e){$('notice').textContent=e.message||'Hotelflur nicht erreichbar';}
@@ -194,10 +195,10 @@ async function updateLobby(){
  try{
   const result=await lobbyRequest({action:'update',lease:visit.lease,position:[player.x,player.y,player.z],yaw:player.yaw});
   if(lobbyState!==visit)return;
-  if(visit.offline)$('notice').textContent='Flurverbindung wiederhergestellt';visit.offline=false;visit.lastOK=performance.now();visit.online=result.online;visit.capacity=result.capacity;renderer.lobby.sync(result.peers||[]);updateWorldStatus();
+  if(visit.offline)$('notice').textContent='Flurverbindung wiederhergestellt';visit.offline=false;visit.lastOK=performance.now();visit.online=result.online;visit.capacity=result.capacity;renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);updateWorldStatus();
  }catch(e){
   if(lobbyState!==visit)return;
-  if(e.status===409||performance.now()-visit.lastOK>LOBBY_LAYOUT.leaseSeconds*1000){returnToRoom('Flurverbindung beendet. Du bist wieder in deinem Zimmer.',false);}
+  if(e.status===401){location.reload();return;}if(e.status===409||performance.now()-visit.lastOK>LOBBY_LAYOUT.leaseSeconds*1000){returnToRoom('Flurverbindung beendet. Du bist wieder in deinem Zimmer.',false);}
   else {visit.offline=true;$('notice').textContent='Flurverbindung unterbrochen – erneuter Verbindungsversuch';}
  }finally{visit.sending=false;}
 }
@@ -357,7 +358,89 @@ async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if
 }
 function groundAt(x,z){if(lobbyState)return 0;if(z<-5&&state.unlocked&&!lobbyEnabled)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
 function coll(x,z){if(lobbyState)return !lobbyWalkable(x,z);if(Math.abs(x)>4.65||z>4.65||z<(!lobbyEnabled&&state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+1.6&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,.85,1.45].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+1.6&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
-let enteringGame=false;async function enterGame(){if(!graphicsReady||enteringGame)return;enteringGame=true;void audio.unlock();if(protectedGame)token=$('token').value;try{if(personalWorld)await api('/api/session',{});await refresh();if(protectedGame)sessionStorage.setItem('second_live_token',token);$('welcome').hidden=true;started=true;active=true;document.body.classList.add('playing');if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});}catch(e){$('loginerror').textContent=e.message;}finally{enteringGame=false;}}
+let enteringGame=false;
+function authButtons(){
+ const ready=graphicsReady&&!accountBusy;
+ $('account-submit').disabled=!ready;$('account-continue').disabled=!ready;
+ $('auth-login').disabled=accountBusy;$('auth-register').disabled=accountBusy;
+}
+function setAuthMode(mode){
+ authMode=mode==='register'?'register':'login';const register=authMode==='register';
+ $('account-form').hidden=false;$('account-resume').hidden=true;$('auth-login').setAttribute('aria-pressed',String(!register));$('auth-register').setAttribute('aria-pressed',String(register));
+ $('nickname-field').hidden=!register;$('account-nickname').disabled=!register;$('account-nickname').required=register;
+ $('account-password').autocomplete=register?'new-password':'current-password';$('account-password').minLength=register?10:1;
+ $('account-submit').textContent=register?'Konto erstellen':'Anmelden';
+ $('account-note').textContent=register?'Mindestens 10 Zeichen. Dein bisheriger privater Raum wird bei gültiger alter Sitzung einmalig übernommen.':'Melde dich an, um dein Zimmer und deinen Charakter zu laden.';
+ $('loginerror').textContent='';
+}
+function applyAccount(profile){
+ if(!profile||typeof profile.nickname!=='string'||!lobbyDoor(profile.slot))throw Error('Ungültiges Spielerprofil');
+ accountProfile={nickname:profile.nickname,slot:profile.slot,avatar:normalizeCharacter(profile.avatar)};
+ renderer?.setCharacter(accountProfile);$('account-phone').hidden=false;$('account-phone-name').textContent=accountProfile.nickname+' · Zimmer '+lobbyDoor(accountProfile.slot).number;updateWorldStatus();
+}
+function openStudio(fromGame=false){
+ if(!accountProfile||!graphicsReady||lobbyState||lobbyTransition)return;
+ if(fromGame&&posture&&!leavePosture())return;
+ editingFromGame=fromGame;studioOpen=true;characterDraft={...accountProfile.avatar};clearControls();active=false;document.exitPointerLock?.();
+ $('welcome').hidden=true;$('phone').hidden=true;$('character-editor').hidden=false;document.body.classList.add('character-editing');
+ $('character-player').textContent=accountProfile.nickname+' · Zimmer '+lobbyDoor(accountProfile.slot).number;
+ $('character-save').textContent=fromGame?'Charakter speichern':'Speichern und spielen';$('character-error').textContent='';
+ renderCharacterFields();renderer.studio.set(characterDraft);
+}
+function renderCharacterFields(){
+ const area=$('character-fields');area.replaceChildren();
+ for(const [key,entry] of Object.entries(CHARACTER_OPTIONS)){
+  const label=document.createElement('label');label.textContent=entry.label;
+  const select=document.createElement('select');select.dataset.character=key;
+  for(const [index,name] of entry.values.entries()){const o=document.createElement('option');o.value=String(index);o.textContent=name;select.append(o);}
+  select.value=String(characterDraft[key]);select.onchange=()=>{characterDraft[key]=Number(select.value);renderer.studio.set(characterDraft);};label.append(select);area.append(label);
+ }
+}
+function closeStudio(){
+ studioOpen=false;$('character-editor').hidden=true;document.body.classList.remove('character-editing');clearControls();
+ if(editingFromGame){active=true;}else{$('welcome').hidden=false;showAccountResume();}
+}
+function showAccountResume(){
+ if(!accountProfile)return;
+ $('account-form').hidden=true;$('account-resume').hidden=false;$('account-resume-name').textContent='Angemeldet als '+accountProfile.nickname;
+}
+async function authenticate(){
+ if(!graphicsReady||accountBusy||!accountsEnabled||!$('account-form').reportValidity())return;
+ accountBusy=true;authButtons();$('loginerror').textContent='';
+ if(protectedGame)token=$('token').value;
+ const data={action:authMode,email:$('account-email').value.trim(),password:$('account-password').value};
+ if(authMode==='register')data.nickname=$('account-nickname').value;
+ try{
+  applyAccount(await api('/api/account',data));$('account-password').value='';showAccountResume();
+  if(protectedGame)sessionStorage.setItem('second_live_token',token);
+  openStudio();
+ }catch(e){$('loginerror').textContent=e.message;}
+ finally{data.password='';$('account-password').value='';accountBusy=false;authButtons();}
+}
+async function enterGame(){
+ if(!graphicsReady||enteringGame)return;enteringGame=true;void audio.unlock();if(protectedGame)token=$('token').value;
+ try{
+  if(accountsEnabled&&!accountProfile)throw Error('Bitte zuerst anmelden');
+  if(personalWorld&&!accountsEnabled)await api('/api/session',{});
+  await refresh();if(protectedGame)sessionStorage.setItem('second_live_token',token);
+  $('welcome').hidden=true;$('character-editor').hidden=true;studioOpen=false;document.body.classList.remove('character-editing');
+  started=true;active=true;document.body.classList.add('playing');
+  if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});
+ }catch(e){if(studioOpen)$('character-error').textContent=e.message;else $('loginerror').textContent=e.message;}
+ finally{enteringGame=false;}
+}
+$('auth-login').onclick=()=>setAuthMode('login');$('auth-register').onclick=()=>setAuthMode('register');
+$('account-form').onsubmit=e=>{e.preventDefault();authenticate();};$('account-continue').onclick=()=>openStudio();
+$('account-switch').onclick=async()=>{if(accountBusy)return;accountBusy=true;authButtons();try{await api('/api/account',{action:'logout'});accountProfile=null;$('account-phone').hidden=true;setAuthMode('login');}catch(e){$('loginerror').textContent=e.message;}finally{accountBusy=false;authButtons();}};
+$('character-left').onclick=()=>renderer.studio.turn(-Math.PI/6);$('character-right').onclick=()=>renderer.studio.turn(Math.PI/6);
+$('character-random').onclick=()=>{for(const [k,v] of Object.entries(CHARACTER_OPTIONS))characterDraft[k]=Math.floor(Math.random()*v.values.length);renderCharacterFields();renderer.studio.set(characterDraft);};
+$('character-cancel').onclick=()=>{if(!accountBusy)closeStudio();};
+$('character-save').onclick=async()=>{if(accountBusy||!studioOpen)return;accountBusy=true;$('character-save').disabled=true;$('character-error').textContent='';
+ try{applyAccount(await api('/api/account',{action:'avatar',avatar:characterDraft}));if(editingFromGame)closeStudio();else await enterGame();}
+ catch(e){$('character-error').textContent=e.message;}finally{accountBusy=false;$('character-save').disabled=false;}
+};
+$('edit-character').onclick=()=>{if(lobbyState){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}openStudio(true);};
+$('account-logout').onclick=async()=>{if(accountBusy||!confirm('Vom Spiel abmelden? Dein Zimmer und Charakter bleiben gespeichert.'))return;accountBusy=true;try{await api('/api/account',{action:'logout'});location.reload();}catch(e){$('notice').textContent=e.message;accountBusy=false;}};
 $('start').onclick=()=>enterGame();
 const phonePages=['home','world','settings'];
 function showPhonePage(page){for(const key of phonePages)$('phone-page-'+key).hidden=page!==key;}
@@ -424,6 +507,7 @@ window.addEventListener('blur',()=>{clearControls();audio.stopAll();});document.
 let prev=performance.now();
 function frame(now,xrFrame){
   let dt=Math.max(0,Math.min(.035,(now-prev)/1000));prev=now;
+  if(studioOpen){renderer.renderStudio(canvas,dt);return;}
   const vr=!!renderer.xrMode?.active;const xrInput=vr?renderer.xrMode.inputs(xrFrame):null;
   if(started&&active&&!posture&&!lobbyTransition){
     stepReload(dt);stepTrigger(dt);
@@ -464,7 +548,8 @@ function frame(now,xrFrame){
     if(hp>0){if(!renderer.drawModel(id,b.p,o.s,hp,o.max,b.q))part(b.p,o.s,id==='window'?o.c:hp<o.max?'947665':o.c,0,b.q);}else {for(let i=0;i<4;i++){let a=i*1.73;const at=state.placements?.[id]||o.p,x=id==='window'?-4.42:at[0];part([x+Math.cos(a)*.19,at[1]-o.s[1]/2+.032,at[2]+Math.sin(a)*.26],id==='window'?[.13,.012,.08]:[.23,.06,.12],o.c,a);}}
   }
   for(let b of debris)draw(b);
-  if(!first&&!vr&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5){part([player.x,player.y+1,player.z],[.5,1.1,.32],'354d65');part([player.x,player.y+1.7,player.z],[.32,.34,.32],'cba384');}
+  const third=!first&&!vr&&!posture&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5;
+  renderer.showCharacter(player,third&&started,dt,keys.has('KeyW')||keys.has('KeyA')||keys.has('KeyS')||keys.has('KeyD')||Math.hypot(...touchMove)>.05);
   renderer.syncMarks(state.marks||[]);
   if(started&&active)audio.listener(eye,d);renderer.equip(equipped,first&&started&&!scopeZoom);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom);
   if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}
@@ -499,7 +584,7 @@ function changeProfile(){sessionStorage.setItem('sl_quality',qualityChoice.value
 qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListener('change',changeProfile);
 (async()=>{
   try{
-    const health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());protectedGame=health.requires_game_token===true; personalWorld=health.personal_world===true;lobbyEnabled=health.hotel_lobby===true; $('game-auth').hidden=!protectedGame;
+    const health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());protectedGame=health.requires_game_token===true; personalWorld=health.personal_world===true;lobbyEnabled=health.hotel_lobby===true;accountsEnabled=health.accounts===true; $('game-auth').hidden=!protectedGame;$('account-access').hidden=!accountsEnabled;$('start').hidden=accountsEnabled;setAuthMode('login');authButtons();
     const q=qualityChoice.value==='auto'?(matchMedia('(pointer:coarse)').matches||innerWidth<800?'1k':'2k'):qualityChoice.value;
     renderer=new RoomRenderer(canvas,q,lightChoice.value,t=>status.textContent=t);
     await renderer.load(spec,objects);
@@ -513,7 +598,8 @@ qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListe
     status.textContent='Rapier-Physik wird geladen …';
     physicsWorld=await RoomPhysics.create(room.filter(o=>!movableDecor(o.surfaceId)),spec);
     status.textContent='Fotomaterialien und Rapier-Physik bereit';
-    graphicsReady=true;$('start').disabled=false;
+    graphicsReady=true;$('start').disabled=false;authButtons();
+    if(accountsEnabled){try{if(protectedGame)token=$('token').value;applyAccount(await api('/api/account',{action:'profile'}));showAccountResume();}catch(e){if(e.status!==401)console.warn('Konto:',e.message);}}else renderer.setCharacter({avatar:DEFAULT_CHARACTER});
     prev=performance.now();renderer.setLoop(frame);setupXR();
   }catch(e){console.error(e);status.textContent='Grafik konnte nicht geladen werden: '+e.message;$('error').hidden=false;$('error').textContent='WebGL 2 oder lokale Grafikdateien fehlen. Bitte Docker-Build und Browser prüfen.';}
 })();
