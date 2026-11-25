@@ -86,6 +86,21 @@ console.log('Three.js: irregular slab openings and repair');
 import { fitDoor,buildPortalDoor,PORTAL_SIDES } from './portal_door.js';
 const doorModel=new THREE.Mesh(new THREE.BoxGeometry(1.07,2.19,.2),new THREE.MeshStandardMaterial());
 const fittedDoor=fitDoor(doorModel);const doorBounds=new THREE.Box3().setFromObject(fittedDoor);assert.ok(Math.abs(doorBounds.min.y)<1e-5);assert.ok(Math.abs(doorBounds.max.y-2.2)<1e-5);assert.ok(Math.abs(doorBounds.max.x-.56)<1e-5);assert.equal(PORTAL_SIDES.length,2);
-const doorScene=new THREE.Group(),doorRenderer={staticGroup:doorScene,quality:'1k',realismStatus:{}};
-const door=await buildPortalDoor(doorRenderer,{door_models:{}},s=>s,{});assert.equal(doorRenderer.realismStatus.door,'local');door.setOpen(true);door.setOpen(false);assert.equal(doorScene.children.length,2);
+const doorScene=new THREE.Group(),doorRenderer={staticGroup:doorScene,quality:'1k',realismStatus:{},textured:{}};
+doorRenderer.textured.hotel_wall=hotelMaterials(doorRenderer).wall;
+doorRenderer.textured.white_plaster_02=new THREE.MeshStandardMaterial({color:0xffffff});
+const door=await buildPortalDoor(doorRenderer,{door_models:{}},s=>s,{});
+assert.equal(doorRenderer.realismStatus.door,'local');door.setOpen(true);door.setOpen(false);assert.equal(doorScene.children.length,2);
+const infill=doorScene.getObjectByName('Door wall infill');assert.equal(infill.children.length,2);
+for(const panel of infill.children){
+ assert.equal(panel.material,doorRenderer.textured.hotel_wall);
+ assert.notEqual(panel.material,doorRenderer.textured.white_plaster_02);
+ assert.equal(panel.geometry.type,'BoxGeometry');
+ panel.updateMatrixWorld(true);
+ const bounds=new THREE.Box3().setFromObject(panel);
+ assert.ok(Math.abs(bounds.max.z-(-4.9))<1e-6,'Wall infill must meet room wall face');
+ assert.ok(Math.abs(bounds.min.y)<1e-6&&Math.abs(bounds.max.y-2.2)<1e-6);
+}
+assert.ok(Math.abs(new THREE.Box3().setFromObject(infill).min.x+1)<1e-6);
+assert.ok(Math.abs(new THREE.Box3().setFromObject(infill).max.x-1)<1e-6);
 console.log('Portal geometry and optional door fallback OK');
