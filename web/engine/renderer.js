@@ -21,6 +21,8 @@ import { withAssetDeadline } from './optional_asset.js';
 import { HOTEL_LAYOUT, hotelMaterials, applyPhotoMaterials, createHotelModel } from './hotel_room.js';
 export { HOTEL_LAYOUT };
 import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
+import { HotelLobbyView } from './hotel_lobby.js';
+export { LOBBY_LAYOUT, LOBBY_CAPACITY, lobbyDoor, lobbyWalkable, lobbyDoorAt } from './lobby_layout.js';
 export { PORTAL_SIDES };
 export { DECOR } from './room_decor.js';
 
@@ -404,6 +406,8 @@ export class RoomRenderer {
       const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map:this.shadowTexture,transparent:true,depthWrite:false,opacity:.78,polygonOffset:true,polygonOffsetFactor:-1}));
       m.rotation.x=-Math.PI/2;m.position.y=.006;m.scale.set(o.s[0]*1.55,o.s[2]*1.55,1);this.scene.add(m);this.contactShadows[id]=m;
     }
+    this.status('Gemeinsamer Hotelflur wird vorbereitet');
+    this.lobby=new HotelLobbyView(this);
     this.status('Fotomaterialien und 3D-Modelle bereit · '+this.quality.toUpperCase());
   }
 
@@ -517,7 +521,8 @@ export class RoomRenderer {
     }
   }
   reload(progress){this.reloadProgress=Math.max(0,Math.min(1,progress||0));}
-  render(canvas,eye,target,mobile,dt=1/60,player=null,scopeZoom=false){
+  render(canvas,eye,target,mobile,dt=1/60,player=null,scopeZoom=false,inLobby=false){
+    const scene=inLobby?this.lobby.scene:this.scene;
     this.swayTime+=dt;
     const idle=Math.sin(this.swayTime*1.4)*.004;
     this.weaponRoot.position.x=.23+idle;
@@ -529,10 +534,10 @@ export class RoomRenderer {
     this.kick*=Math.exp(-dt*19);
     this.effects.update(dt);
     for(let i=this.cursor;i<this.pool.length;i++)this.pool[i].visible=false;
-    if(this.xrMode.active){if(player)this.xrMode.place(player);this.renderer.render(this.scene,this.camera);return;}
+    if(this.xrMode.active){if(player)this.xrMode.place(player);this.renderer.render(scene,this.camera);return;}
     const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),dpr=Math.min(devicePixelRatio||1,this.quality==='1k'||mobile?1.25:1.75);
     if(w!==this.width||h!==this.height||dpr!==this.dpr){this.width=w;this.height=h;this.dpr=dpr;this.renderer.setPixelRatio(dpr);this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
     const fov=scopeZoom?28:65;if(this.camera.fov!==fov){this.camera.fov=fov;this.camera.updateProjectionMatrix();}
-    this.camera.position.set(...eye);this.camera.lookAt(...target);this.renderer.render(this.scene,this.camera);
+    this.camera.position.set(...eye);this.camera.lookAt(...target);this.renderer.render(scene,this.camera);
   }
 }
