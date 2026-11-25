@@ -153,7 +153,7 @@ console.log('Hotel rug root, persistent target and rotated ray hit OK');
 import {LOBBY_LAYOUT,LOBBY_CAPACITY,lobbyDoor,lobbyDoorAt,lobbyWalkable,pairedRoom,roomHallTransform,hallToRoom} from './lobby_layout.js';
 import {NeighborRoomView,HallFacadeViews,hotelOpenings} from './hotel_connections.js';
 import {HotelLobbyView} from './hotel_lobby.js';
-import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,animateCharacter,disposeCharacter,CharacterStudio,sculptedMesh} from './character.js';
+import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,createHotelNpc,animateCharacter,disposeCharacter,CharacterStudio,sculptedMesh} from './character.js';
 {
  const L=LOBBY_LAYOUT;
  assert.equal(LOBBY_CAPACITY,24);assert.equal(L.halfLength*2,132);
@@ -175,9 +175,12 @@ import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,a
   const lobby=new HotelLobbyView({textured:{hotel_carpet:new THREE.MeshStandardMaterial(),hotel_wall:new THREE.MeshStandardMaterial(),hotel_ceiling:new THREE.MeshStandardMaterial()}});
   assert.equal(lobby.signs.length,24);lobby.setOwn(0,{nickname:'Alpha',avatar:DEFAULT_CHARACTER});
   const oldName=lobby.nameplates[1].material.map;lobby.setRooms([{slot:0,nickname:'Alpha'},{slot:1,nickname:'Beta'}]);assert.equal(lobby.roomNames.get(1),'Beta');assert.notEqual(lobby.nameplates[1].material.map,oldName);
+  lobby.syncNpc({position:[.62,0,-4],yaw:Math.PI,walking:true});assert.equal(lobby.npc.visible,true);assert.ok(lobby.npc.position.distanceTo(new THREE.Vector3(.62,0,-4))<1e-8);
+  lobby.syncNpc({position:[.62,0,-3],yaw:Math.PI,walking:true});lobby.greetNpc();lobby.step(.1,{x:0,y:0,z:-3});assert.ok(lobby.npc.position.z>-4&&lobby.npc.position.z<-3);assert.ok(lobby.npcGreeting>0);lobby.syncNpc(null);assert.equal(lobby.npc.visible,false);
   lobby.sync([{slot:1,position:[0,0,-2],yaw:0}]);assert.equal(lobby.peers.size,1);
   lobby.sync([{slot:1,position:[0,0,-1],yaw:1}]);lobby.step(.1,{x:0,y:0,z:0,yaw:0});
   assert.ok(lobby.peers.get(1).g.position.z>-2&&lobby.peers.get(1).g.position.z<-1);
+  lobby.sync([{slot:1,position:[0,0,-1],yaw:1,stance:'crouch'}]);lobby.step(.1,{x:0,y:0,z:0,yaw:0});assert.ok(lobby.peers.get(1).g.userData.body.position.y<-.1);
   const oldAvatar=lobby.peers.get(1).g;lobby.sync([{slot:1,nickname:'Beta',avatar:{...DEFAULT_CHARACTER,hair:4},position:[0,0,-1],yaw:1}]);assert.notEqual(lobby.peers.get(1).g,oldAvatar);assert.equal(lobby.peers.get(1).g.userData.character.hair,4);
   lobby.sync([{slot:0,position:[0,0,0],yaw:0}]);assert.equal(lobby.peers.size,0);assert.equal(lobby.roomNames.get(1),'Beta');
   const roomScene=new THREE.Scene(),projected=new THREE.Group();roomScene.add(projected);
@@ -206,7 +209,17 @@ console.log('Shared lobby: layout, named doors, avatar interpolation and cleanup
  const mesh=sculptedMesh([[0,.1,.1],[1,.1,.1]],12);const normal=mesh.attributes.normal;assert.ok(normal.getZ(0)>0);mesh.dispose();
  const studio=new CharacterStudio();studio.set(DEFAULT_CHARACTER);const old=studio.root;studio.set({...DEFAULT_CHARACTER,skin:0});assert.notEqual(studio.root,old);studio.turn(.3);let renders=0;studio.render({render(scene,camera){assert.equal(scene,studio.scene);assert.equal(camera,studio.camera);renders++;}},1.8,.016);studio.render({render(){renders++;}},.6,.016);assert.equal(renders,2);disposeCharacter(studio.root);
 }
-console.log('Character models: all customization variants, geometry, movement and preview checks OK');
+{
+ const npc=createHotelNpc();npc.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(npc);
+ assert.ok(bounds.max.y>1.85&&bounds.max.y<2.1);assert.ok(bounds.min.y>-.13);
+ const c=createCharacter(DEFAULT_CHARACTER);
+ for(let i=0;i<20;i++)animateCharacter(c,.05,true,'crouch');
+ assert.ok(c.userData.body.position.y<-.3);assert.ok(c.userData.knees[0].rotation.x<-1.5);
+ for(let i=0;i<20;i++)animateCharacter(c,.05,true,'sprint');
+ assert.ok(Math.abs(c.userData.body.position.y)<.06);assert.ok(c.userData.crouchBlend<.001);
+ disposeCharacter(npc);disposeCharacter(c);
+}
+console.log('Character models: all variants, concierge, sprint and crouch checks OK');
 
 {
  assert.deepEqual(hotelOpenings({surface_8:[[1,1,3]],surface_6:[[2,2,3]]}),{hall:false,neighbor:false});
