@@ -78,7 +78,7 @@ const DECOR_BOUNDS={...decorBounds,surface_windowframe:{p:[-4.88,1.74,-1],s:[.45
 const spec=Object.fromEntries(Object.entries(HOTEL_LAYOUT).filter(([,o])=>typeof o.max==='number'));
 
 let wallSolids=Object.values(WALLS).map(w=>({p:w.p,s:w.s})),wallSignatures={};
-let state={walls:{},decor:{},marks:[],lights_on:true,curtains_closed:false,placements:{},rotations:{},objects:Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,o.max])),unlocked:false}, bodies=Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,{p:[...o.p],v:[0,0,0]}])), debris=[], busy=false, held=null, player={x:HOTEL_LAYOUT.spawn.p[0],z:HOTEL_LAYOUT.spawn.p[2],y:0,vy:0,yaw:HOTEL_LAYOUT.spawn.yaw,pitch:0}, keys=new Set(), first=true, started=false, active=false;
+let state={walls:{},decor:{},marks:[],lights_on:true,curtains_closed:false,placements:{},rotations:{},objects:Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,o.max])),unlocked:false}, bodies=Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,{p:[...o.p],v:[0,0,0]}])), debris=[], busy=false, held=null, player={x:HOTEL_LAYOUT.spawn.p[0],z:HOTEL_LAYOUT.spawn.p[2],y:0,vy:0,yaw:HOTEL_LAYOUT.spawn.yaw,pitch:0,stance:'walk',eyeHeight:1.65}, keys=new Set(), first=true, started=false, active=false;
 let lastInteractionHint=-Infinity, heldAngle=0;
 const yawQuat=a=>[0,Math.sin(a*Math.PI/360),0,Math.cos(a*Math.PI/360)];
 const quarter=a=>((Math.round(a/90)*90%360)+360)%360;
@@ -88,8 +88,16 @@ const savedBody=(s,id)=>({p:[...(s.placements?.[id]||spec[id].p)],v:[0,0,0],q:ya
 const movableDecor=id=>!!spec[id]?.decor;
 function boundsSize(s,q){if(!q)return s;return [0,1,2].map(i=>{const axis=[0,0,0];axis[i]=1;return rotateInverse(axis,q).reduce((n,v,j)=>n+Math.abs(v)*s[j],0);});}
 function turnHeld(delta){if(!canPlay()||busy||!held)return;heldAngle=quarter(heldAngle+delta);$('notice').textContent='Drehung: '+heldAngle+'°';}
-let mobile=matchMedia('(pointer:coarse)').matches, touchMove=[0,0], look=null;
-function clearControls(){releaseTrigger();setScopeZoom(false);keys.clear();touchMove=[0,0];look=null;$('stick').classList.remove('moving');$('stick').style.removeProperty('--jx');$('stick').style.removeProperty('--jy');}
+let mobile=matchMedia('(pointer:coarse)').matches, touchMove=[0,0], look=null,touchSprint=false,touchCrouch=false;
+// Locomotion is independent of the seated/sleeping furniture state.
+function movementStance(crouch,sprint,moving,canStand,blockedSprint){
+ if(crouch||!canStand)return 'crouch';
+ return sprint&&moving&&!blockedSprint?'sprint':'walk';
+}
+function movementSpeed(stance,vr=false){return vr?1.6:stance==='sprint'?5.8:stance==='crouch'?1.65:3.4;}
+function wantsCrouch(){return touchCrouch||keys.has('ControlLeft')||keys.has('ControlRight')||keys.has('KeyC');}
+function wantsSprint(){return touchSprint||keys.has('ShiftLeft')||keys.has('ShiftRight');}
+function clearControls(){releaseTrigger();setScopeZoom(false);keys.clear();touchSprint=false;touchCrouch=false;touchMove=[0,0];look=null;$('stick').classList.remove('moving');$('stick').style.removeProperty('--jx');$('stick').style.removeProperty('--jy');}
 function setMode(v){mobile=v;document.body.classList.toggle('mobile',v);$('mode').textContent=v?'Desktop-Modus':'Touch-Modus';clearControls();if(v)document.exitPointerLock?.();}
 let token=sessionStorage.getItem('second_live_token')||'';let protectedGame=false,personalWorld=false; $('token').value=token;
 const api=async(path,data)=>{let r=await fetch(path,{headers:{...(protectedGame?{'X-SecondLive-Token':token}:{}),'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});let j=await r.json();if(!r.ok){const e=Error(j.error||r.status);e.status=r.status;throw e;}return j;};
@@ -174,15 +182,16 @@ async function enterLobby(){
   const result=await lobbyRequest({action:'enter'});
   if(!lobbyDoor(result.slot)||!Array.isArray(result.position)||!lobbyWalkable(result.position[0],result.position[2])||typeof result.lease!=='string')throw Error('Ungültige Flursitzung');
   lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
-  resetHotelViews();renderer.lobby.restoreProjection();renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);renderer.syncHallFacades(result.facades||[],result.slot,state);
-  Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0});
+  resetHotelViews();renderer.lobby.restoreProjection();renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);renderer.lobby.syncNpc(result.npc);renderer.syncHallFacades(result.facades||[],result.slot,state);
+  Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0,stance:'walk',eyeHeight:1.65});
+  resetGreeting();
   audio.play('door');updateWorldStatus();$('notice').textContent='Willkommen im Hotelflur. Dein Zimmer: '+lobbyDoor(result.slot).number;
  }catch(e){$('notice').textContent=e.message||'Hotelflur nicht erreichbar';}
  finally{lobbyTransition=false;clearControls();}
 }
 function returnToRoom(message='Du bist wieder in deinem Zimmer.',notify=true){
  const old=lobbyState;if(!old)return;
- lobbyState=null;lobbyTransition=false;resetHotelViews();renderer.lobby.clear();clearControls();player.y=0;player.vy=0;
+ lobbyState=null;lobbyTransition=false;resetHotelViews();renderer.lobby.clear();resetGreeting();clearControls();player.y=0;player.vy=0;player.stance='walk';player.eyeHeight=1.65;
  const spawn=HOTEL_LAYOUT.spawn.p,candidates=[[0,-3.8],[-.8,-3.6],[.8,-3.6],[spawn[0],spawn[2]]];
  for(let z=-3.8;z<=4;z+=.65)for(let x=-4;x<=4;x+=.65)candidates.push([x,z]);
  const p=candidates.find(([x,z])=>groundAt(x,z)>=-.05&&!coll(x,z))||[spawn[0],spawn[2]];
@@ -194,9 +203,9 @@ async function updateLobby(){
  const visit=lobbyState;if(!visit||visit.sending||lobbyTransition)return;
  visit.sending=true;
  try{
-  const result=await lobbyRequest({action:'update',lease:visit.lease,position:[player.x,player.y,player.z],yaw:player.yaw});
+  const result=await lobbyRequest({action:'update',lease:visit.lease,position:[player.x,player.y,player.z],yaw:player.yaw,stance:player.stance});
   if(lobbyState!==visit)return;
-  if(visit.offline)$('notice').textContent='Flurverbindung wiederhergestellt';visit.offline=false;visit.lastOK=performance.now();visit.online=result.online;visit.capacity=result.capacity;renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);renderer.syncHallFacades(result.facades||[],visit.slot,state);updateWorldStatus();
+  if(visit.offline)$('notice').textContent='Flurverbindung wiederhergestellt';visit.offline=false;visit.lastOK=performance.now();visit.online=result.online;visit.capacity=result.capacity;renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);renderer.lobby.syncNpc(result.npc);renderer.syncHallFacades(result.facades||[],visit.slot,state);updateWorldStatus();
  }catch(e){
   if(lobbyState!==visit)return;
   if(e.status===401){location.reload();return;}if(e.status===409||performance.now()-visit.lastOK>LOBBY_LAYOUT.leaseSeconds*1000){returnToRoom('Flurverbindung beendet. Du bist wieder in deinem Zimmer.',false);}
@@ -213,13 +222,13 @@ async function hotelViews(){
  const opening=hotelOpenings(state.walls||{}),mask=String(opening.hall)+String(opening.neighbor);
  if(mask!==hotelViewMask){
   resetHotelViews();hotelViewMask=mask;
-  if(!opening.hall)renderer.lobby.sync([]);
+  if(!opening.hall){renderer.lobby.sync([]);renderer.lobby.syncNpc(null);}
  }
  const epoch=hotelViewEpoch,profile=accountProfile;
  const current=()=>epoch===hotelViewEpoch&&profile===accountProfile&&!lobbyState&&!lobbyTransition;
  if(opening.hall&&!hotelHallPending){
   hotelHallPending=true;
-  api('/api/hotel/view',{action:'hall'}).then(data=>{if(current()&&hotelOpenings(state.walls||{}).hall){renderer.lobby.setRooms(data.rooms||[]);renderer.lobby.sync(data.peers||[]);renderer.syncHallFacades(data.facades||[],profile.slot,state);}}).catch(()=>{}).finally(()=>hotelHallPending=false);
+  api('/api/hotel/view',{action:'hall'}).then(data=>{if(current()&&hotelOpenings(state.walls||{}).hall){renderer.lobby.setRooms(data.rooms||[]);renderer.lobby.sync(data.peers||[]);renderer.lobby.syncNpc(data.npc);renderer.syncHallFacades(data.facades||[],profile.slot,state);}}).catch(()=>{}).finally(()=>hotelHallPending=false);
  }
  if(opening.neighbor&&!hotelNeighborPending&&performance.now()>=hotelNeighborAt){
   hotelNeighborPending=true;hotelNeighborAt=performance.now()+2000;
@@ -228,6 +237,26 @@ async function hotelViews(){
 }
 setInterval(hotelViews,500);
 window.addEventListener('pagehide',()=>{if(lobbyState)lobbyRequest({action:'leave',lease:lobbyState.lease},true).catch(()=>{});});
+// Trigger only once per encounter. Re-arm after separation, never on each poll.
+const greeting={near:false,last:-Infinity,until:0};
+function encounterGreeting(g,dist,now){
+ if(dist>4)g.near=false;
+ if(dist>2.4||g.near)return false;
+ g.near=true;
+ if(now-g.last<12000)return false;
+ g.last=now;return true;
+}
+function resetGreeting(){greeting.near=false;greeting.last=-Infinity;greeting.until=0;$('npc-greeting').hidden=true;}
+function updateGreeting(now,eye,direction){
+ const npc=renderer.lobby.npc;
+ if(!lobbyState||!canPlay()||document.hidden||!npc.visible){$('npc-greeting').hidden=true;return;}
+ const distance=Math.hypot(npc.position.x-player.x,npc.position.z-player.z);
+ if(encounterGreeting(greeting,distance,now)){
+  greeting.until=now+2400;renderer.lobby.greetNpc();
+  audio.listener(eye,direction);audio.play('greeting',[npc.position.x,1.65,npc.position.z],0);
+ }
+ $('npc-greeting').hidden=now>=greeting.until;
+}
 function lobbyInteraction(ray=null){
  if(!lobbyState)return null;const {origin,direction}=interactionRay(ray);return lobbyDoorAt(origin,direction);
 }
@@ -277,14 +306,14 @@ function furniturePose(id,b){
  const local=id==='sofa'?[0,.08]:[.08,.66];
  return {x:b.p[0]+local[0]*c+local[1]*sn,z:b.p[2]-local[0]*sn+local[1]*c,y:b.p[1]-spec[id].s[1]/2,eye:id==='sofa'?1.18:1.02,yaw:a+(id==='sofa'?Math.PI:0),pitch:id==='sofa'?0:-.91};
 }
-function playerEye(){return [player.x,player.y+(posture?.eye||1.65),player.z];}
+function playerEye(){return [player.x,player.y+(posture?.eye||player.eyeHeight||1.65),player.z];}
 function enterPosture(id,kind){
  if(held||posture||!movable(id)||renderer?.xrMode?.active)return false;
  const pose=furniturePose(id,bodies[id]);
  if(!pose||pose.y<-.05||pose.y>.25||groundAt(pose.x,pose.z)<-.1){$('notice').textContent='Möbel steht nicht sicher – zuerst richtig abstellen';return false;}
  chooseWeapon('none');clearControls();
  posture={id,kind,eye:pose.eye,returnPose:{x:player.x,z:player.z,yaw:player.yaw,pitch:player.pitch,first},sleeping:false};
- first=true;Object.assign(player,{x:pose.x,z:pose.z,y:pose.y,vy:0,yaw:pose.yaw,pitch:pose.pitch});
+ first=true;Object.assign(player,{x:pose.x,z:pose.z,y:pose.y,vy:0,yaw:pose.yaw,pitch:pose.pitch,stance:'walk',eyeHeight:1.65});
  $('notice').textContent=kind==='sit'?'Du sitzt auf dem Sofa':'Du liegst im Bett';
  return true;
 }
@@ -300,10 +329,10 @@ function leavePosture(){
  for(const radius of [1.1,1.6,2.1,2.7,3.4])for(let i=0;i<16;i++){const a=i*Math.PI/8;candidates.push([player.x+radius*Math.cos(a),player.z+radius*Math.sin(a)]);}
  const spawn=HOTEL_LAYOUT.spawn.p;candidates.push([spawn[0],spawn[2]]);
  player.y=0;
- const place=candidates.find(([x,z])=>groundAt(x,z)>=-.05&&!coll(x,z));
+ const place=candidates.find(([x,z])=>groundAt(x,z)>=-.05&&!coll(x,z,1.6));
  if(!place){player.y=oldY;setSleeping(false);$('notice').textContent='Kein freier Platz zum Aufstehen';return false;}
  posture=null;$('sleep-overlay').hidden=true;first=base.first;clearControls();
- Object.assign(player,{x:place[0],z:place[1],y:groundAt(...place),vy:0,yaw:base.yaw,pitch:base.pitch});
+ Object.assign(player,{x:place[0],z:place[1],y:groundAt(...place),vy:0,yaw:base.yaw,pitch:base.pitch,stance:'walk',eyeHeight:1.65});
  $('notice').textContent='Aufgestanden';return true;
 }
 function secondaryInteraction(){
@@ -353,9 +382,12 @@ function updateInteractionHint(vr=false){
   const extra=$('touchSecondary');extra.hidden=!secondary;extra.disabled=busy;extra.textContent=secondary||'Weitere Aktion';
   $('touchZoom').hidden=equipped!=='rifle'||!!posture||!!held;$('touchZoom').disabled=!!reloadId;
   $('touchArsenal').disabled=!!lobbyState||lobbyTransition;
-  $('touchFire').disabled=!!posture||!!lobbyState||lobbyTransition;$('touchJump').disabled=!!posture;
+  $('touchFire').disabled=!!posture||!!lobbyState||lobbyTransition;$('touchJump').disabled=!!posture||player.stance==='crouch';
+  $('touchSprint').disabled=!!posture||!!held||scopeZoom||lobbyTransition;$('touchCrouch').disabled=!!posture||lobbyTransition;
+  $('touchSprint').setAttribute('aria-pressed',String(player.stance==='sprint'||touchSprint));$('touchCrouch').setAttribute('aria-pressed',String(player.stance==='crouch'||touchCrouch));
   $('touchReload').disabled=!!posture||!!lobbyState||!equipped;
-  $('hint').textContent=started?(lobbyState?'Gemeinsamer Hotelflur · E: eigenes Zimmer':mobile?'Handy · Inventar':'P: Smartphone · I: Inventar · Mausrad: Waffenwechsel'):'Spiel starten';
+  const movement=player.stance==='crouch'?' · Geduckt':player.stance==='sprint'?' · Sprint':'';
+  $('hint').textContent=started?((lobbyState?'Gemeinsamer Hotelflur · E: eigenes Zimmer':mobile?'Handy · Inventar':'P: Smartphone · I: Inventar')+(mobile?'':' · Shift: Sprint · Strg/C: Ducken')+movement):'Spiel starten';
 }
 function horizontalHold(id){
   const s=turnedSize(spec[id].s,heldAngle),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52,flat=Math.hypot(d[0],d[2]);
@@ -381,7 +413,7 @@ async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if
   if(doorInView(hit,ray)){if(lobbyEnabled)await enterLobby();else $('notice').textContent='Gemeinsamer Hotelflur nicht verfügbar.';}
 }
 function groundAt(x,z){if(lobbyState)return 0;if(z<-5&&state.unlocked&&!lobbyEnabled)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
-function coll(x,z){if(lobbyState)return !lobbyWalkable(x,z);if(Math.abs(x)>4.65||z>4.65||z<(!lobbyEnabled&&state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+1.6&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,.85,1.45].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+1.6&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
+function coll(x,z,height=player.stance==='crouch'?1.12:1.6){if(lobbyState)return !lobbyWalkable(x,z);if(Math.abs(x)>4.65||z>4.65||z<(!lobbyEnabled&&state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+height&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,height*.53,height-.15].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+height&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
 let enteringGame=false;
 function authButtons(){
  const ready=graphicsReady&&!accountBusy;
@@ -488,7 +520,7 @@ window.addEventListener('wheel',e=>{
 },{passive:false});
 window.addEventListener('pointerup',e=>{if(triggerPointer===null||triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('pointercancel',releaseTrigger);
-window.addEventListener('keydown',e=>{if(!active||!started||!$('updater').hidden)return;if(['Space','KeyW','KeyA','KeyS','KeyD'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyQ')turnHeld(-90);if(e.code==='KeyF'){if(posture?.kind==='lie')secondaryInteraction();else turnHeld(90);}if(e.code==='KeyG'&&!posture)secondaryInteraction();if(e.code==='KeyV'&&!posture){setScopeZoom(false);first=!first;}if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit3')chooseWeapon('m16');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR')repair();});
+window.addEventListener('keydown',e=>{if(!active||!started||!$('updater').hidden)return;if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyC'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyQ')turnHeld(-90);if(e.code==='KeyF'){if(posture?.kind==='lie')secondaryInteraction();else turnHeld(90);}if(e.code==='KeyG'&&!posture)secondaryInteraction();if(e.code==='KeyV'&&!posture){setScopeZoom(false);first=!first;}if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit3')chooseWeapon('m16');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR')repair();});
 window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>keys.clear());document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==canvas)clearControls();});document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas&&canPlay()&&!posture?.sleeping){const sensitivity=scopeZoom ? .0012 : .003;player.yaw-=e.movementX*sensitivity;player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch+e.movementY*sensitivity));}});
 function part(p,s,c,r=0,q=null){draw({p,s,c:rgb(c),r,q,m:mat(c)});}
 function canPlay(){return started&&active&&$('phone').hidden&&$('arsenal').hidden&&$('updater').hidden;}
@@ -524,7 +556,7 @@ function repair(ray=null){
 $('mode').onclick=()=>setMode(!mobile);setMode(mobile);
 const stick=$('stick');let stickId=null;function moveStick(e){let r=stick.getBoundingClientRect(),x=(e.clientX-r.left-r.width/2)/(r.width*.36),y=(e.clientY-r.top-r.height/2)/(r.height*.36),l=Math.max(1,Math.hypot(x,y));touchMove=[x/l,-y/l];stick.style.setProperty('--jx',`${x/l*33}px`);stick.style.setProperty('--jy',`${y/l*33}px`);}stick.addEventListener('pointerdown',e=>{if(!canPlay()||stickId!==null)return;e.preventDefault();stickId=e.pointerId;stick.setPointerCapture(e.pointerId);moveStick(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId&&canPlay())moveStick(e);});for(const n of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(n,e=>{if(e.pointerId===stickId){stickId=null;touchMove=[0,0];stick.style.setProperty('--jx','0px');stick.style.setProperty('--jy','0px');}});
 canvas.addEventListener('pointerdown',e=>{if(!canPlay()||posture?.sleeping||(!mobile&&document.pointerLockElement===canvas))return;if(look)return;look={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!look||look.id!==e.pointerId||!canPlay()||posture?.sleeping)return;const sensitivity=scopeZoom ? .002 : .005;player.yaw-=(e.clientX-look.x)*sensitivity;player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch+(e.clientY-look.y)*sensitivity));look.x=e.clientX;look.y=e.clientY;});for(const n of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(n,e=>{if(look?.id===e.pointerId)look=null;});
-for(const [id,fn] of [['touchInteract',interact],['touchSecondary',secondaryInteraction],['touchZoom',toggleScope],['touchRotateLeft',()=>turnHeld(-90)],['touchRotateRight',()=>turnHeld(90)],['touchReload',startReload],['touchRepair',()=>repair()],['touchView',()=>{if(!posture){setScopeZoom(false);first=!first;}}],['touchPhone',phone],['touchArsenal',arsenal],['touchJump',()=>{if(!posture&&Math.abs(player.y-groundAt(player.x,player.z))<1e-5)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});const fireButton=$('touchFire');fireButton.addEventListener('pointerdown',e=>{e.preventDefault();if(!canPlay()||triggerPointer!==null)return;void audio.unlock();pressTrigger();if(triggerHeld){triggerPointer=e.pointerId;fireButton.setPointerCapture?.(e.pointerId);}});
+for(const [id,fn] of [['touchInteract',interact],['touchSecondary',secondaryInteraction],['touchZoom',toggleScope],['touchRotateLeft',()=>turnHeld(-90)],['touchRotateRight',()=>turnHeld(90)],['touchReload',startReload],['touchRepair',()=>repair()],['touchView',()=>{if(!posture){setScopeZoom(false);first=!first;}}],['touchPhone',phone],['touchArsenal',arsenal],['touchSprint',()=>{if(!posture&&!held&&!scopeZoom){touchSprint=!touchSprint;if(touchSprint)touchCrouch=false;}}],['touchCrouch',()=>{if(!posture){touchCrouch=!touchCrouch;if(touchCrouch)touchSprint=false;}}],['touchJump',()=>{if(!posture&&player.stance!=='crouch'&&!wantsCrouch()&&Math.abs(player.y-groundAt(player.x,player.z))<1e-5)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});const fireButton=$('touchFire');fireButton.addEventListener('pointerdown',e=>{e.preventDefault();if(!canPlay()||triggerPointer!==null)return;void audio.unlock();pressTrigger();if(triggerHeld){triggerPointer=e.pointerId;fireButton.setPointerCapture?.(e.pointerId);}});
 for(const event of ['pointerup','pointercancel','lostpointercapture'])fireButton.addEventListener(event,e=>{if(triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('blur',()=>{clearControls();audio.stopAll();});document.addEventListener('visibilitychange',()=>{if(document.hidden)clearControls();});
 
@@ -533,16 +565,22 @@ function frame(now,xrFrame){
   let dt=Math.max(0,Math.min(.035,(now-prev)/1000));prev=now;
   if(studioOpen){renderer.renderStudio(canvas,dt);return;}
   const vr=!!renderer.xrMode?.active;const xrInput=vr?renderer.xrMode.inputs(xrFrame):null;
-  if(started&&active&&!posture&&!lobbyTransition){
+  if(canPlay()&&!posture&&!lobbyTransition){
     stepReload(dt);stepTrigger(dt);
     if(vr)player.yaw+=xrInput.turn;
-    let f=vr?xrInput.move[1]:Number(keys.has('KeyW'))-Number(keys.has('KeyS'))+touchMove[1],s=vr?xrInput.move[0]:Number(keys.has('KeyD'))-Number(keys.has('KeyA'))+touchMove[0],a=player.yaw+(vr?xrInput.headYaw:0),m=(vr?1.6:3.4)*dt/Math.max(1,Math.hypot(f,s)),dx=(-Math.sin(a)*f+Math.cos(a)*s)*m,dz=(-Math.cos(a)*f-Math.sin(a)*s)*m;
+    let f=vr?xrInput.move[1]:Number(keys.has('KeyW'))-Number(keys.has('KeyS'))+touchMove[1],s=vr?xrInput.move[0]:Number(keys.has('KeyD'))-Number(keys.has('KeyA'))+touchMove[0],a=player.yaw+(vr?xrInput.headYaw:0);
+    const canStand=player.stance!=='crouch'||!coll(player.x,player.z,1.6);
+    player.stance=movementStance(!vr&&wantsCrouch(),!vr&&wantsSprint(),Math.hypot(f,s)>.03,canStand,!!held||scopeZoom);
+    const m=movementSpeed(player.stance,vr)*dt/Math.max(1,Math.hypot(f,s)),dx=(-Math.sin(a)*f+Math.cos(a)*s)*m,dz=(-Math.cos(a)*f-Math.sin(a)*s)*m;
     if(!coll(player.x+dx,player.z))player.x+=dx;
     if(!coll(player.x,player.z+dz))player.z+=dz;
     const ground=groundAt(player.x,player.z);
-    if(!vr&&keys.has('Space')&&Math.abs(player.y-ground)<1e-5)player.vy=4.2;
+    if(!vr&&player.stance!=='crouch'&&keys.has('Space')&&Math.abs(player.y-ground)<1e-5)player.vy=4.2;
     player.vy-=9.81*dt;player.y=Math.max(ground,player.y+player.vy*dt);if(player.y===ground)player.vy=0;
   }
+  if(!canPlay()||posture||lobbyTransition){if(player.stance==='sprint')player.stance='walk';}
+  const eyeTarget=player.stance==='crouch'?1.10:1.65;
+  player.eyeHeight+=(eyeTarget-player.eyeHeight)*Math.min(1,dt*13);
   if(debris.length>80)debris.splice(0,debris.length-80);
   if(started&&!lobbyState){
     let holdPoint=[0,0,0];if(held){const s=spec[held].s,[x,z]=horizontalHold(held),floor=groundAt(x,z),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52;
@@ -560,10 +598,12 @@ function frame(now,xrFrame){
   if(lobbyState){
     renderer.setHotelOpenings(lobbyState.slot,{},true);
     renderer.lobby.step(dt,player,!first&&!vr&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5);
+    audio.listener(eye,d);updateGreeting(now,eye,d);
     renderer.equip(null,false);renderer.render(canvas,eye,target,mobile,dt,player,false,true);
     if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}
     return;
   }
+  $('npc-greeting').hidden=true;
   const openings=renderer.setHotelOpenings(accountProfile?.slot,state.walls||{});
   if(openings.hall)renderer.lobby.step(dt,null,false);
   renderer.setDoorOpen?.(!lobbyEnabled&&state.unlocked);
