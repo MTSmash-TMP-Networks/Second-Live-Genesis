@@ -148,3 +148,32 @@ assert.ok(rugSpec.decor&&rugSpec.s[1]<=.02);assert.ok(rugRoot.position.distanceT
 rugRoot.position.set(0,.009,0);rugRoot.rotation.y=Math.PI/2;rugScene.updateMatrixWorld(true);
 const rugHit=rugMarks.cast([0,1.5,0],[0,-1,0],[rugScene]);assert.equal(rugHit.id,'surface_rug');
 console.log('Hotel rug root, persistent target and rotated ray hit OK');
+
+// Shared corridor: actual layout, scene and animated remote guests (no GPU).
+import {LOBBY_LAYOUT,LOBBY_CAPACITY,lobbyDoor,lobbyDoorAt,lobbyWalkable} from './lobby_layout.js';
+import {HotelLobbyView} from './hotel_lobby.js';
+{
+ const L=LOBBY_LAYOUT;
+ assert.equal(LOBBY_CAPACITY,24);assert.equal(L.halfLength*2,42);
+ assert.ok(lobbyWalkable(0,0));assert.ok(!lobbyWalkable(L.halfWidth,0));assert.ok(!lobbyWalkable(0,L.halfLength));assert.equal(lobbyDoor(24),null);
+ const numbers=new Set();
+ for(let i=0;i<LOBBY_CAPACITY;i++){
+  const d=lobbyDoor(i);numbers.add(d.number);
+  assert.equal(lobbyDoorAt([0,1.65,d.z],[d.side,0,0]).slot,i);
+  assert.equal(lobbyDoorAt([0,1.65,d.z+1.3],[d.side,0,0]),null);
+  assert.equal(lobbyDoorAt([0,2.7,d.z],[d.side,0,0]),null);
+ }
+ assert.equal(numbers.size,24);
+ const savedDocument=globalThis.document;
+ globalThis.document={createElement(){return {width:0,height:0,getContext(){return {fillRect(){},strokeRect(){},fillText(){}};}};}};
+ try{
+  const lobby=new HotelLobbyView({textured:{hotel_carpet:new THREE.MeshStandardMaterial(),hotel_wall:new THREE.MeshStandardMaterial(),hotel_ceiling:new THREE.MeshStandardMaterial()}});
+  assert.equal(lobby.signs.length,24);lobby.setOwn(0);
+  lobby.sync([{slot:1,position:[0,0,-2],yaw:0}]);assert.equal(lobby.peers.size,1);
+  lobby.sync([{slot:1,position:[0,0,-1],yaw:1}]);lobby.step(.1,{x:0,y:0,z:0,yaw:0});
+  assert.ok(lobby.peers.get(1).g.position.z>-2&&lobby.peers.get(1).g.position.z<-1);
+  lobby.sync([{slot:0,position:[0,0,0],yaw:0}]);assert.equal(lobby.peers.size,0);
+  lobby.clear();assert.equal(lobby.own,null);
+ }finally{if(savedDocument===undefined)delete globalThis.document;else globalThis.document=savedDocument;}
+}
+console.log('Shared lobby: layout, doors, avatar interpolation and cleanup OK');
