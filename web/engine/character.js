@@ -137,17 +137,43 @@ export function createCharacter(value){
  body.scale.set(1,height,1);root.userData={character:a,body,head,arms,elbows,legs,knees,phase:0,height};
  return root;
 }
-export function animateCharacter(root,dt,moving=false){
- const u=root.userData;u.phase+=dt*(moving?9.5:2.0);const a=moving?Math.sin(u.phase)*.48:Math.sin(u.phase)*.018,t=Math.min(1,dt*12);
- for(let i=0;i<2;i++){
-  const sign=i?1:-1,leg=-a*sign;
-  u.arms[i].rotation.x+=(a*sign-u.arms[i].rotation.x)*t;
-  u.elbows[i].rotation.x+=(-.12-Math.max(0,a*sign)*.3-u.elbows[i].rotation.x)*t;
-  u.legs[i].rotation.x+=(leg-u.legs[i].rotation.x)*t;
-  u.knees[i].rotation.x+=(Math.max(0,-leg)*.65-u.knees[i].rotation.x)*t;
+// Original concierge character inspired by classic red hotel uniforms.
+export function createHotelNpc(){
+ const g=createCharacter({...DEFAULT_CHARACTER,body:1,height:1,face:1,skin:1,hair:1,hairColor:2,eyes:0,top:3,topColor:4,trousers:1,trousersColor:3,shoes:2,beard:0,glasses:0});
+ const {head,body,arms}=g.userData,red=material(0x9d2636,.8),gold=material(0xbda56d,.36),black=material(0x26272c,.68);
+ // Pillbox concierge hat: shaped crown, dark band, gold piping and insignia.
+ loft(head,[[.136,.142,.135,.012],[.158,.148,.14,.012],[.223,.141,.137,.012],[.244,.124,.124,.012],[.249,.003,.003,.012]],red,48);
+ loft(head,[[.142,.149,.141,.012],[.168,.150,.142,.012]],black,48);
+ loft(head,[[.166,.151,.143,.012],[.176,.151,.143,.012]],gold,48);
+ ellipsoid(head,[0,.191,-.13],[.025,.027,.009],gold);
+ for(const [i,arm] of arms.entries()){
+  const side=i?1:-1;
+  ellipsoid(arm,[side*.012,.041,0],[.093,.018,.067],black);
+  ellipsoid(arm,[side*.012,.056,0],[.065,.008,.041],gold);
  }
- u.body.position.y=moving?Math.abs(Math.sin(u.phase))*.018:Math.sin(u.phase)*.003;
+ for(const side of [-1,1]){
+  for(let j=0;j<4;j++)ellipsoid(body,[side*.065,1.385-j*.085,-.137],[.012,.012,.008],gold);
+  line(body,[[side*.065,1.515,-.049],[side*.09,1.435,-.109],[side*.035,1.38,-.133]],.008,gold);
+ }
+ ellipsoid(body,[-.135,1.39,-.129],[.036,.013,.006],gold);
+ return g;
+}
+export function animateCharacter(root,dt,moving=false,stance='walk'){
+ const u=root.userData,crouch=stance==='crouch',sprint=stance==='sprint'&&moving;
+ u.phase+=dt*(moving?(sprint?15:crouch?6.2:9.5):2.0);
+ const a=moving?Math.sin(u.phase)*(sprint?.82:crouch?.21:.48):Math.sin(u.phase)*.018,t=Math.min(1,dt*12);
+ u.crouchBlend=(u.crouchBlend||0)+((crouch?1:0)-(u.crouchBlend||0))*t;
+ const c=u.crouchBlend;
+ for(let i=0;i<2;i++){
+  const sign=i?1:-1,leg=-a*sign,armTarget=a*sign*(1-.65*c)-.3*c;
+  u.arms[i].rotation.x+=(armTarget-u.arms[i].rotation.x)*t;
+  u.elbows[i].rotation.x+=((sprint?-.85:-.12)-Math.max(0,a*sign)*.3-.45*c-u.elbows[i].rotation.x)*t;
+  u.legs[i].rotation.x+=(leg+1.05*c-u.legs[i].rotation.x)*t;
+  u.knees[i].rotation.x+=(Math.max(0,-leg)*.65*(1-c)-1.85*c-u.knees[i].rotation.x)*t;
+ }
+ u.body.position.y=-.35*c*u.height+(moving?Math.abs(Math.sin(u.phase))*(sprint?.04:.018):Math.sin(u.phase)*.003)*(1-.65*c);
  u.head.rotation.y=Math.sin(u.phase*.23)*.035;
+ if(u.nameTag)u.nameTag.position.y=(2.03-.35*c)*u.height;
 }
 export function disposeCharacter(root){
  root.removeFromParent();const materials=new Set(),geometry=new Set(),textures=new Set();
