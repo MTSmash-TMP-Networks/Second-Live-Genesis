@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101821"><title>Second Live | Umgebung scannen</title><link rel="icon" href="/icon.svg"><link rel="stylesheet" href="/capture.css"><script type="module" src="/capture.js"></script></head>
-<body><header><a class="back" href="/">SECOND <b>LIVE</b></a><span class="build">WORLD GENESIS / 0.7.7</span><a href="/">Zum Spiel</a></header>
+<body><header><a class="back" href="/">SECOND <b>LIVE</b></a><span class="build">WORLD GENESIS / 0.7.8</span><a href="/">Zum Spiel</a></header>
 <main class="capture-wizard">
   <div class="wizard-head"><small>WORLD CAPTURE</small><h1 id="stage-title">Deine Umgebung scannen</h1><p id="stage-subtitle">Erstelle aus Fotos eine 3D-Vorschau.</p></div>
   <nav class="steps" aria-label="Scanfortschritt">
@@ -31,9 +31,10 @@
     <div class="sectionhead"><div><h2>Raum fotografieren</h2><p id="live-count" class="big-count">0 Fotos gespeichert</p></div><span id="live" class="pill">Kamera aus</span></div>
     <progress id="live-progress" max="24" value="0" aria-label="Aufnahmen bis zum Richtwert 24"></progress><p class="muted photo-goal">Richtwert: 24–40 gute Fotos · maximal 60</p>
     <p id="capture-task" class="task">Beginne mit einer Ecke des Raums.</p>
-    <div class="view" id="camera-view"><video id="video" autoplay playsinline muted></video><div class="guide"><span></span><span></span><span></span><span></span></div><div class="camera-placeholder" id="camera-placeholder"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 20h12l5-7h14l5 7h12v34H8z"/><circle cx="32" cy="36" r="11"/></svg><strong>Kamera öffnen</strong><p>Die Rückkamera wird bevorzugt.</p></div><div id="guide-text" class="guide-text">Tippe auf „Kamera öffnen“.</div></div>
+    <div class="view" id="camera-view"><video id="video" autoplay playsinline muted></video><div class="guide"><span></span><span></span><span></span><span></span></div><div class="camera-placeholder" id="camera-placeholder"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 20h12l5-7h14l5 7h12v34H8z"/><circle cx="32" cy="36" r="11"/></svg><strong>Kamera öffnen</strong><p>Die Rückkamera wird bevorzugt.</p></div><div id="live-model" class="live-model"><div class="live-model-head"><span>LIVE 3D</span><button id="live-expand" type="button" aria-label="3D-Vorschau vergrößern" aria-pressed="false">Vergrößern</button></div><div id="live-viewport" class="live-viewport" aria-label="Räumliche Live-Punktwolke"></div><div id="live-empty" class="live-empty">Ab 4 Fotos</div></div><div id="guide-text" class="guide-text">Tippe auf „Kamera öffnen“.</div></div>
     <div class="camera-actions"><button id="camera" class="primary" type="button" disabled>Kamera öffnen</button><button id="snap" class="primary shutter" type="button" disabled hidden>Foto aufnehmen</button><button id="pause" class="secondary" type="button" disabled hidden>Kamera pausieren</button></div>
     <label class="check auto-toggle"><input id="auto" type="checkbox" checked> <span>Automatisch fotografieren, wenn das Bild geeignet ist</span></label>
+    <div id="live-info" class="live-info"><div class="live-stats"><strong id="live-state">Noch keine 3D-Punkte</strong><span id="live-count-3d">0 verbundene Fotos</span></div><p id="live-advice" role="status" aria-live="polite">Ab vier Bildern versucht der Server, gemeinsame Merkmale räumlich zu verbinden. Geh seitlich weiter und halte dieselben Details im Bild.</p><p class="muted live-note">Echte Punktwolke, schrittweise aktualisiert. Keine flächendeckende oder maßstäbliche AR-Messung. Die Oberfläche wird am Ende genauer berechnet.</p></div>
     <p id="capture-feedback" class="feedback" aria-live="polite">Die Aufnahmen werden auf deinem Server gespeichert.</p>
     <button id="to-review" class="primary next" type="button" disabled>Fotos prüfen</button><p id="review-hint" class="muted">Du kannst nach mindestens 8 Fotos zur 3D-Berechnung wechseln.</p>
     <details class="advanced"><summary>Andere Aufnahmearten und technische Hinweise</summary>
@@ -44,7 +45,7 @@
   </section>
   <section data-stage="3" class="panel review" hidden>
     <div class="sectionhead"><h2>Deine Aufnahmen prüfen</h2><span id="count" class="pill">0 / 60</span></div><progress id="progress" max="60" value="0" aria-label="Gespeicherte Fotos"></progress><p id="coverage"></p>
-    <p>Unscharfe, dunkle oder sehr ähnliche Bilder entfernen. Die Fotos sollten denselben Raum aus versetzten Blickwinkeln zeigen.</p><div id="frames" class="frames"></div>
+    <p>Unscharfe, dunkle oder sehr ähnliche Bilder entfernen. Die Fotos sollten denselben Raum aus versetzten Blickwinkeln zeigen.</p><p id="live-review" class="muted">Die Live-Prüfung zeigt, welche Fotos räumlich verbunden wurden.</p><div id="frames" class="frames"></div>
     <button id="submit" class="primary" type="button" disabled>3D-Modell berechnen</button><button id="back-to-camera" class="secondary full" type="button">Weitere Fotos aufnehmen</button>
     <details class="advanced"><summary>Technische Bildauswertung</summary><div id="checklist"></div><div class="sample"><canvas id="mask" width="320" height="240" aria-label="Semantische Vorschau"></canvas></div><p id="mask-note" class="muted">KI-Markierung des letzten ausgewerteten Fotos, keine Live- oder 3D-Abdeckung.</p><div id="classes"></div></details>
   </section>
