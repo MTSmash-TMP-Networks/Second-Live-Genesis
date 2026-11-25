@@ -20,7 +20,7 @@ def spawn(slot):
 
 def pose(data):
     p=data.get('position');yaw=data.get('yaw')
-    def number(v):return type(v) in (int,float) and math.isfinite(v)
+    def number(v):return type(v) in (int,float) and abs(v)<=1_000_000 and math.isfinite(v)
     if not isinstance(p,list) or len(p)!=3 or not all(map(number,p)) or not number(yaw):
         raise CaptureError('Ungueltige Flurposition',400)
     x,y,z=p;m=LAYOUT['playerMargin']
