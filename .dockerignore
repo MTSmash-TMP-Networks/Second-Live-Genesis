@@ -1,7 +1,9 @@
 .env
 data/
 __pycache__/
-tests/
+# Exclude development tests except the build-time live capture smoke test.
+tests/*
+!tests/test_live_capture.py
 .git/
 node_modules/
 web/assets/polyhaven/
