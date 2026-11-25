@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.8 – Realistic Character Studio
+- Behebt ungültige Ara-Katalogparameter (unter anderem erzwungenes Solid-Muster bei T-Shirts). Profilvarianten werden gegen das Schema der installierten Bibliothek geprüft.
+- Docker erzeugt und validiert zwei echte texturierte GLB-Startermodelle mit Skelett und vier Animationen. Das neue Standardprofil und das frühere Standardprofil werden lokal vorgeladen.
+- Charakterstudio zeigt keine alte Ersatzfigur mehr; bei Anpassungen bleibt nur die letzte fertige realistische Vorschau sichtbar. Ladefehler werden mit Ursache und Wiederholungsmöglichkeit angezeigt.
+- Keine Änderung an Konten, gespeicherten Profilen, CSP oder bisherigen HTTP- und Physiktests.
+
 ## 0.11.7 – Avatar HTTP Build Fix
 - Behebt UnboundLocalError im GET-Handler durch Entfernen des lokalen unquote-Imports; Healthcheck und alle GET-Routen funktionieren wieder.
 - Avatar-Asset-Pfade werden nur einmal URL-dekodiert. Neuer HTTP-Regressionstest für Healthcheck, Modelldaten, kodierte Dateinamen und blockierte Pfadumgehungen; bisherige Build-Tests und CSP bleiben unverändert.

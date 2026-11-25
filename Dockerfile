@@ -21,6 +21,8 @@ RUN npm install --no-audit --no-fund --save-exact ara3d@0.16.0
 COPY scripts/install_avatar_data.mjs ./
 RUN node install_avatar_data.mjs
 COPY web/engine/realistic_avatar_provider.js ./
+COPY scripts/build_realistic_avatars.mjs ./
+RUN ./node_modules/.bin/esbuild build_realistic_avatars.mjs --bundle --platform=node --format=esm --external:ara3d --outfile=/build/build_realistic_avatars.bundle.mjs && node /build/build_realistic_avatars.bundle.mjs
 RUN ./node_modules/.bin/esbuild realistic_avatar_provider.js --bundle --platform=browser --format=esm --target=es2020 --minify --outfile=/build/realistic-avatar.bundle.js
 
 FROM python:3.13-slim AS assets
@@ -82,6 +84,8 @@ COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bund
 COPY --from=renderer /build/THREE-LICENSE.txt /app/web/engine/THREE-LICENSE.txt
 COPY --from=realistic-avatar /build/realistic-avatar.bundle.js /app/web/engine/realistic-avatar.bundle.js
 COPY --from=realistic-avatar /build/node_modules/ara3d-data/assets/ /app/web/assets/avatars/data/
+COPY --from=realistic-avatar /build/avatar-models/standard.glb /app/web/assets/avatars/data/second-live-standard.glb
+COPY --from=realistic-avatar /build/avatar-models/classic.glb /app/web/assets/avatars/data/second-live-classic.glb
 COPY docs/AVATAR-LICENSE.txt /app/web/assets/avatars/LICENSE.txt
 COPY --from=door-converted /build/polyhaven /app/web/assets/polyhaven/
 ARG SECOND_LIVE_REVISION=local

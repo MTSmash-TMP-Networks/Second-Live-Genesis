@@ -233,6 +233,19 @@ console.log('Shared lobby: layout, named doors, avatar interpolation and cleanup
  assert.ok(Math.abs(c.userData.body.position.y)<.06);assert.ok(c.userData.crouchBlend<.001);
  disposeCharacter(npc);disposeCharacter(c);
 }
+// Keep only the last completed preview while a replacement is loading.
+{
+ const studio=new CharacterStudio();studio.set(DEFAULT_CHARACTER);
+ const ready=studio.root;ready.userData.realisticStatus='ready';
+ studio.set({...DEFAULT_CHARACTER,hair:2});const waiting=studio.root;
+ assert.equal(studio.previous,ready);assert.equal(ready.parent,studio.scene);
+ studio.set({...DEFAULT_CHARACTER,hair:3});
+ assert.equal(waiting.parent,null);assert.equal(studio.previous,ready);
+ studio.root.userData.realisticStatus='ready';
+ studio.render({render(){}},1.8,.016);
+ assert.equal(ready.parent,null);assert.equal(studio.previous,null);
+ studio.clear();assert.equal(studio.root,null);
+}
 console.log('Character models: all variants, concierge, sprint and crouch checks OK');
 
 {

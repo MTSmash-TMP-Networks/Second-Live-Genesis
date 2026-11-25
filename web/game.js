@@ -444,9 +444,12 @@ function openStudio(fromGame=false){
  renderCharacterFields();renderer.studio.set(characterDraft);
 }
 function updateAvatarModelStatus(){
- const node=$('character-model-status'),status=renderer?.studio?.root?.userData.realisticStatus;
- const message=status==='ready'?'Realistisches 3D-Modell bereit':status==='loading'?'Realistisches 3D-Modell wird lokal erstellt …':status==='fallback'?'Realistisches Modell nicht verfügbar – Ersatzmodell aktiv':'';
+ const studio=renderer?.studio,u=studio?.root?.userData,status=u?.realisticStatus;
+ const node=$('character-model-status'),retry=$('character-model-retry');
+ const previous=studio?.previous?' Die letzte fertige Vorschau bleibt sichtbar.':'';
+ const message=status==='ready'?'Realistisches 3D-Modell bereit':status==='loading'?'Realistisches 3D-Modell wird geladen …'+previous:status==='fallback'?'Modell konnte nicht geladen werden. '+(u.realisticError||'')+previous:'';
  if(node&&node.textContent!==message)node.textContent=message;
+ if(retry)retry.hidden=status!=='fallback';
 }
 function renderCharacterFields(){
  const area=$('character-fields');area.replaceChildren();
@@ -458,7 +461,7 @@ function renderCharacterFields(){
  }
 }
 function closeStudio(){
- studioOpen=false;$('character-editor').hidden=true;document.body.classList.remove('character-editing');clearControls();
+ studioOpen=false;renderer?.studio?.clear();$('character-editor').hidden=true;document.body.classList.remove('character-editing');clearControls();
  if(editingFromGame){active=true;}else{$('welcome').hidden=false;showAccountResume();}
 }
 function showAccountResume(){
@@ -484,7 +487,7 @@ async function enterGame(){
   if(accountsEnabled&&!accountProfile)throw Error('Bitte zuerst anmelden');
   if(personalWorld&&!accountsEnabled)await api('/api/session',{});
   await refresh();if(protectedGame)sessionStorage.setItem('second_live_token',token);
-  $('welcome').hidden=true;$('character-editor').hidden=true;studioOpen=false;document.body.classList.remove('character-editing');
+  $('welcome').hidden=true;$('character-editor').hidden=true;studioOpen=false;renderer?.studio?.clear();document.body.classList.remove('character-editing');
   started=true;active=true;document.body.classList.add('playing');
   if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});
  }catch(e){if(studioOpen)$('character-error').textContent=e.message;else $('loginerror').textContent=e.message;}
@@ -495,6 +498,7 @@ $('account-form').onsubmit=e=>{e.preventDefault();authenticate();};$('account-co
 $('account-switch').onclick=async()=>{if(accountBusy)return;accountBusy=true;authButtons();try{await api('/api/account',{action:'logout'});accountProfile=null;$('account-phone').hidden=true;window.dispatchEvent(new Event('sl-account-change'));setAuthMode('login');}catch(e){$('loginerror').textContent=e.message;}finally{accountBusy=false;authButtons();}};
 $('character-left').onclick=()=>renderer.studio.turn(-Math.PI/6);$('character-right').onclick=()=>renderer.studio.turn(Math.PI/6);
 $('character-random').onclick=()=>{for(const [k,v] of Object.entries(CHARACTER_OPTIONS))characterDraft[k]=Math.floor(Math.random()*v.values.length);renderCharacterFields();renderer.studio.set(characterDraft);};
+$('character-model-retry').onclick=()=>{if(studioOpen&&characterDraft)renderer.studio.set(characterDraft);};
 $('character-cancel').onclick=()=>{if(!accountBusy)closeStudio();};
 $('character-save').onclick=async()=>{if(accountBusy||!studioOpen)return;accountBusy=true;$('character-save').disabled=true;$('character-error').textContent='';
  try{applyAccount(await api('/api/account',{action:'avatar',avatar:characterDraft}));if(editingFromGame)closeStudio();else await enterGame();}

@@ -95,7 +95,7 @@ function faceModel(parent,a,skin,hair){
  }
  hairModel(h,a,hair);return h;
 }
-export function createCharacter(value,{legacyOnly=false}={}){
+export function createCharacter(value,{legacyOnly=false,studio=false}={}){
  const a=normalizeCharacter(value),root=new THREE.Group(),body=new THREE.Group();root.add(body);
  const bw=[.88,1,1.16,.99][a.body],hip=[.88,1,1.14,1.12][a.body],height=[.925,1,1.075][a.height];
  const skin=material(color(a,'skin'),.84),hair=material(color(a,'hairColor'),.89);hair.side=THREE.DoubleSide;
@@ -136,6 +136,8 @@ export function createCharacter(value,{legacyOnly=false}={}){
   for(let j=0;j<3;j++)line(shoeRoot,[[-.031,.047,-.033-j*.019],[.031,.047,-.033-j*.019]],.003,sole);
  }
  body.scale.set(1,height,1);root.userData={character:a,body,head,arms,elbows,legs,knees,phase:0,height};
+ // Never show the procedural fallback as the real studio preview in the browser.
+ if(studio&&typeof window!=='undefined')body.visible=false;
  if(!legacyOnly)prepareRealistic(root,a,options);
  return root;
 }
@@ -191,13 +193,23 @@ export class CharacterStudio{
   this.scene.add(new THREE.HemisphereLight(0xf5f2eb,0x838895,2.2));
   for(const [x,y,z,c,p] of [[-3,4,-4,0xffe5c8,3.1],[3,2,1,0xb8d9ff,2.4]]){const light=new THREE.DirectionalLight(c,p);light.position.set(x,y,z);this.scene.add(light);}
   const plinth=new THREE.Mesh(new THREE.CylinderGeometry(.72,.79,.1,64),material(0x657e84,.68));plinth.position.y=-.06;this.scene.add(plinth);
-  this.root=null;this.angle=.25;
+  this.root=null;this.previous=null;this.angle=.25;
  }
- set(value){if(this.root)disposeCharacter(this.root);this.root=createCharacter(value);this.scene.add(this.root);}
+ set(value){
+  if(this.root){
+   if(this.root.userData.realisticStatus==='ready'){
+    if(this.previous)disposeCharacter(this.previous);this.previous=this.root;
+   }else disposeCharacter(this.root);
+  }
+  this.root=createCharacter(value,{studio:true});this.scene.add(this.root);
+ }
+ clear(){if(this.root)disposeCharacter(this.root);if(this.previous)disposeCharacter(this.previous);this.root=null;this.previous=null;}
  turn(angle){this.angle+=angle;}
  render(renderer,aspect,dt){
   if(!this.root)this.set(DEFAULT_CHARACTER);
+  if(this.root.userData.realisticStatus==='ready'&&this.previous){disposeCharacter(this.previous);this.previous=null;}
   this.root.rotation.y=this.angle;animateCharacter(this.root,dt,false);
+  if(this.previous){this.previous.rotation.y=this.angle;animateCharacter(this.previous,dt,false);}
   const mobile=aspect<1.15,hh=mobile?2.65:1.27,hw=hh*aspect;
   this.camera.left=-hw;this.camera.right=hw;this.camera.top=hh;this.camera.bottom=-hh;
   const x=mobile?0:-hw*.45,y=mobile?-.48:.98;

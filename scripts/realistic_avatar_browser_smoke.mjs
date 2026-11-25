@@ -15,7 +15,9 @@ try{
  await page.goto(url,{waitUntil:'domcontentloaded'});
  const result=await page.evaluate(async recipe=>{
   const provider=await import('/engine/realistic-avatar.bundle.js');
-  const {bytes,clips}=await provider.generateAvatar(recipe);
+  const starter=await provider.generateAvatar(recipe);
+  if(new DataView(starter.bytes).getUint32(0,true)!==0x46546c67)throw Error('Invalid prebuilt starter model');
+  const {bytes,clips}=await provider.generateAvatar(recipe,{forceGenerate:true});
   const v=new DataView(bytes),length=v.getUint32(12,true);
   const json=JSON.parse(new TextDecoder().decode(new Uint8Array(bytes,20,length)));
   return {magic:v.getUint32(0,true),skins:json.skins?.length||0,meshes:json.meshes?.length||0,clips:json.animations?.map(a=>a.name)||[],expected:clips,bytes:bytes.byteLength};

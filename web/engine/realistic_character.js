@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {avatarRecipe} from './avatar_recipe.js';
 
-const providerPath='/engine/realistic-avatar.bundle.js';
+const providerPath='/engine/realistic-avatar.bundle.js?v=0.11.8';
 const pending=new Map(),cache=new Map(),queue=[];
 let provider=null,active=0;
 function pump(){
@@ -14,10 +14,12 @@ function pump(){
   }
   active++;
   if(!provider)provider=import(providerPath).catch(e=>{provider=null;throw e;});
-  provider.then(m=>m.generateAvatar(job.recipe)).then(result=>{
+  let timer;
+  const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Zeitlimit beim Erstellen des 3D-Modells erreicht')),90000);});
+  Promise.race([provider.then(m=>m.generateAvatar(job.recipe)),deadline]).then(result=>{
    cache.set(job.key,result);while(cache.size>4)cache.delete(cache.keys().next().value);
    job.resolve(result);
-  },job.reject).finally(()=>{pending.delete(job.key);active--;pump();});
+  },job.reject).finally(()=>{clearTimeout(timer);pending.delete(job.key);active--;pump();});
  }
 }
 function requestModel(recipe,u){
@@ -48,12 +50,11 @@ function releaseScene(scene){
 }
 const clipKey=name=>name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/_loop$/,'').replace(/_$/,'');
 export function prepareRealistic(root,a,options){
- if(typeof window==='undefined'||typeof Worker==='undefined')return;
- const u=root.userData;u.realisticStatus='loading';
+ if(typeof window==='undefined')return;
+ const u=root.userData;u.realisticStatus='loading';u.realisticError='';
  // Wait for rapid editor changes to settle before starting the worker.
  u.realisticTimer=setTimeout(async()=>{
   let model=null;
-  const deadline=setTimeout(()=>{if(!u.disposed&&!u.realistic)u.realisticStatus='fallback';},45000);
   try{
    const {bytes,clips}=await requestModel(avatarRecipe(a,options),u);
    if(u.disposed)return;
@@ -81,8 +82,8 @@ export function prepareRealistic(root,a,options){
    u.realisticStatus='ready';
   }catch(e){
    if(model)releaseScene(model);
-   if(!u.disposed){u.realisticStatus='fallback';console.warn('Second Live avatar:',e.message||e);}
-  }finally{clearTimeout(deadline);}
+   if(!u.disposed){u.realisticStatus='fallback';u.realisticError=String(e?.message||e).slice(0,280);console.warn('Second Live avatar:',u.realisticError);}
+  }
  },180);
 }
 export function animateRealistic(root,dt,moving,stance){
