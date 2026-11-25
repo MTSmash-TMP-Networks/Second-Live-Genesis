@@ -1,8 +1,14 @@
 # Second Live – World Genesis
 
-**v0.9.5 · Hotel Interactions**
+**v0.9.6 · Room Life**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.9.6 – Zimmerleben und Steuerung
+
+Am Sofa setzt sich der Spieler mit E hin, am Bett legt er sich mit E hin. Die Kamera wird an die tatsächliche Möbelposition und -drehung angepasst; E steht wieder auf, F im Bett schaltet zwischen Ruhen und Schlafen um (E weckt ebenfalls auf). Der Schlafmodus verdunkelt die Ansicht; es gibt noch keinen simulierten Tagesablauf oder Schlafwerte. Sitz- und Liegepositionen sind lokale First-Person-Zustände, keine Avatar-Skelettanimationen. G nimmt Sofa/Bett stattdessen auf. Der separate Teppich ist mit E beweglich, mit Q/F drehbar, bleibt flach und darf unter Möbeln liegen. Platzierung und Drehung werden wie bisher gespeichert.
+
+Mausrad: Unbewaffnet / Pistole / Gewehr / M16 zyklisch auswählen. Rechtsklick beim Gewehr schaltet eine virtuelle Zoomansicht ein/aus; beim Wechsel der Ansicht, Waffe oder bei Öffnen eines Menüs wird sie beendet. Auf Touch-Geräten stehen kontextabhängige Tasten zur Verfügung. Sitz-/Liegeaktionen und die Zoomansicht sind im Desktop-/Touch-Modus verfügbar; VR bleibt separat. Bestehende Spielstände werden nicht gelöscht.
 
 ## Neu in 0.9.5 – Vorhänge und Objektaktionen
 
