@@ -28,7 +28,11 @@ FROM realism AS decor
 COPY scripts/download_decor.py ./download_decor.py
 RUN python -u download_decor.py --output /build/polyhaven
 
-FROM decor AS photos
+FROM decor AS hotel-assets
+COPY scripts/download_hotel_assets.py ./download_hotel_assets.py
+RUN python -u download_hotel_assets.py /build/polyhaven
+
+FROM hotel-assets AS photos
 COPY optional-photos/ /build/optional-photos/
 ARG SECOND_LIVE_PHOTO_REFRESH=0
 ARG SECOND_LIVE_WIKIMEDIA_CONTACT=""
