@@ -1,10 +1,11 @@
-import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
 let renderer=null, physicsWorld=null, graphicsReady=false;
 let equipped=null, xrEntering=false, xrReturnFirst=true, posture=null, scopeZoom=false, lastWheel=-Infinity;
 let lobbyEnabled=false,lobbyState=null,lobbyTransition=false;
+let hotelHallPending=false,hotelNeighborPending=false,hotelViewEpoch=0,hotelViewMask='',hotelNeighborAt=0;
 let accountsEnabled=false,accountProfile=null,authMode='login',studioOpen=false,editingFromGame=false,characterDraft=null,accountBusy=false;
 const weaponIds=['pistol','rifle','m16'];
 const weaponCycle=['none',...weaponIds];
@@ -173,7 +174,7 @@ async function enterLobby(){
   const result=await lobbyRequest({action:'enter'});
   if(!lobbyDoor(result.slot)||!Array.isArray(result.position)||!lobbyWalkable(result.position[0],result.position[2])||typeof result.lease!=='string')throw Error('Ungültige Flursitzung');
   lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
-  renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);
+  resetHotelViews();renderer.lobby.restoreProjection();renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);
   Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0});
   audio.play('door');updateWorldStatus();$('notice').textContent='Willkommen im Hotelflur. Dein Zimmer: '+lobbyDoor(result.slot).number;
  }catch(e){$('notice').textContent=e.message||'Hotelflur nicht erreichbar';}
@@ -181,7 +182,7 @@ async function enterLobby(){
 }
 function returnToRoom(message='Du bist wieder in deinem Zimmer.',notify=true){
  const old=lobbyState;if(!old)return;
- lobbyState=null;lobbyTransition=false;renderer.lobby.clear();clearControls();player.y=0;player.vy=0;
+ lobbyState=null;lobbyTransition=false;resetHotelViews();renderer.lobby.clear();clearControls();player.y=0;player.vy=0;
  const spawn=HOTEL_LAYOUT.spawn.p,candidates=[[0,-3.8],[-.8,-3.6],[.8,-3.6],[spawn[0],spawn[2]]];
  for(let z=-3.8;z<=4;z+=.65)for(let x=-4;x<=4;x+=.65)candidates.push([x,z]);
  const p=candidates.find(([x,z])=>groundAt(x,z)>=-.05&&!coll(x,z))||[spawn[0],spawn[2]];
@@ -203,6 +204,29 @@ async function updateLobby(){
  }finally{visit.sending=false;}
 }
 setInterval(updateLobby,LOBBY_LAYOUT.pollMilliseconds);
+function resetHotelViews(){
+ hotelViewEpoch++;hotelViewMask='';hotelNeighborAt=0;
+ renderer?.setNeighborSnapshot(null);
+}
+async function hotelViews(){
+ if(!started||!accountProfile||!renderer||lobbyState||lobbyTransition||studioOpen)return;
+ const opening=hotelOpenings(state.walls||{}),mask=String(opening.hall)+String(opening.neighbor);
+ if(mask!==hotelViewMask){
+  resetHotelViews();hotelViewMask=mask;
+  if(!opening.hall)renderer.lobby.sync([]);
+ }
+ const epoch=hotelViewEpoch,profile=accountProfile;
+ const current=()=>epoch===hotelViewEpoch&&profile===accountProfile&&!lobbyState&&!lobbyTransition;
+ if(opening.hall&&!hotelHallPending){
+  hotelHallPending=true;
+  api('/api/hotel/view',{action:'hall'}).then(data=>{if(current()&&hotelOpenings(state.walls||{}).hall){renderer.lobby.setRooms(data.rooms||[]);renderer.lobby.sync(data.peers||[]);}}).catch(()=>{}).finally(()=>hotelHallPending=false);
+ }
+ if(opening.neighbor&&!hotelNeighborPending&&performance.now()>=hotelNeighborAt){
+  hotelNeighborPending=true;hotelNeighborAt=performance.now()+2000;
+  api('/api/hotel/view',{action:'neighbor'}).then(data=>{if(current()&&hotelOpenings(state.walls||{}).neighbor)renderer.setNeighborSnapshot(data);}).catch(()=>{}).finally(()=>hotelNeighborPending=false);
+ }
+}
+setInterval(hotelViews,500);
 window.addEventListener('pagehide',()=>{if(lobbyState)lobbyRequest({action:'leave',lease:lobbyState.lease},true).catch(()=>{});});
 function lobbyInteraction(ray=null){
  if(!lobbyState)return null;const {origin,direction}=interactionRay(ray);return lobbyDoorAt(origin,direction);
@@ -534,11 +558,14 @@ function frame(now,xrFrame){
   if(!first&&!vr&&!posture){let t=eye.map((v,i)=>v-d[i]*2.1);if(!coll(t[0],t[2])){eye=t;target=eye.map((v,i)=>v+d[i]);}}
   renderer.begin();
   if(lobbyState){
+    renderer.setHotelOpenings(lobbyState.slot,{},true);
     renderer.lobby.step(dt,player,!first&&!vr&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5);
     renderer.equip(null,false);renderer.render(canvas,eye,target,mobile,dt,player,false,true);
     if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}
     return;
   }
+  const openings=renderer.setHotelOpenings(accountProfile?.slot,state.walls||{});
+  if(openings.hall)renderer.lobby.step(dt,null,false);
   renderer.setDoorOpen?.(!lobbyEnabled&&state.unlocked);
   renderer.advanceCurtains?.(dt,state.decor||{});
   if(state.unlocked&&!lobbyEnabled){part([0,-.12,-10],[10,.24,10],'a8a69a');part([-4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([0,1.4,-15],[10,2.8,.2],'c1b6a6');}
