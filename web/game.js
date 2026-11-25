@@ -191,7 +191,7 @@ $('phone-sound').onchange=()=>{audio.configure($('phone-sound').checked,Number($
 setInterval(()=>{if(!$('phone').hidden)updatePhone();},15000);
 window.addEventListener('keydown',e=>{if(e.code==='Escape'&&!$('phone').hidden&&$('updater').hidden){$('closephone').onclick();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)audio.stopAll();});
-$('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('unlock').onclick=()=>{if(personalCapture){location.href='/scanner.html';return;}action('unlock');};$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';updatePhone();}catch(e){$('notice').textContent=e.message;}};
+$('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('unlock').onclick=()=>{if(personalCapture){location.href='/panorama.html';return;}action('unlock');};$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';updatePhone();}catch(e){$('notice').textContent=e.message;}};
 canvas.onclick=()=>{if(mobile||!canPlay())return;void audio.unlock();if(document.pointerLockElement!==canvas){canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;}};
 canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.pointerLockElement===canvas&&canPlay())pressTrigger();});
 window.addEventListener('pointerup',e=>{if(triggerPointer===null||triggerPointer===e.pointerId)releaseTrigger();});
