@@ -15,7 +15,8 @@ import { WALLS, floorSupported } from './wall_layout.js';
 import { inspectHand, poseContactHand } from './avatar_hands.js';
 export { WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported } from './wall_layout.js';
 import { isolateDisplayProp } from './display_prop.js';
-import { buildRoomDecor } from './room_decor.js';
+import { buildRoomDecor, fitDecor } from './room_decor.js';
+import { withAssetDeadline } from './optional_asset.js';
 import { HOTEL_LAYOUT, hotelMaterials, applyPhotoMaterials, createHotelModel } from './hotel_room.js';
 export { HOTEL_LAYOUT };
 import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
@@ -358,7 +359,19 @@ export class RoomRenderer {
     if(this.viewHands.pistol?.userData.importedHands===1&&this.viewHands.rifle?.userData.importedHands===2&&this.viewHands.m16?.userData.importedHands===2)this.realismStatus.hands='ready';
     for(const id of HOTEL_MODELS){
       this.status('Hotelmöbel: '+id);
-      const root=createHotelModel(this,id),materials=[];
+      let root=createHotelModel(this,id);const materials=[];
+      if(id==='chair'&&manifest.hotel_models?.chair){
+        try{
+          const optionalLoader=new GLTFLoader(new THREE.LoadingManager());
+          const gltf=await withAssetDeadline(()=>optionalLoader.loadAsync(path(manifest.hotel_models.chair)),6000);
+          // Preserve the authored velvet normal/roughness/AO maps and match the reference's mustard hue.
+          gltf.scene.traverse(o=>{if(!o.isMesh)return;for(const m of Array.isArray(o.material)?o.material:[o.material]){
+            if(/fabric/i.test(m.name||'')){m.color.set(0xcba13b);m.sheenColor?.set(0xf0c066);m.metalness=0;m.roughness=.88;}
+            else if(/wood/i.test(m.name||'')){m.color.set(0x2d2722);}
+          }});
+          const fitted=fitDecor(gltf.scene,spec[id]);const original=new THREE.Group();original.add(fitted.root);root=original;this.realismStatus.chair='original';
+        }catch(e){console.warn('Optionales Samt-Stuhlmodell:',e);}
+      }
       root.traverse(o=>{if(!o.isMesh)return;
         const copy=m=>{const c=m.clone();if(c.color)materials.push([c,c.color.clone()]);return c;};
         o.material=Array.isArray(o.material)?o.material.map(copy):copy(o.material);
