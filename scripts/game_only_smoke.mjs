@@ -141,3 +141,42 @@ console.log('Game-only UI, movement and proximity greetings passed');
 assert.ok(game.includes('posture.yaw=pose.yaw'));
 assert.ok(game.includes('started&&!vr,{posture,weapon:equipped}'));
 console.log('Room avatar receives furniture direction, posture and equipped cosmetic prop state');
+
+
+// Session recovery is distinct from wrong passwords or the protected-game key.
+// Exercise the actual production functions with controlled account responses.
+const sessionTest=new Function('assert',getPart('let enteringGame=false,pendingAvatar=null;','function authButtons(){')+`
+ let accountsEnabled=true,started=false,active=true,studioOpen=true,editingFromGame=false;
+ let accountProfile={slot:0,nickname:'Alpha',avatar:{model:1}},characterDraft={model:8};
+ const first={...accountProfile},second={slot:1,nickname:'Beta',avatar:{model:2}};
+ let reply=first,failure=null,cleared=0,notified=0,resetMode=null,reloads=0;
+ const api=async()=>{if(failure)throw failure;return reply;};
+ const nodes=new Map(),$=id=>{if(!nodes.has(id))nodes.set(id,{hidden:false,value:'',textContent:''});return nodes.get(id);};
+ const renderer={studio:{clear(){cleared++;}},roomModels:{clear(){cleared++;}}};
+ const clearControls=()=>{},updateWorldStatus=()=>{},setAuthMode=mode=>{resetMode=mode;};
+ const document={exitPointerLock(){},body:{classList:{remove(){}}}},location={reload(){reloads++;}};
+ const window={dispatchEvent(){notified++;}},Event=class{};
+ const expired=Object.assign(Error('expired'),{status:401,code:'session_required'});
+ const wrong=Object.assign(Error('E-Mail oder Passwort falsch'),{status:401});
+ const tokenError=Object.assign(Error('Zugriffsschluessel fehlt oder ist falsch'),{status:401});
+ return (async()=>{
+  assert.ok(isPersonalSessionError(expired));assert.ok(!isPersonalSessionError(wrong));assert.ok(!isPersonalSessionError(tokenError));
+  assert.ok(isPersonalSessionError({status:401,message:'Persoenliche Sitzung fehlt; Spiel erneut betreten'}));
+  assert.equal(await verifyAccountSession(first),first);
+  reply=second;
+  try{await verifyAccountSession(first);throw Error('account mismatch accepted');}catch(e){assert.ok(isPersonalSessionError(e));}
+  failure=expired;
+  try{await verifyAccountSession(first);throw Error('expired session accepted');}catch(e){assert.equal(e,expired);}
+  assert.equal(recoverAccountSession(wrong),false);assert.equal(recoverAccountSession(expired),true);
+  assert.equal(accountProfile,null);assert.equal(studioOpen,false);assert.equal($('welcome').hidden,false);
+  assert.equal($('character-editor').hidden,true);assert.equal(resetMode,'login');assert.equal(cleared,2);assert.equal(notified,1);
+  assert.equal(resumePendingAvatar(first).model,8);
+  pendingAvatar={profile:first,avatar:{model:8}};assert.equal(resumePendingAvatar(second),null);
+  pendingAvatar={profile:first,avatar:{model:8}};assert.equal(resumePendingAvatar({...first,nickname:'Someone else'}),null);
+  started=true;active=true;assert.equal(recoverAccountSession(expired),true);assert.equal(active,false);assert.equal(started,false);assert.equal(reloads,1);
+ })();
+`);
+await sessionTest(assert);
+assert.ok(game.includes("credentials:'same-origin'")&&game.includes("cache:'no-store'"));
+assert.ok(game.includes("expected_slot:accountProfile.slot"));
+console.log('Account session verification, reauthentication, draft ownership and restart recovery checks passed');

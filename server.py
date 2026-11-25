@@ -370,6 +370,16 @@ class GameStore:
         return result
 
 
+class PersonalSessionRequired(CaptureError):
+    def __init__(self, message='Persoenliche Sitzung abgelaufen oder fehlt. Bitte erneut anmelden.'):
+        super().__init__(message,401)
+
+def capture_error_body(exc):
+    result={'error':str(exc)}
+    if isinstance(exc,PersonalSessionRequired):result['code']='session_required'
+    return result
+
+
 def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, world_capture=False, legacy_capture=False):
     updater = updater or UpdateBridge(None, "")
     game = GameStore(store.path) # preserve the original legacy world unchanged in personal mode
@@ -384,7 +394,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.12.3"
+        server_version = "SecondLive/0.12.4"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -449,7 +459,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
 
         def player(self):
             player=accounts.identify(self.account_cookie()) if accounts else capture.identify(self.player_cookie()) if capture else None
-            if not player: raise CaptureError('Persoenliche Sitzung fehlt; Spiel erneut betreten',401)
+            if not player: raise PersonalSessionRequired()
             return player
 
         def new_session(self):
@@ -464,7 +474,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
 
         def capture_reply(self,fn):
             try:self.send_json(200,fn())
-            except CaptureError as e:self.send_json(e.status,{'error':str(e)})
+            except CaptureError as e:self.send_json(e.status,capture_error_body(e))
             except (ValueError,TypeError,KeyError) as e:self.send_json(400,{'error':'Ungueltiger Auftrag: '+str(e)[:200]})
             except OSError:self.send_json(503,{'error':'Lokaler Datenspeicher nicht verfuegbar'})
 
@@ -550,7 +560,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     parts=path.split('/')
                     if len(parts)!=6:raise CaptureError('Foto nicht gefunden',404)
                     self.send_data(200,capture.frame_image(self.player(),parts[4],parts[5]),'image/jpeg')
-                except CaptureError as e:self.send_json(e.status,{'error':str(e)})
+                except CaptureError as e:self.send_json(e.status,capture_error_body(e))
                 except OSError:self.send_json(404,{'error':'Foto nicht gefunden'})
                 return
             if path in SAFE_FILES:
@@ -591,7 +601,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.12.3", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.12.4", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/room-models" or path.startswith("/api/room-models/"):
@@ -605,7 +615,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     owner=self.player()
                     if not ID_RE.fullmatch(identifier):raise CaptureError('Modell nicht gefunden',404)
                     self.send_data(200,room_models.get(owner,identifier),'model/gltf-binary')
-                except CaptureError as e:self.send_json(e.status,{'error':str(e)})
+                except CaptureError as e:self.send_json(e.status,capture_error_body(e))
                 except (OSError,sqlite3.Error):self.send_json(503,{'error':'Modellspeicher nicht verfuegbar'})
             elif path == "/api/game":
                 if self.require_game(): self.capture_reply(lambda:self.personal_game().state())
@@ -673,7 +683,15 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                         accounts.logout(self.account_cookie());self.account_session_cookie(None);return {'ok':True}
                     player=self.player()
                     if op=='profile':return accounts.profile(player)
-                    if op=='avatar':return accounts.save_avatar(player,data.get('avatar'))
+                    if op=='avatar':
+                        # Old clients omit this field; new clients protect against a
+                        # different account cookie after another tab changes login.
+                        if 'expected_slot' in data:
+                            slot=data['expected_slot']
+                            if type(slot) is not int:raise CaptureError('Ungueltiges Zimmer',400)
+                            if accounts.profile(player)['slot']!=slot:
+                                raise PersonalSessionRequired('Aktives Konto wurde gewechselt. Bitte erneut anmelden.')
+                        return accounts.save_avatar(player,data.get('avatar'))
                     raise CaptureError('Unbekannte Kontoaktion',400)
                 self.capture_reply(account_action);return
             if path=="/api/hotel/view":
@@ -750,7 +768,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     row=self.personal_game().action(data,store)
                 else: row=store.add(data)
             except CaptureError as exc:
-                self.send_json(exc.status, {"error":str(exc)})
+                self.send_json(exc.status, capture_error_body(exc))
                 return
             except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
                 self.send_json(400, {"error": str(exc)})

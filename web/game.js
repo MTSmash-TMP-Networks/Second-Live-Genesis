@@ -124,7 +124,11 @@ function wantsSprint(){return touchSprint||keys.has('ShiftLeft')||keys.has('Shif
 function clearControls(){releaseTrigger();setScopeZoom(false);keys.clear();touchSprint=false;touchCrouch=false;touchMove=[0,0];look=null;$('stick').classList.remove('moving');$('stick').style.removeProperty('--jx');$('stick').style.removeProperty('--jy');}
 function setMode(v){mobile=v;document.body.classList.toggle('mobile',v);$('mode').textContent=v?'Desktop-Modus':'Touch-Modus';clearControls();if(v)document.exitPointerLock?.();}
 let token=sessionStorage.getItem('second_live_token')||'';let protectedGame=false,personalWorld=false; $('token').value=token;
-const api=async(path,data)=>{let r=await fetch(path,{headers:{...(protectedGame?{'X-SecondLive-Token':token}:{}),'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});let j=await r.json();if(!r.ok){const e=Error(j.error||r.status);e.status=r.status;throw e;}return j;};
+const api=async(path,data)=>{
+ const r=await fetch(path,{cache:'no-store',credentials:'same-origin',headers:{...(protectedGame?{'X-SecondLive-Token':token}:{}),'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});
+ let j;try{j=await r.json();}catch{const e=Error('Spielserver antwortet nicht wie erwartet (HTTP '+r.status+').');e.status=r.status;throw e;}
+ if(!r.ok){const e=Error(j?.error||r.status);e.status=r.status;e.code=j?.code;throw e;}return j;
+};
 function syncWallState(next){
   for(const [id,w] of Object.entries(WALLS)){
     const prev=new Set((state.walls?.[id]||[]).filter(c=>c[2]>=REMOVED).map(c=>`${c[0]},${c[1]}`));
@@ -438,7 +442,42 @@ async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if
 }
 function groundAt(x,z){if(lobbyState)return 0;if(z<-5&&state.unlocked&&!lobbyEnabled)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
 function coll(x,z,height=player.stance==='crouch'?1.12:1.6){if(lobbyState)return !lobbyWalkable(x,z);if(Math.abs(x)>4.65||z>4.65||z<(!lobbyEnabled&&state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+height&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,height*.53,height-.15].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+height&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
-let enteringGame=false;
+let enteringGame=false,pendingAvatar=null;
+function isPersonalSessionError(e){
+ return e?.status===401&&(e.code==='session_required'||/^Persoenliche Sitzung fehlt/i.test(e.message||''));
+}
+function sameAccount(a,b){
+ return !!a&&!!b&&Number.isInteger(a.slot)&&a.slot===b.slot&&a.nickname===b.nickname;
+}
+async function verifyAccountSession(expected){
+ const actual=await api('/api/account',{action:'profile'});
+ if(!sameAccount(expected,actual)){
+  const e=Error('Das aktive Konto wurde gewechselt. Bitte melde dich erneut an.');e.status=401;e.code='session_required';throw e;
+ }
+ return actual;
+}
+function resumePendingAvatar(profile){
+ const draft=pendingAvatar;pendingAvatar=null;
+ return sameAccount(draft?.profile,profile)?{...draft.avatar}:null;
+}
+function recoverAccountSession(e){
+ if(!accountsEnabled||!isPersonalSessionError(e))return false;
+ // If already playing, a fresh document is required to discard private
+ // room state, outstanding world requests and the active physics scene.
+ if(started){active=false;started=false;clearControls();location.reload();return true;}
+ if(studioOpen&&accountProfile&&characterDraft){
+  pendingAvatar={profile:{nickname:accountProfile.nickname,slot:accountProfile.slot},avatar:{...characterDraft}};
+ }
+ studioOpen=false;editingFromGame=false;characterDraft=null;accountProfile=null;active=false;
+ renderer?.studio?.clear();renderer?.roomModels?.clear();
+ clearControls();document.exitPointerLock?.();
+ $('character-editor').hidden=true;$('phone').hidden=true;$('account-phone').hidden=true;
+ $('welcome').hidden=false;document.body.classList.remove('character-editing');
+ setAuthMode('login');
+ $('account-password').value='';
+ $('loginerror').textContent='Deine persönliche Sitzung ist nicht mehr gültig. Melde dich erneut mit deinem bestehenden Konto an. '+(pendingAvatar?'Deine aktuelle Charakterauswahl bleibt für dieses Konto erhalten.':'Dein Zimmer und Charakter bleiben gespeichert.');
+ updateWorldStatus();window.dispatchEvent(new Event('sl-account-change'));return true;
+}
 function authButtons(){
  const ready=graphicsReady&&!accountBusy;
  $('account-submit').disabled=!ready;$('account-continue').disabled=!ready;
@@ -509,35 +548,65 @@ async function authenticate(){
  const data={action:authMode,email:$('account-email').value.trim(),password:$('account-password').value};
  if(authMode==='register')data.nickname=$('account-nickname').value;
  try{
-  applyAccount(await api('/api/account',data));$('account-password').value='';showAccountResume();
+  const profile=await api('/api/account',data);
+  // A successful password check is not enough: confirm that the browser
+  // actually sends the issued HttpOnly cookie back to this origin.
+  let verified;
+  try{verified=await verifyAccountSession(profile);}
+  catch(e){
+   if(isPersonalSessionError(e)){
+    accountProfile=null;setAuthMode('login');
+    throw Error('Anmeldung bestätigt, aber die Sitzung konnte nicht übernommen werden. Bitte Cookies für diese Spieladresse zulassen, dieselbe HTTP-/HTTPS-Adresse verwenden und erneut anmelden.');
+   }
+   throw e;
+  }
+  applyAccount(verified);$('account-password').value='';showAccountResume();
   if(protectedGame)sessionStorage.setItem('second_live_token',token);
-  openStudio();
+  const draft=resumePendingAvatar(accountProfile);openStudio();
+  if(draft&&studioOpen){characterDraft=normalizeCharacter(draft);renderCharacterFields();renderer.studio.set(characterDraft);}
  }catch(e){$('loginerror').textContent=e.message;}
  finally{data.password='';$('account-password').value='';accountBusy=false;authButtons();}
 }
 async function enterGame(){
  if(!graphicsReady||enteringGame)return;enteringGame=true;void audio.unlock();if(protectedGame)token=$('token').value;
  try{
-  if(accountsEnabled&&!accountProfile)throw Error('Bitte zuerst anmelden');
+  if(accountsEnabled){if(!accountProfile)throw Error('Bitte zuerst anmelden');await verifyAccountSession(accountProfile);}
   if(personalWorld&&!accountsEnabled)await api('/api/session',{});
   await refresh();if(protectedGame)sessionStorage.setItem('second_live_token',token);
   $('welcome').hidden=true;$('character-editor').hidden=true;studioOpen=false;renderer?.studio?.clear();document.body.classList.remove('character-editing');
   started=true;active=true;document.body.classList.add('playing');
   void refreshRoomModels().catch(e=>{$('room-model-message').textContent=e.message;});
   if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});
- }catch(e){if(studioOpen)$('character-error').textContent=e.message;else $('loginerror').textContent=e.message;}
+ }catch(e){if(!recoverAccountSession(e)){if(studioOpen)$('character-error').textContent=e.message;else $('loginerror').textContent=e.message;}}
  finally{enteringGame=false;}
 }
 $('auth-login').onclick=()=>setAuthMode('login');$('auth-register').onclick=()=>setAuthMode('register');
-$('account-form').onsubmit=e=>{e.preventDefault();authenticate();};$('account-continue').onclick=()=>openStudio();
-$('account-switch').onclick=async()=>{if(accountBusy)return;accountBusy=true;authButtons();try{await api('/api/account',{action:'logout'});accountProfile=null;$('account-phone').hidden=true;window.dispatchEvent(new Event('sl-account-change'));setAuthMode('login');}catch(e){$('loginerror').textContent=e.message;}finally{accountBusy=false;authButtons();}};
+$('account-form').onsubmit=e=>{e.preventDefault();authenticate();};
+$('account-continue').onclick=async()=>{
+ if(accountBusy||!accountProfile)return;
+ accountBusy=true;authButtons();
+ try{await verifyAccountSession(accountProfile);openStudio();}
+ catch(e){if(!recoverAccountSession(e))$('loginerror').textContent=e.message;}
+ finally{accountBusy=false;authButtons();}
+};
+$('account-switch').onclick=async()=>{
+ if(accountBusy)return;accountBusy=true;authButtons();
+ try{
+  try{await api('/api/account',{action:'logout'});}catch(e){if(!isPersonalSessionError(e))throw e;}
+  pendingAvatar=null;accountProfile=null;$('account-phone').hidden=true;window.dispatchEvent(new Event('sl-account-change'));setAuthMode('login');
+ }catch(e){$('loginerror').textContent=e.message;}finally{accountBusy=false;authButtons();}
+};
 $('character-left').onclick=()=>renderer.studio.turn(-Math.PI/6);$('character-right').onclick=()=>renderer.studio.turn(Math.PI/6);
 $('character-random').onclick=()=>{for(const k of studioFields){const v=CHARACTER_OPTIONS[k];characterDraft[k]=k==='model'?1+Math.floor(Math.random()*(v.values.length-1)):Math.floor(Math.random()*v.values.length);}renderCharacterFields();renderer.studio.set(characterDraft);};
 $('character-model-retry').onclick=()=>{if(studioOpen&&characterDraft)renderer.studio.set(characterDraft);};
 $('character-cancel').onclick=()=>{if(!accountBusy)closeStudio();};
 $('character-save').onclick=async()=>{if(accountBusy||!studioOpen)return;accountBusy=true;$('character-save').disabled=true;$('character-error').textContent='';
- try{applyAccount(await api('/api/account',{action:'avatar',avatar:characterDraft}));if(editingFromGame)closeStudio();else await enterGame();}
- catch(e){$('character-error').textContent=e.message;}finally{accountBusy=false;$('character-save').disabled=false;}
+ try{
+  await verifyAccountSession(accountProfile);
+  applyAccount(await api('/api/account',{action:'avatar',expected_slot:accountProfile.slot,avatar:characterDraft}));
+  if(editingFromGame)closeStudio();else await enterGame();
+ }catch(e){if(!recoverAccountSession(e))$('character-error').textContent=e.message;}
+ finally{accountBusy=false;$('character-save').disabled=false;authButtons();}
 };
 $('edit-character').onclick=()=>{if(lobbyState){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}openStudio(true);};
 $('account-logout').onclick=async()=>{if(accountBusy||!confirm('Vom Spiel abmelden? Dein Zimmer und Charakter bleiben gespeichert.'))return;accountBusy=true;try{await api('/api/account',{action:'logout'});location.reload();}catch(e){$('notice').textContent=e.message;accountBusy=false;}};

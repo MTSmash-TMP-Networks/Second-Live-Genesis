@@ -35,6 +35,67 @@ def room_model_fixture(change=None):
     return struct.pack('<IIIII',0x46546c67,2,28+len(js)+len(vertices),len(js),0x4e4f534a)+js+struct.pack('<II',len(vertices),0x004e4942)+vertices
 
 class GameOnlyTest(unittest.TestCase):
+    def test_account_cookie_survives_restart_and_reauth_preserves_room(self):
+        import sqlite3
+        from world_capture import digest
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);jar=http.cookiejar.CookieJar()
+            opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+            def launch(port=0):
+                srv=create_server(port=port,data_dir=root,guest_game=True,world_capture=True)
+                thread=threading.Thread(target=srv.serve_forever,daemon=True);thread.start()
+                return srv,thread
+            def stop(srv,thread):
+                srv.shutdown();srv.server_close();thread.join(5)
+            def req(base,path,data=None,client=opener):
+                raw=None if data is None else json.dumps(data).encode()
+                request=urllib.request.Request(base+path,data=raw,headers={'Content-Type':'application/json'})
+                with client.open(request,timeout=5) as res:
+                    self.assertEqual(res.headers['Cache-Control'],'no-store')
+                    return json.load(res)
+            def expect_session_required(base,path,data=None,client=opener):
+                with self.assertRaises(urllib.error.HTTPError) as err:req(base,path,data,client)
+                self.assertEqual(err.exception.code,401)
+                self.assertEqual(json.load(err.exception)['code'],'session_required')
+            srv,thread=launch();base='http://127.0.0.1:'+str(srv.server_port)
+            try:
+                login={'email':'restart@example.invalid','password':'Restart-password-123'}
+                profile=req(base,'/api/account',{'action':'register','nickname':'Restart Guest',**login})
+                self.assertEqual(req(base,'/api/account',{'action':'profile'}),profile)
+                cookie=next(c for c in jar if c.name=='sl_account')
+                self.assertTrue(cookie.has_nonstandard_attr('HttpOnly'))
+                self.assertEqual(cookie.get_nonstandard_attr('SameSite'),'Strict')
+                custom={**profile['avatar'],'model':1}
+                saved=req(base,'/api/account',{'action':'avatar','avatar':custom,'expected_slot':profile['slot']})
+                self.assertEqual(saved['avatar'],custom)
+                expect_session_required(base,'/api/account',{'action':'avatar','avatar':profile['avatar'],'expected_slot':profile['slot']+1})
+                self.assertEqual(req(base,'/api/account',{'action':'profile'}),saved)
+                world=req(base,'/api/game',{'action':'toggle_light','id':'surface_switch'})
+                before=req(base,'/api/game')
+                self.assertEqual(world['lights_on'],before['lights_on'])
+                expect_session_required(base,'/api/game',client=urllib.request.build_opener())
+            finally:stop(srv,thread)
+            # Start a fresh HTTP server against the same persistent volume.
+            # Cookies are host scoped, not port scoped.
+            srv,thread=launch();base='http://127.0.0.1:'+str(srv.server_port)
+            try:
+                self.assertEqual(req(base,'/api/account',{'action':'profile'}),saved)
+                self.assertEqual(req(base,'/api/game'),before)
+                with sqlite3.connect(root/'genesis.sqlite3') as db:
+                    db.execute('UPDATE game_account_sessions SET expires=0 WHERE secret=?',(digest(cookie.value),))
+                expect_session_required(base,'/api/account',{'action':'profile'})
+                expect_session_required(base,'/api/account',{'action':'avatar','avatar':custom})
+                expect_session_required(base,'/api/game')
+                expect_session_required(base,'/api/game',{'action':'toggle_light','id':'surface_switch'})
+                self.assertEqual(req(base,'/api/account',{'action':'login',**login}),saved)
+                self.assertEqual(req(base,'/api/game'),before)
+                self.assertEqual(req(base,'/api/account',{'action':'profile'}),saved)
+                with self.assertRaises(urllib.error.HTTPError) as err:
+                    req(base,'/api/account',{'action':'login',**login,'password':'wrong password'})
+                self.assertEqual(err.exception.code,401)
+                self.assertNotIn('code',json.load(err.exception))
+            finally:stop(srv,thread)
+
     def test_private_room_model_validation_and_persistence(self):
         from room_models import RoomModelStore, validate_glb, MAX_MODELS
         blob=room_model_fixture()

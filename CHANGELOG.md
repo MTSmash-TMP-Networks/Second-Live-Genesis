@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.4 – Personal Session Recovery
+- Charakterstudio und Spieleinstieg prüfen die aktuelle Konto-Sitzung ohne Cache. Nach der Anmeldung wird geprüft, ob der Browser das neue HttpOnly-Cookie tatsächlich zurücksendet.
+- Fehlende, abgelaufene oder gewechselte Kontositzungen führen zurück zur Anmeldung statt zu einer blockierenden Studio-Fehlermeldung. Der ungespeicherte Charakterentwurf bleibt bis zur erneuten Anmeldung im gleichen Browserdokument für dasselbe Konto erhalten.
+- Charakteränderungen können mit der erwarteten Zimmernummer gegen einen Kontowechsel in einem anderen Tab abgesichert werden. Keine Umgehung der Anmeldung, keine Änderung der Cookie-Laufzeit oder Konto-/Spielstandsdaten.
+- Neue HTTP-Regressionstests für Serverneustart mit demselben Datenvolume, abgelaufene Sitzung, erneute Anmeldung und unveränderten Spielstand; Frontend-Tests für die Wiederanmeldung und den Entwurf.
+
 ## 0.12.3 – Complete Avatar Mirror Poses
 - Lokaler Rocketbox-Charakter mit Sitzhaltung auf dem Sofa und Liegehaltung im Bett, einschließlich Schlafzustand. Körperrichtung folgt dem Möbel statt der frei drehbaren Ego-Kamera.
 - Ausgerüstete Spielrequisiten werden als separate, an der Avatarhand positionierte Darstellung im Spiegel und in der Third-Person-Ansicht angezeigt. Kamerahände und Ego-Viewmodel bleiben vom Spiegelpass ausgeschlossen; beim Ablegen und Aufstehen wird die normale Darstellung wiederhergestellt.
