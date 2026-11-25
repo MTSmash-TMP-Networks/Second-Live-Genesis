@@ -391,7 +391,7 @@ export class RoomRenderer {
     crateMesh.position.y=c.s[1]/2;crateMesh.castShadow=true;crateMesh.receiveShadow=true;crate.add(crateMesh);crate.visible=false;
     this.models.crate={root:crate,materials:[[crateMat,crateMat.color.clone()]],damage:null};this.dynamicGroup.add(crate);
     for(const [id,m] of Object.entries(this.models))if(spec[id])this.impacts.register(id,m.root,id==='window'?'glass':id==='sofa'||id==='chair'?'fabric':'wood');
-    for(const [id,o] of Object.entries(spec))if(id!=='window'){
+    for(const [id,o] of Object.entries(spec))if(id!=='window'&&!o.decor){
       const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map:this.shadowTexture,transparent:true,depthWrite:false,opacity:.78,polygonOffset:true,polygonOffsetFactor:-1}));
       m.rotation.x=-Math.PI/2;m.position.y=.006;m.scale.set(o.s[0]*1.55,o.s[2]*1.55,1);this.scene.add(m);this.contactShadows[id]=m;
     }
@@ -462,7 +462,7 @@ export class RoomRenderer {
     mesh.geometry=geometry;mesh.scale.set(...(chip?o.s:[1,1,1]));mesh.material=this.material(o);mesh.castShadow=o.m!=='glass'&&o.s[0]<5&&o.s[2]<5;mesh.visible=true;this.place(mesh,o);
   }
   drawModel(id,p,s,hp,max,q){
-    const sh=this.contactShadows[id];if(sh){sh.visible=floorSupported(WALLS.surface_0,this.wallState?.surface_0||[],p[0],p[2]);sh.position.set(p[0],.006,p[2]);sh.material.opacity=Math.max(0,.82-(p[1]-s[1]/2)*.68);}
+    const sh=this.contactShadows[id];if(sh){sh.rotation.z=q?2*Math.atan2(q[1],q[3]):0;sh.visible=floorSupported(WALLS.surface_0,this.wallState?.surface_0||[],p[0],p[2]);sh.position.set(p[0],.006,p[2]);sh.material.opacity=Math.max(0,.82-(p[1]-s[1]/2)*.68);}
     const m=this.models[id];if(!m)return false;
     m.root.visible=true;
     if(m.centered){m.root.position.set(...p);m.root.quaternion.identity();m.glass.opacity=.13+.08*(1-hp/max);return true;}
@@ -472,6 +472,14 @@ export class RoomRenderer {
     const damage=1-.35*(1-hp/max);
     if(m.damage!==damage){for(const [mat,color] of m.materials)mat.color.copy(color).multiplyScalar(damage);m.damage=damage;}
     return true;
+  }
+  drawMovableDecor(id,p,s,q,visible,held){
+    const root=this.impacts.targets.get(id)?.root;if(!root)return;
+    // Preserve existing impact coordinate systems: bed root at floor, wardrobe at centre.
+    const rot=q?new THREE.Quaternion(...q):new THREE.Quaternion();
+    root.position.set(...p);if(id==='surface_bed')root.position.add(new THREE.Vector3(0,-s[1]/2,0).applyQuaternion(rot));
+    root.quaternion.copy(rot);root.visible=visible;
+    root.traverse(o=>{if(o.userData.floorShadow)o.visible=!held&&Math.abs(p[1]-s[1]/2)<.04&&floorSupported(WALLS.surface_0,this.wallState?.surface_0||[],p[0],p[2]);});
   }
   surfaceHit(origin,direction,held){this.scene.updateMatrixWorld(true);return this.impacts.cast(origin,direction,[this.staticGroup,this.dynamicGroup],held);}
   syncWalls(walls){this.walls.sync(walls);this.wallState=walls||{};this.staticGroup.updateMatrixWorld(true);this.staticGroup.traverse(o=>{if(o.userData.floorShadow){const p=o.getWorldPosition(new THREE.Vector3());o.visible=floorSupported(WALLS.surface_0,this.wallState.surface_0||[],p.x,p.z);}});}
