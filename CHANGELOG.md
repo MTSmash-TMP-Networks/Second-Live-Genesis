@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.2 – Account Admin Update
+- Update-Status und Check-/Installations-API ausschließlich für das lokal bestätigte Admin-Konto; keine Berechtigung durch alten Schlüssel, Spitznamen oder vom Client behauptete Rollen.
+- System-App nur für Administratoren sichtbar, normale Spielersitzung statt separatem Update-Login.
+- Host-Konfiguration über SECOND_LIVE_UPDATE_ADMIN_EMAIL in der lokalen .env; einmalige Passwortbestätigung direkt am Docker-Host. Öffentliche Registrierung der reservierten Admin-Adresse gesperrt.
+- Manueller Host-Helfer verwendet die vorhandene revisionsgeprüfte Update-Brücke und Rollback-Logik. Kein Verlust von Spielständen oder Konten; additive SQLite-Tabelle.
+
 ## 0.11.1 – Connected Hotel
 - Tatsächliche Flurgeometrie samt animierten Gästen durch Öffnungen in der Eingangswand sichtbar; gleiche Geometrie in beiden Szenen.
 - Flurlänge 132 m, maßstäbliche Türpositionen für 10 m breite Zimmer. Spiegelbildlich gepaarte Zimmer mit Lichtzwischenräumen für Außenfenster.
