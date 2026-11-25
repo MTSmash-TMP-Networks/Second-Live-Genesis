@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0 – DA3 Multi-view Capture (experimental)
+- Optionaler lokaler Depth-Anything-3-Small-Dienst, getrennt vom Spiel-Docker-Build, mit CPU- und optionaler CUDA-Konfiguration.
+- DA3 als bevorzugte Engine bei aktivem Dienst; COLMAP-Fallback bei Ausfall. Farbige KI-Punktwolke und geschätzte Flächen mit Konfidenz-/Tiefenkonsistenzprüfung.
+- Erste Vorschau ab vier Fotos, früher Abschluss nach brauchbarer DA3-Vorschau, tatsächliche Engine und Qualitätshinweise sichtbar. 60 Fotos sind kein Ziel.
+- Live maximal acht, final maximal 16 ausgewählte Schlüsselbilder; noch kein kontinuierliches SLAM oder globale Streaming-Fusion. Keine Veröffentlichung privater Kameraposen oder Bild-IDs.
+
 ## 0.7.9 – Docker Build Hotfix
 - Allow the live capture smoke test in the Docker build context without including the other development tests.
 - Copy the test with explicit read-only permissions and execute it directly from /app as the unprivileged runtime user, including checkouts created with umask 077.
