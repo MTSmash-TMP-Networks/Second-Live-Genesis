@@ -23,7 +23,7 @@ export function sculptedMesh(rings,segments=36,sculpt=null){
    const t=2*Math.PI*i/segments,x=Math.sin(t)*w,zz=z+Math.cos(t)*d;
    positions.push(...(sculpt?sculpt(x,y,zz,t):[x,y,zz]));uv.push(i/segments,j/(rings.length-1));
   }
-  if(j){for(let i=0;i<segments;i++){const a=(j-1)*(segments+1)+i,b=a+segments+1;indices.push(a,b,a+1,a+1,b,b+1);}}
+  if(j){for(let i=0;i<segments;i++){const a=(j-1)*(segments+1)+i,b=a+segments+1;indices.push(a,a+1,b,a+1,b+1,b);}}
  }
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();return g;
 }
@@ -49,7 +49,7 @@ function hairModel(head,a,m){
   const y=.077+(.146+length*.12)*Math.cos(angle);
   const z=.014+(.135+length*.12)*Math.sin(angle)*Math.cos(t)*noise;
   pos.push(x,y,z);
-  if(j&&i){const k=j*(steps+1)+i;idx.push(k,k-1,k-steps-1,k-1,k-steps-2,k-steps-1);}
+  if(j&&i){const k=j*(steps+1)+i;idx.push(k,k-steps-1,k-1,k-1,k-steps-1,k-steps-2);}
  }
  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setIndex(idx);geo.computeVertexNormals();
  const cap=new THREE.Mesh(geo,m);cap.userData.ownedGeometry=true;head.add(cap);
