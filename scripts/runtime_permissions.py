@@ -5,9 +5,9 @@ import tempfile
 from pathlib import Path
 
 MODULES = ('server.py', 'updater_api.py', 'wall_damage.py', 'world_capture.py',
-           'capture_compute.py', 'da3_client.py', 'panorama_capture.py', 'runtime_permissions.py')
-REQUIRED_WEB = ('index.html', 'game.js', 'audio.js', 'capture.js', 'device-access.js', 'scanner.html', 'panorama.html', 'panorama.js', 'panorama-flow.js', 'panorama.css',
-                'engine/renderer.bundle.js', 'engine/capture-view.bundle.js', 'engine/wall_layout.json',
+           'runtime_permissions.py')
+REQUIRED_WEB = ('index.html', 'game.js', 'audio.js', 'updater.js',
+                'engine/renderer.bundle.js', 'engine/wall_layout.json',
                 'assets/polyhaven/manifest.json')
 
 
