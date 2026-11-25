@@ -6,7 +6,7 @@ from da3_geometry import geometry
 
 MODEL='depth-anything/DA3-SMALL'
 REVISION='e08cab6'
-MAX_BODY=40_000_000
+MAX_BODY=48_000_000
 state={'status':'loading','model':MODEL,'device':'initializing'}
 model=None
 lock=threading.Lock()
@@ -27,7 +27,7 @@ def load():
                 with torch.inference_mode():
                     return m.model(image,extrinsics,intrinsics,export_feat_layers,infer_gs,use_ray_pose,ref_view_strategy)
             m.forward=cpu_forward
-        model=m;state.update(status='ready',device=device.type)
+        model=m;state.update(status='ready',device=device.type);print('DA3-SMALL ready on '+device.type,flush=True)
     except Exception as exc:
         state.update(status='error',error=str(exc)[:300]);print('DA3 initialization failed:',type(exc).__name__,str(exc)[:300],flush=True)
 
