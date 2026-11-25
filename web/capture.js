@@ -11,20 +11,24 @@ function clearLive(){
   $('live-empty').hidden=false;$('live-empty').textContent='Ab 4 Fotos';
 }
 function renderLive(s){
-  const n=s?.frames?.length||0, l=s?.live||{}, revision=l.revision;
-  const state=l.state||'waiting', connected=l.registered||0, total=l.source_count||0;
+  const n=s?.frames?.length||0,l=s?.live||{},revision=l.revision,da3=l.kind==='da3_multiview',engine=s?.worker?.da3||{};
+  const state=l.state||'waiting',connected=l.registered||0,total=l.source_count||0;
+  $('engine-state').textContent=engine.status==='ready'?'DA3-Small · '+(engine.device||'CPU').toUpperCase():engine.status==='loading'?'DA3 wird geladen':engine.status==='error'?'DA3 nicht bereit · COLMAP-Fallback':'DA3 offline · COLMAP-Fallback';
+  $('engine-state').dataset.ready=String(engine.status==='ready');
   $('live-info').dataset.state=state;
-  $('live-count-3d').textContent=total?connected+' / '+total+' Fotos verbunden':'0 Fotos verbunden';
-  let title='Erste Bilder aufnehmen', hint='Geh seitlich weiter und halte dieselben Details im Bild.';
-  if(n<4){hint='Noch '+(4-n)+' Fotos bis zur ersten räumlichen Prüfung. '+hint;}
-  else if(state==='running'){title='3D-Punkte werden berechnet';hint='Der Server prüft '+l.attempted+' Fotos. Du kannst weiter aufnehmen.';}
-  else if(state==='ready'){title='3D-Struktur erkannt';hint=connected<Math.ceil(total*.7)?'Ein Teil der Fotos konnte nicht verbunden werden. Fotografiere dieselben Stellen aus versetzten Positionen.':'Die Fotos lassen sich räumlich verbinden. Erfasse die nächsten Blickwinkel.';if(n>total)hint+=' '+(n-total)+' neue Fotos warten auf die nächste Prüfung.';}
-  else if(state==='insufficient'){title='Noch nicht ausreichend verbunden';hint='Mehr gemeinsame Bilddetails, seitliche Bewegung statt reiner Drehung. '+(revision?'Letzte erfolgreiche 3D-Vorschau bleibt sichtbar.':'Noch keine räumliche Vorschau vorhanden.');}
-  else if(state==='error'){title='Live-Berechnung nicht verfügbar';hint=(l.message||'Die Vorschau konnte nicht berechnet werden.')+' Du kannst weiter Fotos sammeln und die Abschlussberechnung versuchen.';}
-  else if(n>=4){title='Live-Berechnung wartet';hint=s.worker?.online?'Fotos werden für die nächste räumliche Prüfung vorbereitet.':'Der Server-Worker ist noch nicht bereit. Fotos bleiben gespeichert.';}
-  if(revision)hint+=' '+(l.point_count||0).toLocaleString('de-DE')+' echte 3D-Punkte aus der letzten erfolgreichen Berechnung.';
+  $('live-count-3d').textContent=total?connected+' / '+total+(da3?' Ansichten konsistent':' Fotos verbunden'):'Noch keine 3D-Prüfung';
+  let title='Erste Bilder aufnehmen',hint='Geh ein Stück seitlich und halte dieselben Details im Bild.';
+  if(n<4)hint='Noch '+(4-n)+' Fotos bis zur ersten 3D-Prüfung. '+hint;
+  else if(state==='running'){title=revision?'3D-Vorschau wird ergänzt':'Erste 3D-Vorschau entsteht';hint='Du kannst langsam weitergehen. Der Server prüft ausgewählte Ansichten.';}
+  else if(state==='ready'){title=da3?'KI-3D-Vorschau vorhanden':'COLMAP-Punktwolke vorhanden';hint=connected<Math.ceil(total*.7)?'Einige Ansichten sind noch nicht ausreichend konsistent. Fotografiere dieselben Stellen aus leicht versetzten Positionen.':'Sieh dir das Modell an. Wenn wichtige Bereiche fehlen, gehe weiter; andernfalls kannst du abschließen.';if(n>(l.input_count||total))hint+=' Neue Bilder warten auf die nächste Berechnung.';}
+  else if(state==='insufficient'){title='Weitere Blickwinkel nötig';hint='Mehr gemeinsame Bilddetails und seitliche Bewegung statt reiner Drehung. '+(revision?'Die letzte Vorschau bleibt sichtbar.':'Noch keine räumliche Vorschau vorhanden.');}
+  else if(state==='error'){title='Live-Berechnung nicht verfügbar';hint=l.message||'Die Vorschau konnte nicht berechnet werden.';}
+  else if(n>=4){title='Live-Berechnung wartet';hint=s?.worker?.online?'Fotos werden für die nächste Prüfung vorbereitet.':'Server-Worker noch nicht bereit; Fotos bleiben gespeichert.';}
+  if(revision)hint+=' '+(l.point_count||0).toLocaleString('de-DE')+(da3?' KI-geschätzte':' triangulierte')+' 3D-Punkte in der letzten Vorschau.';
+  if(l.warning)hint+=' '+l.warning;
+  if(engine.status!=='ready'&&engine.status==='loading')hint+=' DA3-Modell wird geladen; COLMAP bleibt als Rückfall verfügbar.';
   $('live-state').textContent=title;$('live-advice').textContent=hint;
-  $('live-review').textContent=total?connected+' von '+total+' geprüften Fotos räumlich verbunden. Weitere Fotos können noch ungeprüft sein.':'Noch keine erfolgreiche räumliche Live-Prüfung vorhanden.';
+  $('live-review').textContent=total?connected+' von '+total+(da3?' ausgewählten Ansichten mit Tiefenübereinstimmung.':' Fotos räumlich verbunden.')+' Weitere Fotos sind ggf. noch nicht geprüft.':'Noch keine erfolgreiche räumliche Live-Prüfung vorhanden.';
   if(stage!==2||document.hidden||s?.status!=='capturing'||!s.mine){if(liveDispose||livePending)clearLive();return;}
   if(!revision){if(liveRevision||livePending)clearLive();$('live-empty').textContent=n<4?'Ab 4 Fotos':state==='running'?'3D wird berechnet …':state==='insufficient'?'Mehr Blickwinkel nötig':state==='error'?'Vorschau nicht verfügbar':'Warte auf 3D-Punkte';return;}
   if(liveRevision===revision||liveAttempt===revision||livePending)return;
@@ -94,20 +98,20 @@ function render(s){const was=current?.id;if(!s.worker&&current?.worker)s={...s,w
  $('reserve').disabled=s.status!=='unexplored'||!$('consent').checked||locked;$('scope').disabled=Boolean(stream)||locked;$('evaluation').disabled=s.status!=='unexplored'||locked;$('gps').disabled=Boolean(stream)||locked;
  $('camera').disabled=!active()||!!stream||openingCamera||locked||n>=60||!globalThis.isSecureContext;$('native-photo').disabled=!active()||locked||n>=60||!globalThis.isSecureContext;$('native-capture').disabled=$('native-photo').disabled;$('files').disabled=!active()||locked||n>=60;
  $('cancel').hidden=!s.mine||!['capturing','queued','failed','review','published'].includes(s.status);$('cancel').disabled=$('cancel').hidden||locked;
- $('cancel').textContent=s.status==='published'?'Vorschau und Fotos löschen':'Scan verwerfen';$('pause').disabled=!stream||locked;$('snap').disabled=!stream||locked||n>=60;$('submit').disabled=!active()||n<8||locked;$('to-review').disabled=!active()||locked||n===0;$('back-to-camera').disabled=!active()||locked;
- $('progress').value=n;$('count').textContent=n+' / 60';$('live-progress').value=Math.min(24,n);$('live-count').textContent=n+' '+(n===1?'Foto':'Fotos')+' gespeichert';$('capture-task').textContent=taskHint(n);
- $('review-hint').textContent=n>=60?'60 Fotos erreicht. Prüfe jetzt deine Aufnahmen.':n<8?'Noch '+(8-n)+' Fotos bis zum Mindestumfang.':n<24?'Du kannst bereits berechnen lassen. Empfohlen sind 24–40 Fotos.':'Empfohlener Richtwert erreicht. Prüfe auf fehlende Blickwinkel.';
+ $('cancel').textContent=s.status==='published'?'Vorschau und Fotos löschen':'Scan verwerfen';$('pause').disabled=!stream||locked;$('snap').disabled=!stream||locked||n>=60;const minimum=s.live?.kind==='da3_multiview'&&s.live?.registered>=2?4:8;const da3Good=s.live?.kind==='da3_multiview'&&s.live?.registered>=2&&s.worker?.da3?.status==='ready';$('submit').disabled=!active()||n<minimum||locked;$('finish-scan').disabled=!active()||locked||!(da3Good||n>=8&&s.live?.registered>=3);$('to-review').disabled=!active()||locked||n===0;$('back-to-camera').disabled=!active()||locked;
+ $('progress').value=n;$('count').textContent=n+' / 60';$('live-progress').max=16;$('live-progress').value=Math.min(16,n);$('live-count').textContent=n+' '+(n===1?'Foto':'Fotos')+' gespeichert';$('capture-task').textContent=da3Good?'Prüfe die sichtbare 3D-Vorschau. Gehe weiter, wenn Bereiche fehlen.':taskHint(n);
+ $('review-hint').textContent=da3Good?'DA3-Vorschau verfügbar: Jetzt abschließen oder weitere Bereiche aufnehmen.':n>=60?'Speichergrenze erreicht. Prüfe und entferne ungeeignete Fotos.':n<4?'Erste Vorschau ab 4 Fotos.':'Warte auf die räumliche Vorschau. Mehr Bilder sind nicht automatisch besser.';
  $('jobs').textContent=s.message||'';cameraUI();
  const seen=new Set();let newest=null,semError=null;for(const f of frames){for(const cls of f.analysis?.classes||[])seen.add(cls.id);if(f.analysis?.mask)newest=f;if(f.analysis?.semantic_error)semError=f.analysis.semantic_error;}
  $('checklist').replaceChildren(...targets.map(([name,ids])=>{const el=document.createElement('span');const ok=ids.some(id=>seen.has(id));el.textContent=name+' · '+(ok?'erkannt':'noch nicht erkannt');if(ok)el.className='seen';return el;}));
- $('coverage').textContent=n<8?'Noch '+(8-n)+' unterschiedliche Fotos nötig. Danach kannst du die Berechnung starten.':n<24?'Mindestumfang erreicht. Mehr überlappende Fotos verbessern häufig das Ergebnis.':'Empfohlener Richtwert erreicht. Prüfe die Fotos; die Anzahl allein garantiert kein gutes 3D-Modell.';
+ $('coverage').textContent=n<minimum?'Noch '+(minimum-n)+' unterschiedliche Fotos bis zur Abschlussberechnung.':da3Good?'DA3 hat eine Vorschau erzeugt. Prüfe die Ansichten oder schließe ab.':'Die Anzahl allein garantiert kein gutes Modell. Prüfe die 3D-Rückmeldung.';
  if(s.evaluation&&seen.size){const missing=targets.filter(t=>!t[1].some(id=>seen.has(id))).map(t=>t[0]);if(missing.length)$('coverage').textContent+=' Noch nicht erkannt: '+missing.join(', ')+'. (Keine echte 3D-Abdeckung.)';}
- const signature=JSON.stringify([s.id,s.status,s.live?.revision,frames.map(f=>[f.id,f.status])]);if(signature!==frameSignature){frameSignature=signature;$('frames').replaceChildren(...frames.map((f,i)=>{const el=document.createElement('div');el.className='frame-card '+f.status;const img=document.createElement('img');img.src='/api/capture/photo/'+s.id+'/'+f.id;img.alt='Aufnahme '+(i+1);img.loading='lazy';el.append(img);const label=document.createElement('span');label.textContent=(i+1)+' · '+({done:'geprüft',pending:'wartet',processing:'KI',error:'Fehler'}[f.status]||f.status);el.append(label);if(s.live){const link=document.createElement('span'),included=s.live.frame_ids?.includes(f.id),linked=s.live.registered_ids?.includes(f.id);link.className=linked?'linked':included?'unlinked':'muted';link.textContent=linked?'3D: verbunden':included?'3D: nicht verbunden':'3D: noch ungeprüft';el.append(link);}if(active()){const del=document.createElement('button');del.type='button';del.textContent='Entfernen';del.onclick=async()=>{if(isBusy())return;stopCamera();changing=true;render(current);try{await request('remove_frame',{id:s.id,frame:f.id});captured.delete(f.id);lastMask=null;}catch(e){fail(e);}finally{changing=false;await refresh().catch(fail);}};el.append(del);}return el;}));}
+ const signature=JSON.stringify([s.id,s.status,s.live?.revision,frames.map(f=>[f.id,f.status])]);if(signature!==frameSignature){frameSignature=signature;$('frames').replaceChildren(...frames.map((f,i)=>{const el=document.createElement('div');el.className='frame-card '+f.status;const img=document.createElement('img');img.src='/api/capture/photo/'+s.id+'/'+f.id;img.alt='Aufnahme '+(i+1);img.loading='lazy';el.append(img);const label=document.createElement('span');label.textContent=(i+1)+' · '+({done:'geprüft',pending:'wartet',processing:'KI',error:'Fehler'}[f.status]||f.status);el.append(label);if(s.live){const link=document.createElement('span'),included=s.live.frame_ids?.includes(f.id),linked=s.live.registered_ids?.includes(f.id);link.className=linked?'linked':included?'unlinked':'muted';link.textContent=linked?(s.live.kind==='da3_multiview'?'KI: Tiefe konsistent':'3D: verbunden'):included?'3D: unzureichend':'3D: nicht ausgewählt/ungeprüft';el.append(link);}if(active()){const del=document.createElement('button');del.type='button';del.textContent='Entfernen';del.onclick=async()=>{if(isBusy())return;stopCamera();changing=true;render(current);try{await request('remove_frame',{id:s.id,frame:f.id});captured.delete(f.id);lastMask=null;}catch(e){fail(e);}finally{changing=false;await refresh().catch(fail);}};el.append(del);}return el;}));}
  if(newest)showAnalysis(newest);else if(lastMask){lastMask=null;$('mask').getContext('2d').clearRect(0,0,320,240);$('classes').replaceChildren();}if(!newest&&semError)$('mask-note').textContent='KI-Modell nicht verfügbar: '+semError;else if(!newest&&!s.evaluation)$('mask-note').textContent='Semantischer Evaluationstest nicht aktiviert. Die 3D-Berechnung bleibt verfügbar.';
  $('processing-panel').hidden=!['queued','processing'].includes(s.status)||!s.mine;
  const done=frames.filter(f=>['done','error'].includes(f.status)).length;
  $('processing-title').textContent=s.status==='queued'?'Fotos werden vorbereitet':'3D-Modell wird berechnet';
- $('processing-text').textContent=s.status==='queued'?(s.worker?.online?'Der Server prüft deine Aufnahmen und wartet auf einen freien Rechenplatz.':'Der Rekonstruktionsdienst ist noch nicht bereit. Dein Auftrag bleibt in der Warteschlange.'):'Der Server sucht gemeinsame Bildmerkmale und berechnet daraus räumliche Punkte und ggf. Oberflächen. Es gibt derzeit keine genaue Restzeit.';
+ $('processing-text').textContent=s.status==='queued'?(s.worker?.online?'Der Server prüft deine Aufnahmen und wartet auf einen freien Rechenplatz.':'Der Rekonstruktionsdienst ist noch nicht bereit. Dein Auftrag bleibt in der Warteschlange.'):'Der Server berechnet räumliche Punkte und geschätzte Oberflächen mit DA3 oder COLMAP. Es gibt derzeit keine genaue Restzeit.';
  $('processing-frames').textContent=s.status==='queued'?done+' von '+n+' Fotos verarbeitet':n+' Fotos im Rekonstruktionsauftrag';
  if(s.status==='queued'&&done<n){$('processing-progress').max=Math.max(1,n);$('processing-progress').value=done;}else $('processing-progress').removeAttribute('value');
  $('result').hidden=!['review','failed','published'].includes(s.status)||(!s.mine&&!s.preview);
@@ -152,7 +156,7 @@ async function loadPreview(){
     const {renderPreview}=await import('/engine/capture-view.bundle.js');if(current?.id!==id||stage!==4)return;
     previewDispose?.();previewDispose=null;previewId=null;
     previewDispose=renderPreview($('preview'),data);previewId=id;
-    $('result-info').textContent=(data.triangles?.length?'Punktwolke mit geschätzten Oberflächen':'Räumliche Punktwolke ohne geschlossene Oberflächen')+' · '+data.registered+' von '+(data.total_frames||'?')+' Fotos verbunden · '+data.points.length+' 3D-Punkte. '+(data.warnings||[]).join(' ');
+    $('result-info').textContent=(data.kind==='da3_multiview'?'DA3-Small · KI-Schätzung: ':'COLMAP: ')+(data.triangles?.length?'Punktwolke mit geschätzten Oberflächen':'Räumliche Punktwolke ohne geschlossene Oberflächen')+' · '+data.registered+' / '+(data.total_frames||'?')+(data.kind==='da3_multiview'?' ausgewählte Ansichten konsistent':' Fotos verbunden')+' · '+data.points.length+' 3D-Punkte. '+(data.warnings||[]).join(' ');
     $('load-preview').textContent='Vorschau neu laden';
   }catch(e){previewAttempt=id;previewId=null;$('result-info').textContent='Vorschau konnte nicht angezeigt werden. Bitte erneut laden (WebGL prüfen).';throw e;}
   finally{previewPending=null;if(current?.id===id){$('load-preview').disabled=false;$('preview-reset').disabled=previewId!==id;$('publish').disabled=!current.mine||current.status!=='review'||previewId!==id||isBusy();}if(current?.id!==id||stage!==4){previewAttempt=null;}}
@@ -173,7 +177,7 @@ async function importPhotos(input){
 }
 $('files').onchange=()=>importPhotos($('files')).catch(fail);
 $('native-photo').onclick=()=>{if(!active()||isBusy()||!globalThis.isSecureContext)return;stopCamera();$('native-capture').click();};$('native-capture').onchange=()=>importPhotos($('native-capture')).catch(fail);
-for(const [button,action] of [['submit','submit'],['publish','publish'],['cancel','cancel'],['retry','retry']])$(button).onclick=async()=>{
+for(const [button,action] of [['submit','submit'],['finish-scan','submit'],['publish','publish'],['cancel','cancel'],['retry','retry']])$(button).onclick=async()=>{
   if(isBusy()||!current?.id||$(button).disabled)return;
   if(action==='publish'&&current.scope==='shared'&&!confirm('Nur farblose 3D-Geometrie mit anderen Testspielern teilen? Keine privaten Räume veröffentlichen.'))return;
   if(action==='cancel'&&!confirm('Scanauftrag mit Fotos und Vorschau löschen und Gebiet wieder freigeben?'))return;
