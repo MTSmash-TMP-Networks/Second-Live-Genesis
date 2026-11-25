@@ -2,7 +2,7 @@
 export function pairOrigin(value){
   let u;try{u=new URL(value.trim());}catch{throw Error('Erreichbare HTTPS-Adresse eingeben, z. B. https://SERVER-IP:8443.');}
   const host=u.hostname.toLowerCase().replace(/\.$/,'');
-  if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||!['/','/scanner.html'].includes(u.pathname))throw Error('Handy-Kopplung benötigt eine HTTPS-Adresse ohne Zugangsdaten oder Zusatzparameter.');
+  if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||!['/','/scanner.html','/panorama.html'].includes(u.pathname))throw Error('Handy-Kopplung benötigt eine HTTPS-Adresse ohne Zugangsdaten oder Zusatzparameter.');
   if(!host||host==='localhost'||host.endsWith('.localhost')||host.startsWith('127.')||['0.0.0.0','[::]','[::1]'].includes(host))throw Error('Die Adresse muss vom Handy erreichbar sein (LAN-IP oder eigener DNS-Name, nicht localhost).');
   return u.origin;
 }
