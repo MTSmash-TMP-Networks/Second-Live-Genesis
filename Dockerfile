@@ -5,10 +5,8 @@ RUN npm install --no-audit --no-fund --save-exact three@0.170.0 esbuild@0.25.10 
 COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js web/engine/portal_door.js web/engine/optional_asset.js ./
 COPY web/engine/wall_layout.json /build/wall_layout.json
 COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs ./
-COPY web/engine/capture-view.js ./capture-view.js
-COPY web/capture.js web/capture-flow.js web/scanner.html scripts/capture_ui_smoke.mjs web/panorama.js web/panorama-flow.js web/panorama.html scripts/panorama_ui_smoke.mjs ./
-RUN node --check capture.js && node capture_ui_smoke.mjs && node --check panorama.js && node panorama_ui_smoke.mjs
-RUN ./node_modules/.bin/esbuild capture-view.js --bundle --platform=browser --format=esm --target=es2020 --minify --outfile=/build/capture-view.bundle.js
+COPY web/game.js web/index.html scripts/game_only_smoke.mjs ./
+RUN node --check game.js && node game_only_smoke.mjs
 # Rapier 0.17.3 advertises a CJS entry that esbuild may interpret as ESM.
 # Bypass package entry resolution for both builds; use the same embedded-WASM ESM file.
 RUN test -s node_modules/@dimforge/rapier3d-compat/rapier.es.js
@@ -60,20 +58,14 @@ COPY --from=hands /build/polyhaven/hands /build/hands
 COPY scripts/avatar_smoke.mjs ./avatar_smoke.mjs
 RUN ./node_modules/.bin/esbuild avatar_smoke.mjs --bundle --platform=node --format=esm --outfile=/build/avatar_smoke.bundle.mjs && node /build/avatar_smoke.bundle.mjs
 
-# CPU reconstruction is available on both amd64 and arm64 Docker hosts.
+# Game-only runtime; retained player identity uses the standard library.
 FROM python:3.13-slim-bookworm
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends colmap libgomp1 && rm -rf /var/lib/apt/lists/*
-ENV QT_QPA_PLATFORM=offscreen
-ARG SECOND_LIVE_ONNX_PACKAGE=onnxruntime==1.22.0
-RUN pip install --no-cache-dir numpy==2.2.6 Pillow==11.3.0 qrcode==8.2 opencv-python-headless==4.12.0.88 "${SECOND_LIVE_ONNX_PACKAGE}" && python -c "import cv2,numpy,PIL,onnxruntime; assert 'CPUExecutionProvider' in onnxruntime.get_available_providers()" && colmap -h >/dev/null
-ENV SECOND_LIVE_COMPUTE=cpu SECOND_LIVE_COMPUTE_THREADS=4
-COPY server.py updater_api.py wall_damage.py world_capture.py capture_compute.py da3_client.py panorama_capture.py /app/
-COPY --chmod=0644 scripts/panorama_smoke.py /app/panorama_smoke.py
-COPY --chmod=0644 tests/test_live_capture.py /app/test_live_capture.py
+COPY server.py updater_api.py wall_damage.py world_capture.py /app/
+COPY --chmod=0644 scripts/game_only_smoke.py /app/game_only_smoke.py
 COPY web/ /app/web/
+RUN rm -f /app/web/scanner.html /app/web/panorama.html /app/web/capture.js /app/web/capture-flow.js /app/web/capture-quality.js /app/web/capture.css /app/web/panorama.js /app/web/panorama-flow.js /app/web/panorama.css /app/web/device-access.js /app/web/app.js /app/web/style.css /app/web/engine/capture-view.js
 COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bundle.js
-COPY --from=renderer /build/capture-view.bundle.js /app/web/engine/capture-view.bundle.js
 COPY --from=renderer /build/THREE-LICENSE.txt /app/web/engine/THREE-LICENSE.txt
 COPY --from=door-converted /build/polyhaven /app/web/assets/polyhaven/
 ARG SECOND_LIVE_REVISION=local
@@ -87,7 +79,7 @@ RUN useradd -m appuser && mkdir -p /app/data && chown -R appuser:appuser /app/da
     && python /app/runtime_permissions.py --normalize /app
 USER appuser
 # Fail the image build if the actual runtime UID cannot read code and assets.
-RUN python /app/runtime_permissions.py --check /app && python -c "import server, capture_compute" && python -B /app/test_live_capture.py && python -B /app/panorama_smoke.py
+RUN python /app/runtime_permissions.py --check /app && python -c "import server" && python -B /app/game_only_smoke.py
 VOLUME ["/app/data"]
 EXPOSE 8765
 CMD ["python", "server.py"]
