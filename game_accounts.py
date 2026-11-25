@@ -160,6 +160,10 @@ class AccountStore:
     def directory(self):
         with self.capture.tx(False) as db:
             return [{'slot':r[0],'nickname':r[1]} for r in db.execute('SELECT room_slot,nickname FROM game_accounts ORDER BY room_slot')]
+    def room_owners(self):
+        # Internal directory; player IDs are never returned to corridor clients.
+        with self.capture.tx(False) as db:
+            return [(r[0],r[1]) for r in db.execute('SELECT room_slot,player FROM game_accounts ORDER BY room_slot')]
     def paired_neighbor(self,player):
         with self.capture.tx(False) as db:
             own=db.execute('SELECT room_slot FROM game_accounts WHERE player=?',(player,)).fetchone()
