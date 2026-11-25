@@ -175,9 +175,23 @@ import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,c
   const lobby=new HotelLobbyView({textured:{hotel_carpet:new THREE.MeshStandardMaterial(),hotel_wall:new THREE.MeshStandardMaterial(),hotel_ceiling:new THREE.MeshStandardMaterial()}});
   assert.equal(lobby.signs.length,24);lobby.setOwn(0,{nickname:'Alpha',avatar:DEFAULT_CHARACTER});
   const oldName=lobby.nameplates[1].material.map;lobby.setRooms([{slot:0,nickname:'Alpha'},{slot:1,nickname:'Beta'}]);assert.equal(lobby.roomNames.get(1),'Beta');assert.notEqual(lobby.nameplates[1].material.map,oldName);
+  // Regression: recursive room-geometry rays do not have a rendering camera.
+  // Hidden sprites are still visited by Three.js raycasting; neither hidden
+  // nor visible name labels may require a camera or report a solid hit.
+  const noCameraRay=new THREE.Raycaster(new THREE.Vector3(.62,2.13,-1),new THREE.Vector3(0,0,-1));
+  assert.equal(noCameraRay.camera,null);
+  const npcLabel=lobby.npc.children.find(o=>o.isSprite);assert.ok(npcLabel);
+  assert.equal(noCameraRay.intersectObject(npcLabel,true).length,0);
+  assert.doesNotThrow(()=>noCameraRay.intersectObject(lobby.guestRoot,true));
   lobby.syncNpc({position:[.62,0,-4],yaw:Math.PI,walking:true});assert.equal(lobby.npc.visible,true);assert.ok(lobby.npc.position.distanceTo(new THREE.Vector3(.62,0,-4))<1e-8);
+  lobby.scene.updateMatrixWorld(true);
+  assert.equal(noCameraRay.intersectObject(npcLabel,true).length,0);
+  assert.doesNotThrow(()=>noCameraRay.intersectObject(lobby.guestRoot,true));
   lobby.syncNpc({position:[.62,0,-3],yaw:Math.PI,walking:true});lobby.greetNpc();lobby.step(.1,{x:0,y:0,z:-3});assert.ok(lobby.npc.position.z>-4&&lobby.npc.position.z<-3);assert.ok(lobby.npcGreeting>0);lobby.syncNpc(null);assert.equal(lobby.npc.visible,false);
   lobby.sync([{slot:1,position:[0,0,-2],yaw:0}]);assert.equal(lobby.peers.size,1);
+  const peerLabel=lobby.peers.get(1).g.userData.nameTag;assert.ok(peerLabel.isSprite);
+  assert.equal(noCameraRay.intersectObject(peerLabel,true).length,0);
+  assert.doesNotThrow(()=>noCameraRay.intersectObject(lobby.guestRoot,true));
   lobby.sync([{slot:1,position:[0,0,-1],yaw:1}]);lobby.step(.1,{x:0,y:0,z:0,yaw:0});
   assert.ok(lobby.peers.get(1).g.position.z>-2&&lobby.peers.get(1).g.position.z<-1);
   lobby.sync([{slot:1,position:[0,0,-1],yaw:1,stance:'crouch'}]);lobby.step(.1,{x:0,y:0,z:0,yaw:0});assert.ok(lobby.peers.get(1).g.userData.body.position.y<-.1);
