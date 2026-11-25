@@ -22,6 +22,8 @@ import { HOTEL_LAYOUT, hotelMaterials, applyPhotoMaterials, createHotelModel } f
 export { HOTEL_LAYOUT };
 import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
 import { HotelLobbyView } from './hotel_lobby.js';
+import { CharacterStudio, createCharacter, animateCharacter, disposeCharacter } from './character.js';
+export { CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter } from './character.js';
 export { LOBBY_LAYOUT, LOBBY_CAPACITY, lobbyDoor, lobbyWalkable, lobbyDoorAt } from './lobby_layout.js';
 export { PORTAL_SIDES };
 export { DECOR } from './room_decor.js';
@@ -407,7 +409,7 @@ export class RoomRenderer {
       m.rotation.x=-Math.PI/2;m.position.y=.006;m.scale.set(o.s[0]*1.55,o.s[2]*1.55,1);this.scene.add(m);this.contactShadows[id]=m;
     }
     this.status('Gemeinsamer Hotelflur wird vorbereitet');
-    this.lobby=new HotelLobbyView(this);
+    this.lobby=new HotelLobbyView(this);this.studio=new CharacterStudio();
     this.status('Fotomaterialien und 3D-Modelle bereit · '+this.quality.toUpperCase());
   }
 
@@ -521,6 +523,16 @@ export class RoomRenderer {
     }
   }
   reload(progress){this.reloadProgress=Math.max(0,Math.min(1,progress||0));}
+  setCharacter(profile){
+    if(this.localCharacter)disposeCharacter(this.localCharacter);
+    this.localCharacter=createCharacter(profile.avatar);this.localCharacter.visible=false;this.scene.add(this.localCharacter);
+  }
+  showCharacter(player,visible,dt,moving=false){if(!this.localCharacter)return;const root=this.localCharacter;root.visible=visible;if(visible){root.position.set(player.x,player.y,player.z);root.rotation.y=player.yaw;animateCharacter(root,dt,moving);}}
+  renderStudio(canvas,dt){
+    const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),dpr=Math.min(devicePixelRatio||1,1.5);
+    if(w!==this.width||h!==this.height||dpr!==this.dpr){this.width=w;this.height=h;this.dpr=dpr;this.renderer.setPixelRatio(dpr);this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
+    this.studio.render(this.renderer,w/h,dt);
+  }
   render(canvas,eye,target,mobile,dt=1/60,player=null,scopeZoom=false,inLobby=false){
     const scene=inLobby?this.lobby.scene:this.scene;
     this.swayTime+=dt;
