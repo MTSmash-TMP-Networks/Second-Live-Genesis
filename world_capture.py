@@ -74,6 +74,8 @@ class CaptureStore:
                 point_count INTEGER NOT NULL DEFAULT 0, result TEXT, message TEXT NOT NULL DEFAULT ''
             );
             ''')
+            if 'attempt_engine' not in {row[1] for row in db.execute('PRAGMA table_info(live_previews)')}:
+                db.execute("ALTER TABLE live_previews ADD COLUMN attempt_engine TEXT NOT NULL DEFAULT 'colmap'")
             if 'da3' not in {row[1] for row in db.execute('PRAGMA table_info(worker)')}:
                 db.execute("ALTER TABLE worker ADD COLUMN da3 TEXT NOT NULL DEFAULT '{}'")
             if 'scan_region' not in {row[1] for row in db.execute('PRAGMA table_info(players)')}:
@@ -265,24 +267,24 @@ class CaptureStore:
             if not live or not live['result']:raise CaptureError('Noch keine Live-Rekonstruktion vorhanden',404)
             result=json.loads(live['result']);result['revision']=live['revision'];return result
 
-    def claim_live(self):
+    def claim_live(self,preferred_engine='colmap'):
         """Coalesce new images; only one live worker, final jobs have priority."""
         with self.tx() as db:
             self.expire(db)
             if db.execute("SELECT 1 FROM scans WHERE status IN ('queued','processing') LIMIT 1").fetchone():return None
             now=time.time()
-            for row in db.execute("""SELECT s.id,l.state,l.attempted,l.updated,count(f.id) AS n
+            for row in db.execute("""SELECT s.id,l.state,l.attempted,l.updated,l.attempt_engine,count(f.id) AS n
                 FROM scans s JOIN frames f ON f.scan=s.id LEFT JOIN live_previews l ON l.scan=s.id
                 WHERE s.status='capturing' GROUP BY s.id HAVING count(f.id)>=?
                 ORDER BY COALESCE(l.updated,0),s.created""",(LIVE_MIN_FRAMES,)):
                 if row['state']=='running':continue
-                attempted=row['attempted'] or 0
+                attempted=(row['attempted'] or 0) if row['attempt_engine']==preferred_engine else 0
                 if row['n']<=attempted:continue
                 if attempted and row['n']-attempted<LIVE_BATCH_FRAMES and now-(row['updated'] or 0)<LIVE_IDLE_SECONDS:continue
                 sid=row['id'];token=uuid.uuid4().hex
                 frames=[f['id'] for f in db.execute('SELECT id FROM frames WHERE scan=? ORDER BY created,id',(sid,))]
-                db.execute("""INSERT INTO live_previews(scan,token,state,attempted,updated,message) VALUES (?,?,'running',?,?,'Fotos werden raeumlich verbunden')
-                    ON CONFLICT(scan) DO UPDATE SET token=excluded.token,state=excluded.state,attempted=excluded.attempted,updated=excluded.updated,message=excluded.message""",(sid,token,len(frames),now))
+                db.execute("""INSERT INTO live_previews(scan,token,state,attempted,updated,message,attempt_engine) VALUES (?,?,'running',?,?,'Fotos werden raeumlich verbunden',?)
+                    ON CONFLICT(scan) DO UPDATE SET token=excluded.token,state=excluded.state,attempted=excluded.attempted,updated=excluded.updated,message=excluded.message,attempt_engine=excluded.attempt_engine""",(sid,token,len(frames),now,preferred_engine))
                 return {'scan':sid,'token':token,'frames':frames}
         return None
 
