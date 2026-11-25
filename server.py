@@ -30,7 +30,7 @@ WEB = ROOT / "web"
 MAX_BODY = 9 * 1024 * 1024
 MAX_IMAGE = 6 * 1024 * 1024
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
-SAFE_FILES = {"/device-access.js":"device-access.js","/audio.js":"audio.js","/capture.js":"capture.js", "/capture-quality.js":"capture-quality.js", "/capture.css":"capture.css", "/engine/capture-view.bundle.js":"engine/capture-view.bundle.js", "/updater.js": "updater.js", **{f"/assets/{n}.jpg": f"assets/{n}.jpg" for n in ("wood", "wall", "fabric")},"/scanner.html": "scanner.html", "/game.js": "game.js", "/bootstrap.js": "bootstrap.js", "/engine/renderer.bundle.js": "engine/renderer.bundle.js", "/engine/THREE-LICENSE.txt": "engine/THREE-LICENSE.txt", "/engine/RAPIER-LICENSE.txt": "engine/RAPIER-LICENSE.txt", "/game.css": "game.css", "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css", "/manifest.webmanifest": "manifest.webmanifest", "/icon.svg": "icon.svg"}
+SAFE_FILES = {"/device-access.js":"device-access.js","/audio.js":"audio.js","/capture.js":"capture.js", "/capture-quality.js":"capture-quality.js", "/capture-flow.js":"capture-flow.js", "/capture.css":"capture.css", "/engine/capture-view.bundle.js":"engine/capture-view.bundle.js", "/updater.js": "updater.js", **{f"/assets/{n}.jpg": f"assets/{n}.jpg" for n in ("wood", "wall", "fabric")},"/scanner.html": "scanner.html", "/game.js": "game.js", "/bootstrap.js": "bootstrap.js", "/engine/renderer.bundle.js": "engine/renderer.bundle.js", "/engine/THREE-LICENSE.txt": "engine/THREE-LICENSE.txt", "/engine/RAPIER-LICENSE.txt": "engine/RAPIER-LICENSE.txt", "/game.css": "game.css", "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css", "/manifest.webmanifest": "manifest.webmanifest", "/icon.svg": "icon.svg"}
 
 
 def clean_location(value):
@@ -338,7 +338,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     game = GameStore(store.path) # preserve the original legacy world unchanged in personal mode
     capture = CaptureStore(store.path) if world_capture else None
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.7.7"
+        server_version = "SecondLive/0.7.8"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -458,6 +458,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                 if op=='remove_frame':return capture.remove_frame(player,sid,data.get('frame'))
                 if op in ('submit','retry','publish','cancel'):return capture.transition(player,sid,op)
                 if op=='preview':return capture.preview(player,sid)
+                if op=='live_preview':return capture.live_preview(player,sid)
                 raise CaptureError('Unbekannte Scan-Aktion',400)
             self.capture_reply(handle)
 
@@ -503,7 +504,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.7.7", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.7.8", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
