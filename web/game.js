@@ -19,7 +19,7 @@ function startReload(){if(!canPlay()||!equipped||reloadId||ammo[equipped]===clip
 function stepReload(dt){if(!reloadId)return;const before=reloadLeft;reloadLeft=Math.max(0,reloadLeft-dt);if(before>RELOAD_TIME*.48&&reloadLeft<=RELOAD_TIME*.48)audio.play('reload',null,1);renderer.reload?.(1-reloadLeft/RELOAD_TIME);if(reloadLeft===0){ammo[reloadId]=clipSize[reloadId];audio.play('click');reloadId=null;renderer.reload?.(0);updateAmmo();}}
 const rgb=h=>[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
 function mat(c){
-  return c==='465a70'?'hotel_carpet':c==='464749'?'hotel_stripe':['a58d72','aa8b67','b28f68'].includes(c)?'wooden_floor_01'
+  return c==='465a70'?'hotel_carpet':c==='464749'?'hotel_stripe':c==='d6cfc3'?'hotel_wall':c==='f1eae0'?'hotel_ceiling':['a58d72','aa8b67','b28f68'].includes(c)?'wooden_floor_01'
     :['e3ded3','e4e1d9','e9e5dc','d8d2c9','d7d3ce','ddd7cf'].includes(c)?'white_plaster_02':c==='f0ede8'?'paint'
     :['765742','81664b','655343','a77a48','967e64','ac9478','7f6752','8a715c','70553f'].includes(c)?'oak_veneer_01'
     :['667d89','9caeb3','536c76','466c79','ccd7df','c3ced7','d6dce2','bfc8cf'].includes(c)?'rough_linen'
@@ -33,7 +33,7 @@ const room=[];
 function solid(x,y,z,w,h,d,c){box(x,y,z,w,h,d,c);room.push({p:[x,y,z],s:[w,h,d]});}
 
 // Room shell.
-for(const [id,w] of Object.entries(WALLS)){solid(...w.p,...w.s,w.kind==='floor'?'465a70':w.kind==='ceiling'?'e4e1d9':id==='surface_7'?'464749':'d8d2c9');objects.at(-1).surfaceId=id;room.at(-1).surfaceId=id;}
+for(const [id,w] of Object.entries(WALLS)){solid(...w.p,...w.s,w.kind==='floor'?'465a70':w.kind==='ceiling'?'f1eae0':id==='surface_7'?'464749':'d6cfc3');objects.at(-1).surfaceId=id;room.at(-1).surfaceId=id;}
 // A visible lower safety foundation keeps the unfinished world bounded.
 solid(0,-1.46,0,10,.22,10,'605a50');
 
