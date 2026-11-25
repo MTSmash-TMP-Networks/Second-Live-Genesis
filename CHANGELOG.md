@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.5 – Hotel Interactions
+- Vorhänge animiert per E oder Touch-Aktion öffnen/schließen, vom Fenster und beiden Stoffbahnen aus bedienbar. Gespeicherter Zustand pro Zimmer, angepasste Fensterausleuchtung und Berücksichtigung zerstörter Vorhänge/Stange.
+- Kontextanzeige unter dem Fadenkreuz mit Objektname und tatsächlich verfügbaren Aktionen; Touch-Aktionstaste passt sich an. Reparaturhinweise nur bei Schäden, keine falsche Türfreigabe.
+- Vorhandene Platzierungen, Schäden, Raumabmessungen und Spieleridentität unverändert; additive SQLite-Tabelle und Tests für Persistenz, Geometrie und Zielerkennung.
+
 ## 0.9.4 – Door Wall Fix
 - Wandfüllstücke links und rechts der Tür nutzen identisches glattes Hotelwandmaterial und bündige planare Geometrie statt alter Putztextur.
 - Sockelleisten bis zur Türzarge verlängert. Türmodell, Öffnung, Kollisionen und persistente Spielstände unverändert.
