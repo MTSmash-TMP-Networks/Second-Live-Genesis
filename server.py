@@ -25,6 +25,7 @@ import wall_damage
 from http.cookies import SimpleCookie, CookieError
 from world_capture import CaptureStore, CaptureError
 from hotel_lobby import HotelLobby
+from game_accounts import AccountStore, SESSION_TTL
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -362,14 +363,15 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     updater = updater or UpdateBridge(None, "")
     game = GameStore(store.path) # preserve the original legacy world unchanged in personal mode
     capture = CaptureStore(store.path) if world_capture else None
-    lobby = HotelLobby() if capture and not legacy_capture else None
+    accounts = AccountStore(capture) if capture and not legacy_capture else None
+    lobby = HotelLobby() if accounts else None
     # Keep the original player/cookie/home database, independent of image capture.
     panorama = None
     if legacy_capture and capture:
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.10.0"
+        server_version = "SecondLive/0.11.0"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -423,8 +425,17 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                 jar=SimpleCookie();jar.load(self.headers.get('Cookie',''));return jar['sl_player'].value if 'sl_player' in jar else None
             except CookieError: return None
 
+        def account_cookie(self):
+            try:
+                jar=SimpleCookie();jar.load(self.headers.get('Cookie',''));return jar['sl_account'].value if 'sl_account' in jar else None
+            except CookieError:return None
+
+        def account_session_cookie(self,key):
+            secure='; Secure' if self.headers.get('X-Forwarded-Proto','').lower()=='https' else ''
+            self.session_cookie='sl_account='+(key or '')+'; Path=/; HttpOnly; SameSite=Strict; Max-Age='+str(SESSION_TTL if key else 0)+secure
+
         def player(self):
-            player=capture.identify(self.player_cookie()) if capture else None
+            player=accounts.identify(self.account_cookie()) if accounts else capture.identify(self.player_cookie()) if capture else None
             if not player: raise CaptureError('Persoenliche Sitzung fehlt; Spiel erneut betreten',401)
             return player
 
@@ -457,7 +468,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             if not self.require_game():return
             def handle():
                 data=self.read_capture_body()
-                if path=='/api/session':return capture.profile(self.new_session())
+                if path=='/api/session':return accounts.profile(self.player()) if accounts else capture.profile(self.new_session())
                 if not legacy_capture:raise CaptureError('Aufnahmefunktion eingestellt',404)
                 if path=='/api/session/pair':
                     player,key=capture.redeem(data.get('code'));self.set_player_cookie(key);return capture.profile(player)
@@ -545,7 +556,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.10.0", "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.11.0", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
@@ -575,11 +586,33 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             path=urlsplit(self.path).path
             if not legacy_capture and (path in ('/api/scans','/api/world','/api/session/pair','/api/capture') or path.startswith(('/api/capture/','/api/scans/','/media/'))):
                 self.send_json(404,{'error':'Aufnahmefunktion eingestellt'});return
+            if path=="/api/account":
+                if not accounts:
+                    self.send_json(404,{"error":"Benutzerkonten nicht verfuegbar"});return
+                if not self.require_game():return
+                def account_action():
+                    data=self.read_capture_body();op=data.get('action')
+                    if op in ('register','login'):
+                        if op=='register':profile,key=accounts.register(data,self.player_cookie(),self.client_address[0])
+                        else:profile,key=accounts.login(data,self.client_address[0])
+                        self.account_session_cookie(key);return profile
+                    if op=='logout':
+                        player=accounts.identify(self.account_cookie())
+                        if player:lobby.disconnect(player)
+                        accounts.logout(self.account_cookie());self.account_session_cookie(None);return {'ok':True}
+                    player=self.player()
+                    if op=='profile':return accounts.profile(player)
+                    if op=='avatar':return accounts.save_avatar(player,data.get('avatar'))
+                    raise CaptureError('Unbekannte Kontoaktion',400)
+                self.capture_reply(account_action);return
             if path=="/api/lobby":
                 if not lobby:
                     self.send_json(404,{"error":"Hotelflur nicht verfuegbar"});return
                 if self.require_game():
-                    self.capture_reply(lambda:lobby.request(self.player(),self.read_capture_body()))
+                    def lobby_action():
+                        player=self.player();data=self.read_capture_body()
+                        return lobby.request(player,data,accounts.profile(player),accounts.directory())
+                    self.capture_reply(lobby_action)
                 return
             if capture and path in ("/api/session","/api/session/pair","/api/capture/locate","/api/capture"):
                 self.capture_post(path);return
