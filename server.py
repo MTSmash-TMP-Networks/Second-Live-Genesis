@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import io
+import ipaddress
 import binascii
 from contextlib import closing
 from datetime import datetime, timezone
@@ -29,7 +30,7 @@ WEB = ROOT / "web"
 MAX_BODY = 9 * 1024 * 1024
 MAX_IMAGE = 6 * 1024 * 1024
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
-SAFE_FILES = {"/audio.js":"audio.js","/capture.js":"capture.js", "/capture-quality.js":"capture-quality.js", "/capture.css":"capture.css", "/engine/capture-view.bundle.js":"engine/capture-view.bundle.js", "/updater.js": "updater.js", **{f"/assets/{n}.jpg": f"assets/{n}.jpg" for n in ("wood", "wall", "fabric")},"/scanner.html": "scanner.html", "/game.js": "game.js", "/bootstrap.js": "bootstrap.js", "/engine/renderer.bundle.js": "engine/renderer.bundle.js", "/engine/THREE-LICENSE.txt": "engine/THREE-LICENSE.txt", "/engine/RAPIER-LICENSE.txt": "engine/RAPIER-LICENSE.txt", "/game.css": "game.css", "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css", "/manifest.webmanifest": "manifest.webmanifest", "/icon.svg": "icon.svg"}
+SAFE_FILES = {"/device-access.js":"device-access.js","/audio.js":"audio.js","/capture.js":"capture.js", "/capture-quality.js":"capture-quality.js", "/capture.css":"capture.css", "/engine/capture-view.bundle.js":"engine/capture-view.bundle.js", "/updater.js": "updater.js", **{f"/assets/{n}.jpg": f"assets/{n}.jpg" for n in ("wood", "wall", "fabric")},"/scanner.html": "scanner.html", "/game.js": "game.js", "/bootstrap.js": "bootstrap.js", "/engine/renderer.bundle.js": "engine/renderer.bundle.js", "/engine/THREE-LICENSE.txt": "engine/THREE-LICENSE.txt", "/engine/RAPIER-LICENSE.txt": "engine/RAPIER-LICENSE.txt", "/game.css": "game.css", "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css", "/manifest.webmanifest": "manifest.webmanifest", "/icon.svg": "icon.svg"}
 
 
 def clean_location(value):
@@ -284,7 +285,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     game = GameStore(store.path) # preserve the original legacy world unchanged in personal mode
     capture = CaptureStore(store.path) if world_capture else None
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.7.2"
+        server_version = "SecondLive/0.7.3"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -385,7 +386,15 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     address=data.get('address','')
                     if not isinstance(address,str) or len(address)>200:raise CaptureError('Ungueltige Server-Adresse',400)
                     parsed=urlsplit(address)
-                    if parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ('','/','/scanner.html'):raise CaptureError('HTTP(S)-Server-Adresse ohne Zugangsdaten erwartet',400)
+                    if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ('','/','/scanner.html'):raise CaptureError('Handy-Kopplung benoetigt HTTPS ohne Zugangsdaten',400)
+                    host=parsed.hostname.lower().rstrip('.')
+                    if host=='localhost' or host.endswith('.localhost'):raise CaptureError('LAN-Adresse statt localhost verwenden',400)
+                    try: addr=ipaddress.ip_address(host)
+                    except ValueError: addr=None
+                    if addr and (addr.is_loopback or addr.is_unspecified or getattr(addr,'ipv4_mapped',None) and (addr.ipv4_mapped.is_loopback or addr.ipv4_mapped.is_unspecified)):raise CaptureError('Vom Handy erreichbare Server-Adresse verwenden',400)
+                    try: port=parsed.port
+                    except ValueError:raise CaptureError('Ungueltiger HTTPS-Port',400)
+                    if port==0:raise CaptureError('Ungueltiger HTTPS-Port',400)
                     code=capture.pair_code(player);link=f'{parsed.scheme}://{parsed.netloc}/scanner.html#'+urlencode({'pair':code,'scope':scope if scope in ('private','shared') else 'private'})
                     buf=io.BytesIO();qrcode.make(link).save(buf,format='PNG')
                     return {'url':link,'qr':'data:image/png;base64,'+base64.b64encode(buf.getvalue()).decode(),'expires_in':300}
@@ -440,7 +449,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.7.2", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.7.3", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":

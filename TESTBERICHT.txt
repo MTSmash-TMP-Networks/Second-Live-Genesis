@@ -1,16 +1,7 @@
-Second Live v0.7.2 - Linux Permission Hotfix
-97 Python-Tests und 13 Subtests erfolgreich (pytest).
-Berechtigungs-Regression: echter Linux-Prozess mit UID/GID 65534, root-eigene Dateien mit 0600 und Verzeichnisse mit 0700. Permission denied vor der Korrektur reproduziert; danach Lesbarkeit, Schreibschutz, Datenverzeichnis und Python-Imports erfolgreich. Vorhandene Weltdaten und deren Rechte unveraendert.
-Docker-Build prueft dies zusaetzlich als appuser. Docker ist hier nicht verfuegbar; der echte Image-Build und der isolierte Containerstart erfolgen beim Update vor dem Wechsel.
-
-Vorheriger Teststand (v0.7.1):
-Second Live v0.7.1 - Immersive Phone & Audio
-Basis v0.7.0. 95 Python-Tests und 13 Subtests erfolgreich (pytest).
-Desktop-/Touch-Client-Simulation inklusive Audio-Aufrufen, Reload und Smartphone-Einstellungen erfolgreich.
-Node Soundgenerator, Lautstaerkegrenzen und fehlendes AudioContext erfolgreich.
-Capture-Qualitaets-Test erfolgreich; JS-Syntax und eindeutige HTML-IDs geprueft.
-Door-Downloader: GLB-Validierung, optionaler Ausfall und Manifest getestet.
-Three.js-Geometrietest im Docker-Build ergaenzt; hier nicht ausgefuehrt.
-Kein echter Docker-, WebGL-, VR- oder Hoertest in dieser Umgebung. Browser-Screenshot fehlgeschlagen/Timeout; DNS-Zugriff auf GLB-Quelle nicht verfuegbar.
-Originaltuer wird beim Build optional geladen; lokale modellierte Kassettentuer bleibt immer verfuegbar.
-Audio ist prozedurales Spielsounddesign; keine Originalaufnahmen.
+Second Live v0.7.3 - Mobile Capture / iOS HTTPS Hotfix
+Basis: v0.7.2. 99 Python-Tests und 23 Subtests erfolgreich (pytest).
+Node: HTTPS-/QR-Validierung, Kamera-Fallback, keine Wiederholung bei verweigerter Berechtigung, GPS-Genauigkeit und Wiederholungsversuch erfolgreich (API-Testdoubles).
+Capture-Qualitaet, Desktop-/Touch-Client-Simulation und Syntax erfolgreich. Scanner-HTML und IDs geprueft.
+Server: HTTPS-QR-Validierung und Auslieferung des neuen JavaScript-Moduls durch lokale HTTP-Integrationstests geprueft.
+Kein echter Docker-/Caddy-/iOS-/Safari-Kameratest in dieser Umgebung. HTTPS-Aktivierung und Vertrauen der eigenen CA muessen auf dem Host bzw. Testgeraet erfolgen.
+Der Scanner ist weiterhin an Einwilligung, Scanauftrag und serverseitige Zustandspruefung gebunden. Keine Umgehung von Browserberechtigungen. Vorhandene Daten und Host-Updater unveraendert.

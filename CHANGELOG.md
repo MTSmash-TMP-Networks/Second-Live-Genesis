@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3 – Mobile Capture / iOS HTTPS
+- QR-Kopplung erfordert eine erreichbare HTTPS-Adresse; HTTP, Loopback und ungueltige Ports werden abgewiesen.
+- Sichtbarer sicherer Browserkontext, dauerhaft sichtbare Geraetefehler, GPS-Wiederholungsversuch mit Genauigkeitspruefung.
+- Flexible Kamera-Anforderungen und native Fotoaufnahme als Alternative zum Live-Stream, Bilddecoder-Fallback.
+- Keine Aenderungen an Spielstaenden, Scan-Gates oder Host-Updater; bestehende HTTPS-Konfiguration manuell aktivieren.
+
 ## 0.7.2 – Linux Permission Hotfix
 - Root-eigene Programmdateien und Web-Assets im Image erhalten definierte Leserechte, unabhaengig von sudo und umask 077. Laufzeitbenutzer bleibt nicht privilegiert.
 - Build prueft Berechtigungen und Python-Imports als appuser; isolierter Starttest und Rollback bleiben aktiv. Keine Migration von Spielerdaten.

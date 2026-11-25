@@ -65,6 +65,17 @@ class CaptureHTTPTest(unittest.TestCase):
         self.assertEqual(e.exception.code,403)
         with self.assertRaises(urllib.error.HTTPError) as e:self.req(self.a,'/api/capture',{'action':'reserve'})
         self.assertEqual(e.exception.code,400)
+    def test_phone_pair_requires_reachable_https_address(self):
+        self.req(self.a,'/api/session',{})
+        for address in ('http://192.168.1.20:8765','https://localhost:8443','https://127.0.0.1:8443','https://0.0.0.0:8443','https://[::1]:8443','https://[::ffff:127.0.0.1]:8443','https://example.invalid:0','https://example.invalid:bad','https://user:secret@example.invalid','https://example.invalid?secret=1'):
+            with self.subTest(address=address):
+                with self.assertRaises(urllib.error.HTTPError) as e:self.req(self.a,'/api/capture',{'action':'pair','address':address})
+                self.assertEqual(e.exception.code,400)
+        p=self.req(self.a,'/api/capture',{'action':'pair','address':'https://192.168.1.20:8443'})
+        self.assertTrue(p['url'].startswith('https://192.168.1.20:8443/scanner.html#'))
+    def test_mobile_device_helper_served(self):
+        with self.a.open(self.base+'/device-access.js') as r:
+            self.assertEqual(r.status,200);self.assertIn(b'export async function cameraStream',r.read())
     def test_http_scan_permissions_and_csrf(self):
         self.req(self.a,'/api/session',{});self.req(self.b,'/api/session',{});sid=self.req(self.a,'/api/capture',{'action':'reserve','consent':True})['id']
         with self.assertRaises(urllib.error.HTTPError) as e:self.req(self.b,'/api/capture',{'action':'frame','id':sid,'photo':jpeg()})

@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {pairOrigin,suggestPairOrigin,locationFix,cameraStream} from '../web/device-access.js';
+for(const u of ['http://192.168.1.4:8765','https://localhost:8443','https://127.0.0.1','https://0.0.0.0','https://[::1]','https://user:pass@example.org','https://example.org?x=1'])assert.throws(()=>pairOrigin(u));
+assert.equal(suggestPairOrigin({origin:'http://192.168.1.4:8765'}),'https://192.168.1.4:8443');assert.equal(suggestPairOrigin({origin:'http://localhost:8765'}),'');assert.equal(suggestPairOrigin({origin:'https://example.org'}),'https://example.org');assert.equal(pairOrigin('https://example.org/scanner.html'),'https://example.org');
+let calls=[];const mockGeo=results=>({geolocation:{getCurrentPosition(ok,err,opts){calls.push(opts);const v=results.shift();if(v.code)err(v);else ok({coords:{latitude:51,longitude:9,accuracy:v.accuracy}});}}});
+await assert.rejects(locationFix(mockGeo([{accuracy:1}]),false),/sichere Browserverbindung/);assert.equal(calls.length,0);
+assert.equal((await locationFix(mockGeo([{accuracy:12}]),true)).accuracy,12);assert.equal(calls.length,1);
+calls=[];assert.equal((await locationFix(mockGeo([{code:3},{accuracy:42}]),true)).accuracy,42);assert.equal(calls.length,2);assert.equal(calls[1].enableHighAccuracy,false);
+calls=[];await assert.rejects(locationFix(mockGeo([{code:1}]),true),/verweigert/);assert.equal(calls.length,1);
+await assert.rejects(locationFix(mockGeo([{accuracy:75},{accuracy:90}]),true),/75 m/);
+let inputs=[];const mockCam=results=>({mediaDevices:{getUserMedia(opts){inputs.push(opts);const x=results.shift();return x instanceof Error?Promise.reject(x):Promise.resolve(x);}}});
+const named=name=>Object.assign(Error(name),{name});const stream={getTracks:()=>[]};
+await assert.rejects(cameraStream(mockCam([stream]),false),/sichere Browserverbindung/);assert.equal(inputs.length,0);
+assert.equal(await cameraStream(mockCam([named('OverconstrainedError'),stream]),true),stream);assert.equal(inputs.length,2);assert.equal(inputs[1].video,true);assert.equal(inputs[1].audio,false);
+inputs=[];await assert.rejects(cameraStream(mockCam([named('NotAllowedError')]),true),/verweigert/);assert.equal(inputs.length,1);
+console.log('Mobile device access: secure context, reachable QR, GPS fallback and permission handling, camera fallback OK');

@@ -1,6 +1,6 @@
 # Second Live – World Genesis
 
-**v0.7.2 · Linux Permission Hotfix / World Capture CPU-Testversion**
+**v0.7.3 · Mobile Capture & iOS HTTPS / World Capture CPU-Testversion**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spieler sollen ihre gemeinsame Welt aus realen Aufnahmen erschaffen, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
 
@@ -16,6 +16,15 @@ Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphon
 - Virtuelles Smartphone mit Glasrahmen, Statusleiste, App-Raster und funktionierenden Welt-, Inventar-, Audio- und System-Menüs. Die Statussymbole sind reine Spielgrafik.
 - Optionale CC0-Kassettentür von tevy (GLB v1, LOD0/1) mit lokalem Ersatzmodell. Bestehende Scan-Freigabe und Spielstände bleiben unverändert. Die Originaldatei wird beim Build heruntergeladen, die Eignung zur Darstellung zusätzlich im Client geprüft. Im freigeschalteten Legacy-Testbereich wird die lokale offene Tür verwendet.
 - Update via System-App im Smartphone; keine Änderungen am Host-Updater.
+
+## iPhone / iPad: Scanner und QR-Kopplung (0.7.3)
+
+- Im ursprünglichen Installationsordner auf dem Host `sudo ./start.sh --https` ausführen (sudo nur falls für Docker nötig). Bei mehreren Schnittstellen `--lan-ip` mit tatsächlicher LAN-IP ergänzen. HTTPS benötigt Port 8443 und den bestehenden Caddy-Dienst. Der Ingame-Updater verändert die Host-Compose-Konfiguration nicht.
+- Nur das exportierte öffentliche `second-live-ca.crt` vom eigenen Server über einen vertrauenswürdigen Übertragungsweg auf das Testgerät kopieren (keine privaten Schlüssel). Installieren und in iOS unter Einstellungen > Allgemein > Info > Zertifikatsvertrauenseinstellungen volles Vertrauen für genau diese eigene CA aktivieren. Bei einem regulär vertrauenswürdigen TLS-Zertifikat entfällt dieser Schritt. Zertifikatswarnungen nicht einfach übergehen.
+- In Safari `https://SERVER-IP:8443/scanner.html` ohne Zertifikatswarnung öffnen. In den Website-Einstellungen Kamera und Standort erlauben bzw. auf Fragen setzen; iOS-Ortungsdienste und genauen Standort aktivieren. Die IP muss mit der beim Start angegebenen IP übereinstimmen.
+- Im Desktop-Scanner des bisherigen Spielstands die erreichbare HTTPS-Adresse eintragen und **erst danach einen neuen QR-Code** erzeugen. Der Code ist einmalig und 5 Minuten gültig; nicht weitergeben. Das Handy muss im selben erreichbaren Netz sein. Der Desktop darf für lokale Tests bei seiner bisherigen Adresse bleiben; ein neuer Hostname oder ein anderer Browser kann einen neuen Gastspielstand erzeugen. Nicht die Cookies löschen.
+- Privater Scanauftrag: Einwilligung erteilen, Scan starten, Kamera öffnen. GPS ist dort optional. Gemeinsame geografische Scans erfordern weiterhin eine gültige Standortmessung mit höchstens 50 m Ungenauigkeit. Bei nicht verfügbarer Live-Kamera steht auf vertrauenswürdigem HTTPS die native Fotoaufnahme zur Verfügung. Nur unterstützte Bildformate lassen sich importieren.
+- Ab 0.7.3 prüft der Scanner den sicheren Browserkontext, verhindert HTTP-/localhost-QR-Ziele, zeigt Gerätefehler dauerhaft und bietet einen zweiten Ortungsversuch. HTTPS wird nicht durch JavaScript simuliert; iOS muss die Berechtigungen erteilen. Vor öffentlicher Freigabe ein regulär vertrauenswürdiges Zertifikat und die vorgesehene Authentifizierung einsetzen.
 
 ## Schnellstart
 
