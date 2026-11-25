@@ -57,17 +57,17 @@ export function buildArchitecture(r,spec) {
   r.models.window={root:glassRoot,glass,materials:[],damage:null,centered:true};
   // Double-layer textiles; gathered curtains leave the view largely open.
   const linen=r.textured.rough_linen;
-  const thick=new THREE.MeshPhysicalMaterial({color:0x9b9a8b,normalMap:linen?.normalMap,normalScale:new THREE.Vector2(.18,.18),roughness:.95,sheen:1,sheenColor:new THREE.Color(0xb4ae9c),sheenRoughness:.8,side:THREE.DoubleSide,envMapIntensity:.22});
+  const thick=new THREE.MeshPhysicalMaterial({color:0x878681,normalMap:linen?.normalMap,normalScale:new THREE.Vector2(.18,.18),roughness:.95,sheen:1,sheenColor:new THREE.Color(0xb1a99d),sheenRoughness:.8,side:THREE.DoubleSide,envMapIntensity:.22});
   const sheer=new THREE.MeshStandardMaterial({color:0xf8f6ed,normalMap:linen?.normalMap,normalScale:new THREE.Vector2(.09,.09),transparent:true,opacity:.26,depthWrite:false,side:THREE.DoubleSide,roughness:1,envMapIntensity:.1});
   const low=r.quality==='1k';
   const curtains={left:new THREE.Group(),right:new THREE.Group()},rod=new THREE.Group();r.staticGroup.add(curtains.left,curtains.right,rod);r.impacts?.register('surface_curtain_l',curtains.left,'fabric');r.impacts?.register('surface_curtain_r',curtains.right,'fabric');r.impacts?.register('surface_curtainrod',rod,'wood');
   const add=(a,mat,shadow)=>{const m=new THREE.Mesh(curtainGeometry({...a,segments:low?56:112,rows:low?14:28}),mat);m.castShadow=shadow;m.receiveShadow=true;m.renderOrder=shadow?0:2;curtains[a.z0<-1?'left':'right'].add(m);};
-  for(const [a,b] of [[-2.41,-1.62],[-.38,.41]])add({x:-4.67,z0:a,z1:b,top:2.66,bottom:.99,folds:5,amplitude:.037},sheer,false);
-  for(const [a,b] of [[-2.58,-1.99],[-.01,.58]])add({x:-4.49,z0:a,z1:b,top:2.70,bottom:.13,folds:5,amplitude:.064},thick,true);
-  r.makeCylinder(.019,.019,3.27,16,[-4.48,2.73,-1],satin,rod,[Math.PI/2,0,0]);
-  for(const z of [-2.52,.52]){r.makeBox([.35,.045,.045],[-4.70,2.73,z],satin,rod);const cap=new THREE.Mesh(new THREE.SphereGeometry(.033,12,8),satin);cap.position.set(-4.48,2.73,z+(z<0?-.14:.14));rod.add(cap);}
+  for(const [a,b] of [[-2.41,-1.62],[-.38,.41]])add({x:-4.67,z0:a,z1:b,top:2.87,bottom:.08,folds:5,amplitude:.037},sheer,false);
+  for(const [a,b] of [[-2.58,-1.99],[-.01,.58]])add({x:-4.49,z0:a,z1:b,top:2.90,bottom:.055,folds:6,amplitude:.071},thick,true);
+  r.makeCylinder(.019,.019,3.27,16,[-4.48,2.925,-1],satin,rod,[Math.PI/2,0,0]);
+  for(const z of [-2.52,.52]){r.makeBox([.35,.045,.045],[-4.70,2.925,z],satin,rod);const cap=new THREE.Mesh(new THREE.SphereGeometry(.033,12,8),satin);cap.position.set(-4.48,2.925,z+(z<0?-.14:.14));rod.add(cap);}
   for(const [a,b] of [[-2.58,-1.99],[-.01,.58]])for(let i=0;i<7;i++){
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(.027,.004,6,14),satin);ring.position.set(-4.48,2.73,a+(b-a)*i/6);curtains[a<-1?'left':'right'].add(ring);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(.027,.004,6,14),satin);ring.position.set(-4.48,2.925,a+(b-a)*i/6);curtains[a<-1?'left':'right'].add(ring);
   }
 
 }
