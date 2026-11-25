@@ -30,7 +30,7 @@ export class HotelLobbyView{
   this.scene.add(new THREE.HemisphereLight(0xfff0d9,0x72685a,1.65));
   const root=new THREE.Group();this.scene.add(root);this.root=root;this.guestRoot=new THREE.Group();this.scene.add(this.guestRoot);this.peers=new Map();this.own=null;this.wallSections=[];this.doorSections=[];this.projectedSlot=null;this.plaques=[];
   const carpet=renderer.textured.hotel_carpet.clone();carpet.color.set(0x8d9aa5);
-  if(carpet.map){carpet.map=carpet.map.clone();carpet.map.repeat.set(2,16);carpet.map.needsUpdate=true;}
+  if(carpet.map){carpet.map=carpet.map.clone();carpet.map.repeat.set(2,Math.round(L.halfLength*2/2.6));carpet.map.needsUpdate=true;}
   const wall=renderer.textured.hotel_wall,wood=mat(0x40342d,.65),panel=mat(0x786d60,.89),trim=mat(0x282a2a,.67),brass=mat(0xbca36d,.32,.68),door=mat(0x514438,.62),ceiling=renderer.textured.hotel_ceiling,lightmat=new THREE.MeshStandardMaterial({color:0xffebce,emissive:0xffd49a,emissiveIntensity:1.9,roughness:.6});
   const len=L.halfLength*2;
   box(root,[0,-.09,0],[L.halfWidth*2,.18,len],carpet);
