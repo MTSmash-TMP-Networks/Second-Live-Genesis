@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.11.4 · Hotel Service & Movement**
+**v0.11.5 · Hotel Service Build Fix**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.11.5 – Build-Fix für Namensschilder
+
+Die sichtbaren Namensschilder des NPC und der Spieler werden bei geometrischen Trefferabfragen ignoriert. Damit benötigen die kamerafreien Flur- und Wandtests keine Sprite-Kamera mehr. Die vollständigen Geometrie- und Physiktests bleiben aktiv. Der Funktionsumfang aus 0.11.4 bleibt erhalten.
 
 ## Neu in 0.11.4 – KI-Hotelservice, Sprinten und Ducken
 
