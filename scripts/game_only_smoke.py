@@ -44,7 +44,12 @@ class GameOnlyTest(unittest.TestCase):
                     continue
                 result=game.action({'action':'place_object','id':key,'position':spec['p'],'rotation':0},None)
                 self.assertEqual(result['placements'][key],spec['p'])
-            self.assertEqual(len(game.state()['placements']),7)
+            self.assertEqual(len(game.state()['placements']),8)
+            # The rug can be placed underneath existing furniture, and turned.
+            rug=[2.95,.009,-2.0]
+            result=game.action({'action':'place_object','id':'surface_rug','position':rug,'rotation':90},None)
+            self.assertEqual(result['placements']['surface_rug'],rug)
+            self.assertEqual(GameStore(Path(tmp)).state()['rotations']['surface_rug'],90)
             game.action({'action':'hit','id':'crate'},None)
             hp=game.state()['objects']['crate']
             with self.assertRaises(ValueError):game.action({'action':'reset_hotel_layout'},None)
