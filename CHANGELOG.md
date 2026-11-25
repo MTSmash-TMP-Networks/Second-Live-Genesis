@@ -5,6 +5,7 @@
 - Persönliche Spielidentität und gespeicherte Räume vom Aufnahmefeature entkoppelt. Bestehende Möbel-, Schadens- und Fortschrittsdaten sowie archivierte Aufnahmen bleiben erhalten.
 - Rekonstruktionsworker, COLMAP, ONNX und OpenCV aus dem Spielimage entfernt. Spielgrafik, Physik, VR, Fototexturen und System-Updates bleiben erhalten.
 - Tür zeigt Hinweis auf die kommende Welterweiterung statt Scanauftrag; bereits freigeschaltete Bereiche bleiben bestehen. Historische Aufnahmecodes im Repository erhalten, nicht im normalen Laufzeitimage.
+- Die App „Meine Welt“ bleibt erhalten und zeigt einen eigenen Bereich für den späteren Weltimport. Import und Laden zusätzlicher Weltpakete sind noch nicht freigeschaltet.
 - Neuer Entwicklungsfokus: echte modellierte und texturierte Spielwelten.
 
 ## 0.9.0 – Guided 360° Panorama Capture
