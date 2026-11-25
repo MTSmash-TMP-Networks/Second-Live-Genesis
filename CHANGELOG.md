@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.3 – Hotel Realism
+- Saubere warme, matte Wände/Decke statt Beton- und Putzflecken; fotoabgeleitete Farbtexturen für Tapete, Teppich und gelben Stoff.
+- Überarbeitete Polster, Stoffnähte, Bettwäsche mit durchgehender Drapierung, feinere Vorhangfalten und natürlichere Materialien.
+- Wärmere indirekte Beleuchtung und zusätzliche schattenwerfende Fensterausleuchtung.
+- Optionales texturiertes Samtstuhl-GLB (CC0; eigener Build-Schritt, Zeitlimit und lokales Ersatzmodell).
+- Hotelanordnung explizit über Meine Welt wiederherstellbar, ohne Schäden, Spielfortschritt oder Spieleridentität zu löschen.
+- Unverändertes Raumgerüst und Objekt-IDs; statische und Docker-Build-Prüfungen ergänzt.
+
 ## 0.9.2 – Hotel Room
 - Neues Hotelzimmer-Design nach der freigegebenen Fotovorlage: dunkle strukturierte Akzentwand, weißes Doppelbett mit modellierten Stofflagen und goldgelbem Läufer, Handtücher, Kissen, Garderobe mit Fernseher, Minibar, schwarzer Nachttisch und Schreibtisch, senfgelber Stuhl.
 - Blau-grauer Teppich, deckenhohe Stoffvorhänge, modelliertes Fenstergeländer und warmes indirektes Licht; Lichtschalter und bestehende Schadensmechanik bleiben aktiv.
