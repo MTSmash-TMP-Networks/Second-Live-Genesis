@@ -1,8 +1,16 @@
 # Second Live – World Genesis
 
-**v0.11.0 · Accounts & Character Studio**
+**v0.11.1 · Connected Hotel**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.11.1 – Räumlich verbundenes Hotel
+
+Der Flur ist nicht mehr nur eine getrennte Ansicht: Entfernte Wandzellen an der Eingangswand geben den Blick auf die tatsächliche Flurgeometrie mit Zimmernummern und synchronisierten Gästen frei. Die vorhandenen Schadens-IDs und Spielstände bleiben unverändert. Der Flur ist jetzt 132 m lang, damit die 10 m breiten Hotelzimmer räumlich zu den Türen passen.
+
+Die Zimmer sind spiegelbildlich in Paaren angeordnet (101/102, 103/104 usw.), damit jedes Zimmer sein bestehendes Außenfenster behält. Die bisherige rechte massive Wand (surface_6) ist die gemeinsame Trennwand. Wird eine Zelle vollständig entfernt, erscheint dahinter der Nachbarraum mit dessen gespeicherter Möbelanordnung, sichtbaren Möbel-/Dekorschäden, Licht- und Vorhangzustand. Ist das Nachbarzimmer nicht vergeben, wird ein leerer Raum gezeigt. Die Außenwände behalten den Außenblick. Die Wand selbst begrenzt die Sicht; Reparieren schließt sie wieder.
+
+Die Nachbaransicht ist rein visuell. Die API ermittelt das zugeordnete Zimmer serverseitig und liefert erst nach einer tatsächlichen Öffnung der eigenen Trennwand die begrenzten Einrichtungsdaten. Sie überträgt keine Kontaktdaten, Anmeldedaten, Spielerpositionen im privaten Raum, Fortschritte oder Trefferhistorie. Andere Räume können weder betreten noch verändert werden; die Beschädigung wirkt noch nicht auf die Gegenseite der Trennwand. Beim Flurwechsel bleibt der bestehende Türübergang per E erhalten. Zimmernummern und Konten werden nicht neu vergeben.
 
 ## Neu in 0.11.0 – Benutzerkonten und Charakter-Editor
 
