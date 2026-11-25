@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const html=readFileSync(new URL('./index.html',import.meta.url),'utf8');
 const game=readFileSync(new URL('./game.js',import.meta.url),'utf8');
+const updater=readFileSync(new URL('./updater.js',import.meta.url),'utf8');
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
 assert.equal(new Set(ids).size,ids.length);
-for(const [,id] of game.matchAll(/\$\('([^']+)'\)/g))assert.ok(ids.includes(id),'Missing DOM element '+id);
+for(const [,id] of (game+'\n'+updater).matchAll(/\$\('([^']+)'\)/g))assert.ok(ids.includes(id),'Missing DOM element '+id);
 for(const obsolete of ['phone-app-capture','start-gps','/scanner.html','/panorama.html','/api/capture/locate','locationFix'])assert.ok(!(html+game).includes(obsolete),obsolete);
 assert.ok(game.includes('health.personal_world===true'));
 assert.ok(game.includes("api('/api/session',{})"));
@@ -86,4 +87,14 @@ reloadId=null;first=false;toggleScope();assert.equal(first,true);assert.equal(sc
 setScopeZoom(false);posture={kind:'sit'};toggleScope();assert.equal(scopeZoom,false);
 `);zoomTest(assert);
 
-console.log('Game-only UI, session handling, DOM and contextual interaction checks passed');
+// Initial UI must not reveal update actions; server authorization is always required.
+for(const id of ['update-open-welcome','update-open-phone']){
+ const button=html.match(new RegExp('<button[^>]*id="'+id+'"[^>]*>'))?.[0];
+ assert.ok(button&&/\bhidden\b/.test(button),id+' hidden before authorization');
+}
+assert.ok(!html.includes('id="update-token"'));
+assert.ok(!updater.includes('X-SecondLive-Admin'));
+assert.ok(updater.includes("credentials:'same-origin'"));
+assert.ok(updater.includes("api('/api/update/status')")&&updater.includes("api('/api/update',body)"));
+assert.ok(game.includes("new Event('sl-account-change')"));
+console.log('Game-only UI, session handling, DOM, contextual interactions and update menu checks passed');
