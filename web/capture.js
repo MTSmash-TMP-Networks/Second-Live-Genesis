@@ -5,6 +5,46 @@ const $=id=>document.getElementById(id);
 let protectedGame=false,token=sessionStorage.getItem('second_live_token')||'',profile=null,current=null,stream=null,timer=null,pollTimer=null,uploading=false,generation=0,last=null,previous=null,lastTime=0,gpsValue=null,previewDispose=null,previewId=null,openingCamera=false,locating=false,importing=false,changing=false,stage=1,stageKey='',previewPending=null,previewAttempt=null,refreshVersion=0;
 const pairParams=new URLSearchParams(location.hash.slice(1)),incomingPair=pairParams.get('pair');if(incomingPair){if(globalThis.isSecureContext)history.replaceState(null,'',location.pathname);if(pairParams.get('scope')==='shared')$('scope').value='shared';}let pairPending=incomingPair;
 const captured=new Map();
+let liveDispose=null,liveRevision=null,liveAttempt=null,livePending=null,liveEpoch=0;
+function clearLive(){
+  liveEpoch++;liveDispose?.();liveDispose=null;liveRevision=null;liveAttempt=null;livePending=null;
+  $('live-empty').hidden=false;$('live-empty').textContent='Ab 4 Fotos';
+}
+function renderLive(s){
+  const n=s?.frames?.length||0, l=s?.live||{}, revision=l.revision;
+  const state=l.state||'waiting', connected=l.registered||0, total=l.source_count||0;
+  $('live-info').dataset.state=state;
+  $('live-count-3d').textContent=total?connected+' / '+total+' Fotos verbunden':'0 Fotos verbunden';
+  let title='Erste Bilder aufnehmen', hint='Geh seitlich weiter und halte dieselben Details im Bild.';
+  if(n<4){hint='Noch '+(4-n)+' Fotos bis zur ersten räumlichen Prüfung. '+hint;}
+  else if(state==='running'){title='3D-Punkte werden berechnet';hint='Der Server prüft '+l.attempted+' Fotos. Du kannst weiter aufnehmen.';}
+  else if(state==='ready'){title='3D-Struktur erkannt';hint=connected<Math.ceil(total*.7)?'Ein Teil der Fotos konnte nicht verbunden werden. Fotografiere dieselben Stellen aus versetzten Positionen.':'Die Fotos lassen sich räumlich verbinden. Erfasse die nächsten Blickwinkel.';if(n>total)hint+=' '+(n-total)+' neue Fotos warten auf die nächste Prüfung.';}
+  else if(state==='insufficient'){title='Noch nicht ausreichend verbunden';hint='Mehr gemeinsame Bilddetails, seitliche Bewegung statt reiner Drehung. '+(revision?'Letzte erfolgreiche 3D-Vorschau bleibt sichtbar.':'Noch keine räumliche Vorschau vorhanden.');}
+  else if(state==='error'){title='Live-Berechnung nicht verfügbar';hint=(l.message||'Die Vorschau konnte nicht berechnet werden.')+' Du kannst weiter Fotos sammeln und die Abschlussberechnung versuchen.';}
+  else if(n>=4){title='Live-Berechnung wartet';hint=s.worker?.online?'Fotos werden für die nächste räumliche Prüfung vorbereitet.':'Der Server-Worker ist noch nicht bereit. Fotos bleiben gespeichert.';}
+  if(revision)hint+=' '+(l.point_count||0).toLocaleString('de-DE')+' echte 3D-Punkte aus der letzten erfolgreichen Berechnung.';
+  $('live-state').textContent=title;$('live-advice').textContent=hint;
+  $('live-review').textContent=total?connected+' von '+total+' geprüften Fotos räumlich verbunden. Weitere Fotos können noch ungeprüft sein.':'Noch keine erfolgreiche räumliche Live-Prüfung vorhanden.';
+  if(stage!==2||document.hidden||s?.status!=='capturing'||!s.mine){if(liveDispose||livePending)clearLive();return;}
+  if(!revision){if(liveRevision||livePending)clearLive();$('live-empty').textContent=n<4?'Ab 4 Fotos':state==='running'?'3D wird berechnet …':state==='insufficient'?'Mehr Blickwinkel nötig':state==='error'?'Vorschau nicht verfügbar':'Warte auf 3D-Punkte';return;}
+  if(liveRevision===revision||liveAttempt===revision||livePending)return;
+  const id=s.id,epoch=liveEpoch;liveAttempt=revision;livePending=revision;
+  (async()=>{
+    try{
+      const data=await request('live_preview',{id});
+      if(epoch!==liveEpoch||stage!==2||current?.id!==id||current.live?.revision!==data.revision)return;
+      const {renderPreview}=await import('/engine/capture-view.bundle.js');
+      if(epoch!==liveEpoch||stage!==2||current?.id!==id||current.live?.revision!==data.revision)return;
+      if(liveDispose)liveDispose.update(data);else liveDispose=renderPreview($('live-viewport'),data,{live:true});
+      liveRevision=data.revision;liveAttempt=data.revision;$('live-empty').hidden=true;
+    }catch(e){if(epoch===liveEpoch){$('live-empty').hidden=!!liveDispose;$('live-empty').textContent='3D-Vorschau nicht verfügbar';$('live-advice').textContent='Räumliche Berechnung läuft unabhängig von der Anzeige. '+(e.message||'');}}
+    finally{if(epoch===liveEpoch){livePending=null;if(current?.live?.revision!==liveAttempt)renderLive(current);}}
+  })();
+}
+$('live-expand').onclick=()=>{
+  const expanded=$('live-model').classList.toggle('expanded');
+  $('live-expand').setAttribute('aria-pressed',String(expanded));$('live-expand').textContent=expanded?'Verkleinern':'Vergrößern';liveDispose?.reset?.();
+};
 const stageTitles=[
   ['Deine Umgebung scannen','Erstelle aus Fotos eine 3D-Vorschau.'],
   ['Fotos aufnehmen','Bewege dich langsam und halte den Raum im Bild.'],
@@ -28,6 +68,7 @@ function syncWizard(s,scroll=false){
   $('consent').disabled=existing||isBusy();
   if(scroll||old!==stage)window.scrollTo({top:0,behavior:'auto'});
   if(stage===4&&s?.preview&&previewId!==s.id&&previewAttempt!==s.id&&!previewPending)loadPreview().catch(fail);
+  renderLive(s);
 }
 function goStage(n){if(isBusy()||!allowedStage(n,current))return;stage=n;if(current)render(current);else syncWizard(current);window.scrollTo({top:0,behavior:'auto'});}
 for(const el of document.querySelectorAll('[data-step]'))el.onclick=()=>goStage(Number(el.dataset.step));
@@ -46,7 +87,7 @@ async function locate(){if(locating)throw Error('Standortabfrage läuft bereits.
 function showProfile(){$('home').textContent='Dein privater Startraum · '+profile.home.slice(0,8);$('region').textContent=profile.region?'Geografisches Startgebiet: '+profile.region+' · aktuelles Scangebiet: '+(profile.scan_region||profile.region):'Noch kein GPS-Startgebiet · privater Test möglich';$('pair').disabled=false;}
 function stopCamera(){generation++;if(timer)clearTimeout(timer);timer=null;stream?.getTracks().forEach(t=>t.stop());stream=null;$('video').srcObject=null;$('live').textContent='Standby';$('pause').disabled=true;$('snap').disabled=true;previous=null;last=null;lastTime=0;cameraUI();}
 function active(){return current?.status==='capturing'&&current.mine;}
-function render(s){const was=current?.id;if(!s.worker&&current?.worker)s={...s,worker:current.worker};current=s;if(was&&was!==s.id){stopCamera();captured.clear();previewDispose?.();previewDispose=null;previewId=null;previewAttempt=null;}if(!active()&&(stream||openingCamera))stopCamera();
+function render(s){const was=current?.id;if(!s.worker&&current?.worker)s={...s,worker:current.worker};current=s;if(was&&was!==s.id){stopCamera();clearLive();captured.clear();previewDispose?.();previewDispose=null;previewId=null;previewAttempt=null;}if(!active()&&(stream||openingCamera))stopCamera();
  $('worker').textContent=s.worker?.online?'Worker · '+s.worker.device:'Worker noch nicht bereit / offline';
  const labels={unexplored:'Noch nicht erzeugt – Scan möglich',capturing:s.mine?'Scanauftrag reserviert':'Anderer Spieler erfasst dieses Gebiet',queued:'Auftrag wartet auf Verarbeitung',processing:'3D-Rekonstruktion läuft',review:'Rekonstruktionsvorschau bereit',published:'Vorschau bestätigt · Scanner gesperrt',failed:'Weitere Perspektiven oder Fehlerprüfung erforderlich',needs_location:'Für ein gemeinsames Testgebiet zuerst den Standort bestimmen.',loading:'Scanbereich wird geprüft …'};
  report(labels[s.status]||s.status);const frames=s.frames||[];const n=frames.length;const locked=isBusy();
@@ -61,7 +102,7 @@ function render(s){const was=current?.id;if(!s.worker&&current?.worker)s={...s,w
  $('checklist').replaceChildren(...targets.map(([name,ids])=>{const el=document.createElement('span');const ok=ids.some(id=>seen.has(id));el.textContent=name+' · '+(ok?'erkannt':'noch nicht erkannt');if(ok)el.className='seen';return el;}));
  $('coverage').textContent=n<8?'Noch '+(8-n)+' unterschiedliche Fotos nötig. Danach kannst du die Berechnung starten.':n<24?'Mindestumfang erreicht. Mehr überlappende Fotos verbessern häufig das Ergebnis.':'Empfohlener Richtwert erreicht. Prüfe die Fotos; die Anzahl allein garantiert kein gutes 3D-Modell.';
  if(s.evaluation&&seen.size){const missing=targets.filter(t=>!t[1].some(id=>seen.has(id))).map(t=>t[0]);if(missing.length)$('coverage').textContent+=' Noch nicht erkannt: '+missing.join(', ')+'. (Keine echte 3D-Abdeckung.)';}
- const signature=JSON.stringify([s.id,s.status,frames.map(f=>[f.id,f.status])]);if(signature!==frameSignature){frameSignature=signature;$('frames').replaceChildren(...frames.map((f,i)=>{const el=document.createElement('div');el.className='frame-card '+f.status;const img=document.createElement('img');img.src='/api/capture/photo/'+s.id+'/'+f.id;img.alt='Aufnahme '+(i+1);img.loading='lazy';el.append(img);const label=document.createElement('span');label.textContent=(i+1)+' · '+({done:'geprüft',pending:'wartet',processing:'KI',error:'Fehler'}[f.status]||f.status);el.append(label);if(active()){const del=document.createElement('button');del.type='button';del.textContent='Entfernen';del.onclick=async()=>{if(isBusy())return;stopCamera();changing=true;render(current);try{await request('remove_frame',{id:s.id,frame:f.id});captured.delete(f.id);lastMask=null;}catch(e){fail(e);}finally{changing=false;await refresh().catch(fail);}};el.append(del);}return el;}));}
+ const signature=JSON.stringify([s.id,s.status,s.live?.revision,frames.map(f=>[f.id,f.status])]);if(signature!==frameSignature){frameSignature=signature;$('frames').replaceChildren(...frames.map((f,i)=>{const el=document.createElement('div');el.className='frame-card '+f.status;const img=document.createElement('img');img.src='/api/capture/photo/'+s.id+'/'+f.id;img.alt='Aufnahme '+(i+1);img.loading='lazy';el.append(img);const label=document.createElement('span');label.textContent=(i+1)+' · '+({done:'geprüft',pending:'wartet',processing:'KI',error:'Fehler'}[f.status]||f.status);el.append(label);if(s.live){const link=document.createElement('span'),included=s.live.frame_ids?.includes(f.id),linked=s.live.registered_ids?.includes(f.id);link.className=linked?'linked':included?'unlinked':'muted';link.textContent=linked?'3D: verbunden':included?'3D: nicht verbunden':'3D: noch ungeprüft';el.append(link);}if(active()){const del=document.createElement('button');del.type='button';del.textContent='Entfernen';del.onclick=async()=>{if(isBusy())return;stopCamera();changing=true;render(current);try{await request('remove_frame',{id:s.id,frame:f.id});captured.delete(f.id);lastMask=null;}catch(e){fail(e);}finally{changing=false;await refresh().catch(fail);}};el.append(del);}return el;}));}
  if(newest)showAnalysis(newest);else if(lastMask){lastMask=null;$('mask').getContext('2d').clearRect(0,0,320,240);$('classes').replaceChildren();}if(!newest&&semError)$('mask-note').textContent='KI-Modell nicht verfügbar: '+semError;else if(!newest&&!s.evaluation)$('mask-note').textContent='Semantischer Evaluationstest nicht aktiviert. Die 3D-Berechnung bleibt verfügbar.';
  $('processing-panel').hidden=!['queued','processing'].includes(s.status)||!s.mine;
  const done=frames.filter(f=>['done','error'].includes(f.status)).length;
@@ -140,7 +181,7 @@ for(const [button,action] of [['submit','submit'],['publish','publish'],['cancel
   try{await request(action,{id:current.id});}catch(e){fail(e);}finally{changing=false;await refresh().catch(fail);}
 };
 $('pair-address').value=suggestPairOrigin(location);$('pair').onclick=async()=>{clearError();$('pair-result').hidden=true;try{const address=pairOrigin($('pair-address').value);const p=await request('pair',{address});$('pair-qr').src=p.qr;$('pair-link').href=p.url;$('pair-result').hidden=false;$('pair-target').textContent=new URL(p.url).origin;report('Kopplungscode erstellt – 5 Minuten gültig.');}catch(e){fail(e);}};
-$('load-preview').onclick=()=>loadPreview().catch(fail);document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCamera();else if(!isBusy())refresh().catch(fail);});window.addEventListener('pagehide',()=>{stopCamera();clearTimeout(pollTimer);previewDispose?.();});
+$('load-preview').onclick=()=>loadPreview().catch(fail);document.addEventListener('visibilitychange',()=>{if(document.hidden){stopCamera();clearLive();}else if(!isBusy())refresh().catch(fail);});window.addEventListener('pagehide',()=>{stopCamera();clearTimeout(pollTimer);clearLive();previewDispose?.();});
 $('connection-status').textContent=globalThis.isSecureContext?'Sicherer Browserkontext · '+location.origin:'Unsichere Verbindung · '+location.origin;$('https-help').hidden=Boolean(globalThis.isSecureContext);if(!globalThis.isSecureContext){$('connection-status').classList.add('error-text');$('connection').open=true;document.querySelector('.camera details').open=true;}
 (async()=>{try{const yes=await navigator.xr?.isSessionSupported?.('immersive-ar');$('ar-status').textContent=yes?'WebXR-AR erkannt; Kamera nutzt derzeit 2D-Modus.':'Geführter Kamera-Modus (kein natives AR).';}catch(e){$('ar-status').textContent='Geführter Kamera-Modus';}})();
 (async()=>{try{const h=await fetch('/api/health').then(r=>r.json());if(!h.world_capture)throw Error('World Capture benötigt Server 0.7.0.');protectedGame=h.requires_game_token===true;$('token').value=token;if(protectedGame&&!token){$('auth').hidden=false;return;}await connect();}catch(e){if(protectedGame)$('auth').hidden=false;fail(e);}})();
