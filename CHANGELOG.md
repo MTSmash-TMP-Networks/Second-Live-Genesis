@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1 – World Foundation
+- Kamera-, Foto-, GPS- und Scanoberflächen aus Spiel und virtuellem Smartphone entfernt; alte Scanner-, Panorama- und Foto-API-Routen im Spielbetrieb deaktiviert.
+- Persönliche Spielidentität und gespeicherte Räume vom Aufnahmefeature entkoppelt. Bestehende Möbel-, Schadens- und Fortschrittsdaten sowie archivierte Aufnahmen bleiben erhalten.
+- Rekonstruktionsworker, COLMAP, ONNX und OpenCV aus dem Spielimage entfernt. Spielgrafik, Physik, VR, Fototexturen und System-Updates bleiben erhalten.
+- Tür zeigt Hinweis auf die kommende Welterweiterung statt Scanauftrag; bereits freigeschaltete Bereiche bleiben bestehen. Historische Aufnahmecodes im Repository erhalten, nicht im normalen Laufzeitimage.
+- Neuer Entwicklungsfokus: echte modellierte und texturierte Spielwelten.
+
 ## 0.9.0 – Guided 360° Panorama Capture
 - Separate private Aufnahmepunkte mit zwölf horizontalen Blickrichtungen, optionalen Boden-/Deckenansichten und Sensorhilfe oder manuellem Modus.
 - Equirektanguläre Projektion echter Kamerabilder, Anzeige der Bildabdeckung ohne künstliche Füllung, interaktiver 360°-Viewer und Wechsel zwischen Standpunkten.
