@@ -134,11 +134,8 @@ fi
 # Existing tokens are not changed; complex dotenv interpolation is not supported.
 [[ "$token" =~ ^[A-Za-z0-9._~+/@=%:-]+$ ]] || fail 'SECOND_LIVE_TOKEN enthaelt nicht unterstuetzte Zeichen. Bitte .env pruefen.'
 if [ "${#token}" -lt 32 ]; then printf 'WARNUNG: Bestehender Token ist kurz. Fuer Tests einen langen Token verwenden.\n' >&2; fi
-admin_token=$(read_env SECOND_LIVE_UPDATE_ADMIN_TOKEN)
-if [ -z "$admin_token" ] || [ "$admin_token" = "$token" ]; then
-  admin_token=$(random_token); set_env SECOND_LIVE_UPDATE_ADMIN_TOKEN "$admin_token"
-fi
-[[ "$admin_token" =~ ^[a-fA-F0-9]{64}$ ]] || fail 'Update-Admin-Schluessel muss aus 64 Hex-Zeichen bestehen.'
+admin_email=$(read_env SECOND_LIVE_UPDATE_ADMIN_EMAIL)
+# Preserve any legacy token in .env for rollback, but do not generate or print it.
 [ ! -L .sl-update ] || fail 'Update-Verzeichnis darf kein symbolischer Link sein.'
 mkdir -p .sl-update/status .sl-update/requests
 chmod 700 .sl-update
@@ -164,7 +161,7 @@ fi
 if [ "$https_mode" != "$(read_env SECOND_LIVE_HTTPS)" ]; then set_env SECOND_LIVE_HTTPS "$https_mode"; fi
 # .env is authoritative for these app settings, even if the parent shell exports
 # variables with the same names. Compose project/context settings are preserved.
-unset SECOND_LIVE_HOST SECOND_LIVE_PORT SECOND_LIVE_TOKEN SECOND_LIVE_TLS_HOST SECOND_LIVE_HTTPS SECOND_LIVE_UPDATE_ADMIN_TOKEN SECOND_LIVE_REVISION
+unset SECOND_LIVE_HOST SECOND_LIVE_PORT SECOND_LIVE_TOKEN SECOND_LIVE_TLS_HOST SECOND_LIVE_HTTPS SECOND_LIVE_UPDATE_ADMIN_TOKEN SECOND_LIVE_UPDATE_ADMIN_EMAIL SECOND_LIVE_REVISION
 compose=(docker compose --env-file .env -f compose.yaml)
 if [ "$https_mode" = 1 ]; then compose+=(-f compose.https.yaml); fi
 if [ -f .sl-update/active.compose.json ]; then
@@ -240,6 +237,6 @@ if [ "${SECOND_LIVE_NO_AGENT:-0}" != 1 ] && command -v python3 >/dev/null 2>&1 &
 else
   printf 'Hinweis: Auto-Updater benoetigt Python 3 und Git auf dem Docker-Host.\n' >&2
 fi
-if [ -t 1 ]; then printf '\nSeparater Update-Admin-Schluessel: %s\n' "$admin_token"; else printf 'Update-Admin-Schluessel steht in .env (SECOND_LIVE_UPDATE_ADMIN_TOKEN).\n'; fi
+if [ -n "$admin_email" ]; then printf '\nSystem-Update: lokales Admin-Konto konfiguriert.\n'; else printf '\nSystem-Update: kein Admin-Konto konfiguriert.\n'; fi
 printf 'Nur im vertrauenswuerdigen Testnetz nutzen; keine Router-Portfreigabe ins Internet.\n'
 printf 'Firewall/WLAN-Zugriff bei Bedarf manuell freigeben.\n'
