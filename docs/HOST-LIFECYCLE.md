@@ -22,3 +22,24 @@ Bei einem laufenden Start, Build oder Wechsel verweigert stop.sh einen konkurrie
 Alte Quellcode-Checkouts, die urspruengliche lokale Basis-Image-Referenz, BuildKit-Caches und fremde Images bleiben bewusst erhalten. Die Anzahl der verbleibenden Tags kann daher groesser als zwei sein (z.B. wenn weitere Container dieselben Images referenzieren). Docker entscheidet, welche nicht mehr referenzierten Layer physisch freigegeben werden. `docker system df` ist eine reine Uebersicht ueber die Speichernutzung.
 
 Die bestehenden Spiel-/Scan-Daten und Caddy-Zertifikate bleiben im Volume. Stoppen beendet laufende Spiel-/Rekonstruktionsprozesse; die gespeicherten Scanauftraege bleiben erhalten. Ein abgebrochener Rekonstruktionsauftrag kann gegebenenfalls erneut gestartet werden. Keine Aussage, dass in jedem Stadium ein angefangener CPU-Job nahtlos fortgesetzt wird.
+
+## HTTPS-Handshake bei direkter LAN-IP
+
+Firefox/Safari und andere TLS-Clients senden beim direkten IP-Aufruf normalerweise keinen SNI-Hostnamen. Docker-Portweiterleitung kann Caddy dabei eine andere Ziel-IP zeigen. Die Caddyfile setzt deshalb `default_sni {$SECOND_LIVE_TLS_HOST}`, ohne die Host-Pruefung oder die TLS-Zertifikatsvalidierung zu deaktivieren.
+
+Bestehende Installationen: die aktualisierte Caddyfile in den **urspruenglichen Installationsordner** kopieren (nicht in einen Update-Checkout). Bei einem aktiven Spielupdate erst dessen Abschluss abwarten. Im Installationsordner:
+
+```sh
+sudo docker compose --env-file .env -f compose.yaml -f compose.https.yaml exec -T https caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo docker compose --env-file .env -f compose.yaml -f compose.https.yaml up -d --no-deps --no-build --force-recreate https
+```
+
+Bei einer Ersetzung der Datei per rename kann das noch laufende Bind-Mount auf die alte Datei zeigen; die Neuerstellung bindet die neue Datei ein. Kein Spiel-Build, kein Loeschen der Caddy-Volumes oder der privaten CA. Bei nicht mit sudo installierten Systemen sudo weglassen. Die Befehle muessen mit demselben Compose-Projekt/Docker-Kontext wie start.sh laufen.
+
+Anschliessend von einem erreichbaren Rechner mit dem eigenen exportierten Root-Zertifikat testen (LAN-IP anpassen):
+
+```sh
+sudo curl --cacert second-live-ca.crt https://192.168.1.175:8443/api/health
+```
+
+Ist der Handshake erfolgreich, aber der Browser vertraut der CA nicht, das eigene Root-Zertifikat im jeweiligen Client installieren und vertrauen. Kein TLS-Bypass. Bei anhaltendem Handshake-Fehler: `sudo docker compose --env-file .env -f compose.yaml -f compose.https.yaml logs --tail 80 https` pruefen, insbesondere Zertifikatsausstellung und die konfigurierte IP. Die Host-Korrektur ist unabhaengig vom Ingame-Updater; fuer diesen Fix muss das Spiel nicht neu gebaut werden.

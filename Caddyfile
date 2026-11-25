@@ -1,3 +1,9 @@
+{
+    # IP-address clients usually omit SNI. Use the configured LAN IP,
+    # not the Docker-internal destination address, to select the certificate.
+    default_sni {$SECOND_LIVE_TLS_HOST}
+}
+
 https://{$SECOND_LIVE_TLS_HOST}:8443 {
     tls internal
     reverse_proxy second-live:8765
