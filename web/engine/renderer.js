@@ -16,13 +16,15 @@ import { inspectHand, poseContactHand } from './avatar_hands.js';
 export { WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported } from './wall_layout.js';
 import { isolateDisplayProp } from './display_prop.js';
 import { buildRoomDecor } from './room_decor.js';
+import { HOTEL_LAYOUT, hotelMaterials, createHotelModel } from './hotel_room.js';
+export { HOTEL_LAYOUT };
 import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
 export { PORTAL_SIDES };
 export { DECOR } from './room_decor.js';
 
 const BASE='/assets/polyhaven/';
 const MATERIAL_SIZE={wooden_floor_01:2.1,white_plaster_02:2.5,oak_veneer_01:.95,rough_linen:.42};
-const MODEL_IDS={sofa:'sofa_02',table:'wooden_table_02',chair:'modern_arm_chair_01',coffee_table:'modern_coffee_table_01'};
+const HOTEL_MODELS=['sofa','table','chair','coffee_table','crate'];
 
 export class RoomRenderer {
   constructor(canvas, quality, lighting, status){
@@ -30,7 +32,7 @@ export class RoomRenderer {
     this.renderer=new THREE.WebGLRenderer({canvas,antialias:quality==='2k',powerPreference:'high-performance'});
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure=1.06;
+    this.renderer.toneMappingExposure=1.12;
     this.renderer.shadowMap.enabled=true;
     this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     this.scene=new THREE.Scene();
@@ -78,10 +80,10 @@ export class RoomRenderer {
     this.dynamicGroup=new THREE.Group();
     this.scene.add(this.staticGroup,this.dynamicGroup);
 
-    const hemi=new THREE.HemisphereLight(0xf3f2ef,0xa69e8f,.58);
+    const hemi=new THREE.HemisphereLight(0xf3f2ef,0xa69e8f,.76);
     this.scene.add(hemi);
 
-    const sun=new THREE.DirectionalLight(0xfff5e7,1.75);
+    const sun=new THREE.DirectionalLight(0xfff1db,2.0);
     sun.position.set(-8,3.1,-1.4);
     sun.target.position.set(1,.55,-.4);
     sun.castShadow=true;
@@ -94,7 +96,7 @@ export class RoomRenderer {
     this.scene.add(sun,sun.target);
 
     RectAreaLightUniformsLib.init();
-    const windowFill=new THREE.RectAreaLight(0xeaf0f5,2.6,2.2,1.5);
+    const windowFill=new THREE.RectAreaLight(0xeaf0f5,3.1,2.2,1.5);
     windowFill.position.set(-4.15,1.78,-1);
     windowFill.lookAt(.2,1.5,-1);
     this.scene.add(windowFill);
@@ -326,6 +328,7 @@ export class RoomRenderer {
       }
       this.textured[id]=mat;
     }
+    const hotel=hotelMaterials(this);this.textured.hotel_carpet=hotel.carpet;this.textured.hotel_stripe=hotel.stripe;
     this.status('Inventarbildquellen werden geprüft');
     await this.loadOptionalWeaponPhotos(manifest,path,textureLoader);
 
@@ -349,33 +352,26 @@ export class RoomRenderer {
     this.realismStatus.hands='partial';
     for(const id of ['pistol','rifle','m16']){try{this.viewHands[id]=this.buildGloves(id);this.viewHands[id].visible=false;this.weaponRoot.add(this.viewHands[id]);}catch(e){console.warn('Optionales Handmesh nicht verfügbar',id,e);}}
     if(this.viewHands.pistol?.userData.importedHands===1&&this.viewHands.rifle?.userData.importedHands===2&&this.viewHands.m16?.userData.importedHands===2)this.realismStatus.hands='ready';
-    for(const [id,asset] of Object.entries(MODEL_IDS)){
-      this.status('Möbelmodell: '+asset);
-      const gltf=await loader.loadAsync(path(profile.models[asset]));
-      const model=gltf.scene;model.updateMatrixWorld(true);
-      let bounds=new THREE.Box3().setFromObject(model), size=bounds.getSize(new THREE.Vector3());
-      if(!Number.isFinite(size.length())||Math.min(size.x,size.y,size.z)<=0)throw new Error('Ungültige Modellabmessungen: '+asset);
-      const s=spec[id].s;
-      if((size.x>size.z)!==(s[0]>s[2])&&Math.abs(s[0]-s[2])>.12){model.rotation.y+=Math.PI/2;model.updateMatrixWorld(true);bounds=new THREE.Box3().setFromObject(model);size=bounds.getSize(new THREE.Vector3());}
-      const scale=Math.min(s[0]/size.x,s[1]/size.y,s[2]/size.z);
-      const center=bounds.getCenter(new THREE.Vector3());
-      const inner=new THREE.Group();inner.add(model);inner.scale.setScalar(scale);
-      inner.position.set(-center.x*scale,-bounds.min.y*scale,-center.z*scale);
-      const root=new THREE.Group();root.add(inner);root.visible=false;
-      const materials=[];
-      model.traverse(o=>{if(o.isMesh){
-        o.castShadow=true;o.receiveShadow=true;
+    for(const id of HOTEL_MODELS){
+      this.status('Hotelmöbel: '+id);
+      const root=createHotelModel(this,id),materials=[];
+      root.traverse(o=>{if(!o.isMesh)return;
         const copy=m=>{const c=m.clone();if(c.color)materials.push([c,c.color.clone()]);return c;};
         o.material=Array.isArray(o.material)?o.material.map(copy):copy(o.material);
-      }});
-      this.models[id]={root,materials,damage:null};this.dynamicGroup.add(root);
+      });
+      root.visible=false;this.models[id]={root,materials,damage:null};this.dynamicGroup.add(root);
     }
 
     const surfaceGroups=new Map();
     for(const o of objects){
+      if(o.surfaceId==='surface_wardrobe'){
+        const root=new THREE.Group(),model=createHotelModel(this,'surface_wardrobe');
+        root.position.set(...o.p);model.position.y=-o.s[1]/2;root.add(model);this.staticGroup.add(root);
+        this.impacts.register(o.surfaceId,root,'wood');continue;
+      }
       const m=new THREE.Mesh(this.geometry(o),this.material(o));
       this.place(m,o);if(o.switchRocker)this.switchRocker=m;m.castShadow=o.m!=='glass';m.receiveShadow=true;this.staticGroup.add(m);
-      if(o.surfaceId){this.impacts.register(o.surfaceId,m,o.m==='wooden_floor_01'||o.surfaceId==='surface_wardrobe'?'wood':'wall');this.walls.register(o.surfaceId,m);}
+      if(o.surfaceId){this.impacts.register(o.surfaceId,m,o.m==='hotel_carpet'?'fabric':o.m==='wooden_floor_01'?'wood':'wall');this.walls.register(o.surfaceId,m);}
       if(o.groupSurface){let g=surfaceGroups.get(o.groupSurface);if(!g){g=new THREE.Group();g.name=o.groupSurface;this.staticGroup.add(g);surfaceGroups.set(o.groupSurface,g);this.impacts.register(o.groupSurface,g,'wood');}g.add(m);}
       if(o.parentSurface){const parent=this.impacts.targets.get(o.parentSurface)?.root;if(parent){parent.updateWorldMatrix(true,false);m.updateWorldMatrix(true,false);parent.attach(m);}}
     }
@@ -385,11 +381,6 @@ export class RoomRenderer {
     this.status('Tuermodell wird vorbereitet');
     const doorLoader=new GLTFLoader(new THREE.LoadingManager()).setMeshoptDecoder(MeshoptDecoder);
     this.portalDoor=await buildPortalDoor(this,manifest,path,doorLoader);
-    // Keep the crate in its own stable scene root instead of the reusable box pool.
-    const c=spec.crate,crate=new THREE.Group(),crateMat=this.textured.oak_veneer_01.clone();
-    const crateMesh=new THREE.Mesh(this.geometry({s:c.s,p:c.p,m:'oak_veneer_01'}),crateMat);
-    crateMesh.position.y=c.s[1]/2;crateMesh.castShadow=true;crateMesh.receiveShadow=true;crate.add(crateMesh);crate.visible=false;
-    this.models.crate={root:crate,materials:[[crateMat,crateMat.color.clone()]],damage:null};this.dynamicGroup.add(crate);
     for(const [id,m] of Object.entries(this.models))if(spec[id])this.impacts.register(id,m.root,id==='window'?'glass':id==='sofa'||id==='chair'?'fabric':'wood');
     for(const [id,o] of Object.entries(spec))if(id!=='window'&&!o.decor){
       const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map:this.shadowTexture,transparent:true,depthWrite:false,opacity:.78,polygonOffset:true,polygonOffsetFactor:-1}));
@@ -399,8 +390,8 @@ export class RoomRenderer {
   }
 
   geometry(o){
-    const size=o.s, tile=MATERIAL_SIZE[o.m]||1;
-    const continuous=['white_plaster_02','wooden_floor_01'].includes(o.m);
+    const size=o.s, tile=o.m==='hotel_carpet'?2.1:o.m==='hotel_stripe'?2.5:MATERIAL_SIZE[o.m]||1;
+    const continuous=['white_plaster_02','wooden_floor_01','hotel_carpet','hotel_stripe'].includes(o.m);
     const key=size.join(',')+'|'+tile+(continuous?'|'+o.p.join(','):'');
     if(!this.geometries.has(key)){
       const g=new THREE.BoxGeometry(...size);
@@ -445,6 +436,7 @@ export class RoomRenderer {
     if(this.bedsideShade)this.bedsideShade.emissiveIntensity=lamp?.17:0;
     if(this.bedsideBulb)this.bedsideBulb.emissiveIntensity=lamp?1.3:0;
     if(this.switchRocker)this.switchRocker.rotation.x=on?-.14:.14;
+    for(const h of this.hotelLights||[]){const active=on&&(decor[h.surface]||0)<4&&(h.surface!=='surface_lamp'||(decor.surface_nightstand||0)<4);h.light.intensity=active?h.intensity:0;if(h.material)h.material.emissiveIntensity=active?h.emissive:0;}
     // Window/daylight sources deliberately remain active.
   }
   begin(){this.cursor=0;for(const m of Object.values(this.models))m.root.visible=false;for(const m of Object.values(this.contactShadows))m.visible=false;}
