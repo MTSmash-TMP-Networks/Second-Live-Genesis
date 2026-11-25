@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0 – Guided 360° Panorama Capture
+- Separate private Aufnahmepunkte mit zwölf horizontalen Blickrichtungen, optionalen Boden-/Deckenansichten und Sensorhilfe oder manuellem Modus.
+- Equirektanguläre Projektion echter Kamerabilder, Anzeige der Bildabdeckung ohne künstliche Füllung, interaktiver 360°-Viewer und Wechsel zwischen Standpunkten.
+- Originalbilder und geschätzte relative Positionen bleiben gespeichert; keine automatische 3D-Fusion oder freien Laufwege in dieser Version.
+- Bestehender Foto-/DA3-Scanner, Spielstände, CSP und Update-Protokoll bleiben erhalten. Getrennte Speichergrenzen und private Zugriffsprüfung.
+
 ## 0.8.0 – DA3 Multi-view Capture (experimental)
 - Optionaler lokaler Depth-Anything-3-Small-Dienst, getrennt vom Spiel-Docker-Build, mit CPU- und optionaler CUDA-Konfiguration.
 - DA3 als bevorzugte Engine bei aktivem Dienst; COLMAP-Fallback bei Ausfall. Farbige KI-Punktwolke und geschätzte Flächen mit Konfidenz-/Tiefenkonsistenzprüfung.
