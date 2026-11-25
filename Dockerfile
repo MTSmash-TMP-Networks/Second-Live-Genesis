@@ -5,8 +5,8 @@ RUN npm install --no-audit --no-fund --save-exact three@0.170.0 esbuild@0.25.10 
 COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/hotel_room.js web/engine/hotel_layout.json web/engine/hotel_reference.json web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js web/engine/portal_door.js web/engine/optional_asset.js web/engine/hotel_lobby.js web/engine/lobby_layout.js web/engine/lobby_layout.json web/engine/hotel_connections.js web/engine/character.js web/engine/character_options.json ./
 COPY web/engine/wall_layout.json /build/wall_layout.json
 COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs ./
-COPY web/game.js web/index.html scripts/game_only_smoke.mjs ./
-RUN node --check game.js && node game_only_smoke.mjs
+COPY web/game.js web/index.html web/updater.js scripts/game_only_smoke.mjs ./
+RUN node --check game.js && node --check updater.js && node game_only_smoke.mjs
 # Rapier 0.17.3 advertises a CJS entry that esbuild may interpret as ESM.
 # Bypass package entry resolution for both builds; use the same embedded-WASM ESM file.
 RUN test -s node_modules/@dimforge/rapier3d-compat/rapier.es.js
