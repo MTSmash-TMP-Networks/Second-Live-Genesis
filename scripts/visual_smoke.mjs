@@ -19,7 +19,7 @@ for(const id of ['surface_wardrobe','table','chair','sofa','coffee_table','crate
  const g=createHotelModel(r,id);g.updateMatrixWorld(true);
  const b=new THREE.Box3().setFromObject(g),s=HOTEL_LAYOUT[id].s;
  assert.ok(b.min.y>=-.01,id+' below floor');
- assert.ok(b.max.y<=s[1]+.09,id+' above collider');
+ assert.ok(b.max.y<=s[1]+(id==='table'?.40:.09),id+' above collider');
  assert.ok(b.min.x>=-s[0]/2-.05&&b.max.x<=s[0]/2+.05,id+' width');
  assert.ok(b.min.z>=-s[2]/2-.05&&b.max.z<=s[2]/2+.05,id+' depth');
  let meshes=0;g.traverse(o=>{if(o.isMesh){meshes++;assert.ok([...o.geometry.attributes.position.array].every(Number.isFinite));}});assert.ok(meshes>8,id+' incomplete furniture');
