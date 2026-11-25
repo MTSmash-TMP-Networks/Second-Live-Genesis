@@ -253,7 +253,8 @@ class CaptureStore:
         path=self.files/scan/'preview.json'
         if not path.is_file(): raise CaptureError('Vorschau fehlt',404)
         data=json.loads(path.read_text());
-        if not mine: data.pop('colors',None); data.pop('mesh_colors',None); data.pop('semantics',None); data.pop('warnings',None)
+        if not mine:
+            for key in ('colors','mesh_colors','semantics','warnings','camera_positions','registered_ids','frame_ids','agreement'):data.pop(key,None)
         return data
     def live_preview(self,player,scan):
         """Live geometry is private even for a reserved shared region."""
