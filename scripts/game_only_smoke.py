@@ -14,7 +14,7 @@ from pathlib import Path
 from server import create_server, GameStore, HOTEL_LAYOUT
 from world_capture import CaptureStore
 
-from hotel_lobby import HotelLobby, FacadeDirectory, CAPACITY, LEASE, spawn
+from hotel_lobby import HotelLobby, FacadeDirectory, CAPACITY, LEASE, spawn, npc_patrol, NPC_SPEED
 from world_capture import CaptureError
 from game_accounts import AccountStore, DEFAULT_AVATAR, OPTIONS, password_hash, clean_avatar
 
@@ -96,6 +96,34 @@ class GameOnlyTest(unittest.TestCase):
                 srv.shutdown();srv.server_close();thread.join(timeout=5)
 
 
+    def test_npc_patrol_and_locomotion(self):
+        now=[100.0];lobby=HotelLobby(lambda:now[0])
+        profiles=[{'slot':i,'nickname':'Guest '+str(i),'avatar':DEFAULT_AVATAR} for i in range(2)]
+        a=lobby.request('a',{'action':'enter'},profiles[0],[])
+        b=lobby.request('b',{'action':'enter'},profiles[1],[])
+        self.assertEqual(a['npc'],b['npc'])
+        self.assertEqual(a['npc'],npc_patrol(0))
+        self.assertEqual(a['npc']['position'],[.62,0,-60.0])
+        now[0]+=.25
+        p=list(a['position']);p[2]+=1.45
+        result=lobby.request('a',{'action':'update','lease':a['lease'],'position':p,'yaw':0,'stance':'sprint'},profiles[0],[])
+        observed=lobby.observe('b',profiles[1],[])
+        self.assertEqual(observed['npc'],result['npc'])
+        self.assertEqual(observed['peers'][0]['stance'],'sprint')
+        self.assertAlmostEqual(result['npc']['position'][2]-a['npc']['position'][2],NPC_SPEED*.25,places=3)
+        now[0]+=.25
+        result=lobby.request('a',{'action':'update','lease':a['lease'],'position':p,'yaw':0,'stance':'crouch'},profiles[0],[])
+        self.assertEqual(lobby.observe('b',profiles[1],[])['peers'][0]['stance'],'crouch')
+        for invalid in ('flying',[],True):
+            with self.assertRaises(CaptureError):
+                lobby.request('a',{'action':'update','lease':a['lease'],'position':p,'yaw':0,'stance':invalid},profiles[0],[])
+        for t in range(0,480):
+            q=npc_patrol(t)
+            self.assertLessEqual(abs(q['position'][2]),64)
+            self.assertAlmostEqual(q['position'][0],.62)
+            self.assertIn(q['yaw'],(0.0,3.1416))
+        self.assertEqual(lobby.observe('b',profiles[1],[])['online'],2)
+
     def test_lobby_capacity_leases_and_privacy(self):
         now=[100.0];lobby=HotelLobby(lambda:now[0])
         profiles={str(i):{'slot':i,'nickname':'Guest '+str(i),'avatar':DEFAULT_AVATAR} for i in range(CAPACITY)}
@@ -104,7 +132,7 @@ class GameOnlyTest(unittest.TestCase):
             return lobby.request(str(i),data,profiles[str(i)],directory)
         a=req(0,{'action':'enter','slot':9});b=req(1,{'action':'enter'})
         self.assertEqual(a['slot'],0);self.assertEqual(b['slot'],1)
-        self.assertEqual(b['peers'],[{'slot':0,'position':a['position'],'yaw':a['yaw'],'nickname':'Guest 0','avatar':DEFAULT_AVATAR}])
+        self.assertEqual(b['peers'],[{'slot':0,'position':a['position'],'yaw':a['yaw'],'nickname':'Guest 0','avatar':DEFAULT_AVATAR,'stance':'walk'}])
         self.assertEqual(b['rooms'],directory)
         with self.assertRaises(CaptureError):req(1,{'action':'leave','lease':a['lease']})
         p=list(a['position']);p[2]+=.3;now[0]+=.25
@@ -216,7 +244,7 @@ class GameOnlyTest(unittest.TestCase):
                 a=req(ca,'/api/lobby',{'action':'enter'});b=req(cb,'/api/lobby',{'action':'enter'})
                 self.assertEqual(b['online'],2)
                 self.assertEqual(b['peers'][0]['slot'],a['slot'])
-                self.assertEqual(set(b['peers'][0]),{'slot','position','yaw','nickname','avatar'})
+                self.assertEqual(set(b['peers'][0]),{'slot','position','yaw','nickname','avatar','stance'})
                 self.assertEqual(b['peers'][0]['nickname'],'Alpha')
                 self.assertEqual(b['rooms'],[{'slot':0,'nickname':'Alpha'},{'slot':1,'nickname':'Beta'}])
                 self.assertNotEqual(a['slot'],b['slot'])
