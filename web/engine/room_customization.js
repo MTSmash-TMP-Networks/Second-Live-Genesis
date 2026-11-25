@@ -54,11 +54,12 @@ export class RoomModels{
   }
  }
  physicsModels(){return [...this.entries.values()].filter(e=>e.root&&e.status==='ready').map(e=>({row:e.row,size:e.size}));}
- drawBody(id,body,hp){
+ drawBody(id,body,hp,extent=null){
   const e=this.entries.get(id);if(!e?.root)return false;
   const root=e.root,rot=new THREE.Quaternion(...(body.q||[0,0,0,1]));
-  root.visible=hp>0;root.scale.setScalar(e.row.extent);
-  root.quaternion.copy(rot);root.position.set(...body.p).add(new THREE.Vector3(0,-e.size[1]*e.row.extent/2,0).applyQuaternion(rot));
+  const scale=extent??e.row.extent;
+  root.visible=hp>0;root.scale.setScalar(scale);
+  root.quaternion.copy(rot);root.position.set(...body.p).add(new THREE.Vector3(0,-Math.max(.015,e.size[1]*scale)/2,0).applyQuaternion(rot));
   if(e.damage!==hp){
    if(!e.colors){
     e.colors=new Map();root.traverse(o=>{for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[])if(m.color&&!e.colors.has(m))e.colors.set(m,m.color.clone());});

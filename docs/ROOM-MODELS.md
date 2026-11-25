@@ -26,3 +26,6 @@ The importer accepts embedded static WebP textures via EXT_texture_webp, includi
 
 ### Dynamic room objects (0.12.6)
 Existing models are migrated in place with 100 HP and optional saved centre/quaternion. Use E to pick up or place, Q/F to rotate, G to drop, R to repair (or the phone's repair button). The server uses existing fictional furniture damage profiles; the client cannot specify HP. Settled body transforms are saved with revision checks at a bounded rate; models that fall outside the room return to the inventory. The optional player-collision flag does not disable rigid-body contact with furniture. Physics is local to the private room and uses simplified bounding boxes, not exact mesh fracture or material-dependent breakage.
+
+### Live sizing (0.12.7)
+While carrying an imported object, use the on-screen minus/plus controls or the corresponding keyboard/numpad keys to change its longest dimension in 0.10 m steps (0.10–2.40 m). The model remains proportional, its box collider and clearance checks follow the preview, and placement or dropping commits the new size. With desktop mouse lock, use keyboard keys or release the mouse with Escape to click the buttons. A cancelled or stale grab discards the local preview without changing the saved model.

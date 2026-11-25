@@ -108,10 +108,26 @@ const yawQuat=a=>[0,Math.sin(a*Math.PI/360),0,Math.cos(a*Math.PI/360)];
 const quarter=a=>((Math.round(a/90)*90%360)+360)%360;
 const yawAngle=q=>q?quarter(Math.atan2(2*(q[3]*q[1]+q[0]*q[2]),1-2*(q[1]*q[1]+q[2]*q[2]))*180/Math.PI):0;
 const turnedSize=(s,a)=>a===90||a===270?[s[2],s[1],s[0]]:s;
-const savedBody=(s,id)=>spec[id].imported?importedSavedBody(spec[id].row,spec[id].s):({p:[...(s.placements?.[id]||spec[id].p)],v:[0,0,0],q:yawQuat(s.rotations?.[id]||0)});
+const savedBody=(s,id)=>spec[id].imported?importedSavedBody(spec[id].row,spec[id].savedSize||spec[id].s):({p:[...(s.placements?.[id]||spec[id].p)],v:[0,0,0],q:yawQuat(s.rotations?.[id]||0)});
 const movableDecor=id=>!!spec[id]?.decor;
 function boundsSize(s,q){if(!q)return s;return [0,1,2].map(i=>{const axis=[0,0,0];axis[i]=1;return rotateInverse(axis,q).reduce((n,v,j)=>n+Math.abs(v)*s[j],0);});}
 function turnHeld(delta){if(!canPlay()||busy||!held)return;heldAngle=quarter(heldAngle+delta);$('notice').textContent='Drehung: '+heldAngle+'°';}
+function nextModelExtent(current,delta){
+ return Math.max(.1,Math.min(2.4,Math.round((current+delta*.1)*100)/100));
+}
+function resizeHeld(delta){
+ if(!canPlay()||busy||roomModelBusy||lobbyState||lobbyTransition||!held||!spec[held]?.imported||!state.objects[held])return;
+ const o=spec[held],next=nextModelExtent(o.extent??o.row.extent,delta);
+ if(next===(o.extent??o.row.extent))return;
+ o.previewExtent=next;
+ syncRoomModelBodies();
+ updateInteractionHint();
+}
+function importedPlacementAllowed(o,p){
+ const extent=o.extent??o.row.extent,margin=extent*Math.SQRT2/2,y=p[1]-o.s[1]/2;
+ return y>=-0.00005&&y+extent<=2.9&&Math.abs(p[0])+margin<=4.72&&Math.abs(p[2])+margin<=4.72&&
+  !(o.row.solid&&p[2]-margin<-3.65&&Math.abs(p[0])<.85+margin);
+}
 let mobile=matchMedia('(pointer:coarse)').matches, touchMove=[0,0], look=null,touchSprint=false,touchCrouch=false;
 // Locomotion is independent of the seated/sleeping furniture state.
 function movementStance(crouch,sprint,moving,canStand,blockedSprint){
@@ -375,11 +391,18 @@ function secondaryInteraction(){
 function pickUp(id){
  if(!movable(id)||held||posture)return;
  chooseWeapon('none');held=id;heldAngle=yawAngle(bodies[held].q);
- $('notice').textContent='Gegenstand aufgenommen · Q/F: drehen · E: abstellen';
+ $('notice').textContent=spec[id].imported?'Gegenstand aufgenommen · +/-: Größe · Q/F: drehen · E: abstellen':'Gegenstand aufgenommen · Q/F: drehen · E: abstellen';
 }
 function updateInteractionHint(vr=false){
   const playing=canPlay()&&!vr,panel=$('interaction-prompt'),actionButton=$('touchInteract'),repairButton=$('touchRepair');
   $('touchRotateLeft').hidden=$('touchRotateRight').hidden=!held;
+  const resize=playing&&!lobbyState&&!lobbyTransition&&!!held&&!!spec[held]?.imported&&state.objects[held]>0;
+  $('held-model-size').hidden=!resize;
+  if(resize){const extent=spec[held].extent??spec[held].row.extent;
+    $('held-model-extent').textContent=extent.toFixed(2).replace('.',',')+' m';
+    $('held-size-minus').disabled=busy||roomModelBusy||extent<=.1;
+    $('held-size-plus').disabled=busy||roomModelBusy||extent>=2.4;
+  }
   let name='',lines=[],short='Aktion',secondary='',canAct=false,canRepair=false;
   if(playing&&lobbyState){
     const door=lobbyInteraction();if(door){name='Zimmer '+door.number;if(door.slot===lobbyState.slot){short='Zimmer betreten';canAct=true;lines.push(mobile?short:'E · '+short);}else lines.push('Privates Gästezimmer · kein Zutritt');}
@@ -393,7 +416,7 @@ function updateInteractionHint(vr=false){
     name=objectName(held);canAct=clear;short='Abstellen';
     lines.push(clear?(mobile?'Abstellen: Stellplatz frei':'E · Abstellen'):'Stellplatz blockiert');
     lines.push(mobile?'Drehtasten · 90°':'Q / F · Drehen');
-    if(spec[held]?.imported){secondary='Fallenlassen';lines.push(mobile?secondary:'G · Fallenlassen');}
+    if(spec[held]?.imported){secondary='Fallenlassen';lines.push(mobile?secondary:'G · Fallenlassen');if(!mobile)lines.push('+ / − · Größe');}
   }else if(playing){
     const hit=interactionTarget(),primary=primaryInteraction(hit),fix=repairTarget(null,hit),id=hit.dist<=3?hit.id:null;
     const door=doorInView(hit);
@@ -424,13 +447,14 @@ function updateInteractionHint(vr=false){
 function horizontalHold(id){
   const s=turnedSize(spec[id].s,heldAngle),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52,flat=Math.hypot(d[0],d[2]);
   const dx=flat>.01?d[0]/flat:-Math.sin(player.yaw),dz=flat>.01?d[2]/flat:-Math.cos(player.yaw);
-  const clamp=(v,h)=>{const limit=spec[id].imported?4.72-Math.max(h/2,spec[id].row.extent*Math.SQRT2/2+.04):4.84-h/2;return Math.max(-limit,Math.min(limit,v));};
+  const clamp=(v,h)=>{const limit=spec[id].imported?4.72-Math.max(h/2,(spec[id].extent??spec[id].row.extent)*Math.SQRT2/2+.04):4.84-h/2;return Math.max(-limit,Math.min(limit,v));};
   return [clamp(player.x+dx*dist,s[0]),clamp(player.z+dz*dist,s[2])];
 }
 function placementPoint(id){
   const s=turnedSize(spec[id].s,heldAngle),[x,z]=horizontalHold(id);
   const grounds=[[-1,-1],[-1,1],[1,-1],[1,1],[0,0]].map(([u,v])=>groundAt(x+u*s[0]*.45,z+v*s[2]*.45));if(grounds.some(v=>v!==grounds[0]))return null;
   const p=[x,grounds[0]+s[1]/2,z],overlap=(q,t)=>p.every((v,i)=>Math.abs(v-q[i])<(s[i]+t[i])/2-.018);
+  if(spec[id].imported&&!importedPlacementAllowed(spec[id],p))return null;
   if(id!=='surface_rug'&&overlap([player.x,player.y+.8,player.z],[.56,1.6,.56]))return null;
   if(collisionRoom().some(b=>!['surface_0','surface_1'].includes(b.surfaceId)&&overlap(b.p,b.s)))return null;
   if(id!=='surface_rug'&&Object.entries(bodies).some(([k,b])=>k!==id&&k!=='surface_rug'&&state.objects[k]>0&&overlap(b.p,boundsSize(spec[k].s,b.q))))return null;
@@ -635,20 +659,26 @@ function syncRoomModelBodies(preserveId=null){
   if(held===id)held=null;delete spec[id];delete bodies[id];delete state.objects[id];debris=debris.filter(d=>d.source!==id);
  }
  for(const {row,size} of models){
-  const id=row.id,hp=row.hp??100,old=spec[id],s=size.map(v=>Math.max(.015,v*row.extent));
+  const id=row.id,hp=row.hp??100,old=spec[id];
+  // A preview is local to this grab and the revision it started with.
+  // A remote edit must not silently overwrite or save a stale draft.
+  if(held===id&&old&&(old.row.revision!==row.revision||!hp))held=null;
+  const previewExtent=held===id&&hp>0?old?.previewExtent:undefined;
+  const extent=previewExtent??row.extent;
+  const s=size.map(v=>Math.max(.015,v*extent)),savedSize=size.map(v=>Math.max(.015,v*row.extent));
   const key=JSON.stringify([row.x,row.y,row.z,row.extent,row.rotation,row.pose]);
-  const saved=importedSavedBody(row,s);
+  const saved=importedSavedBody(row,savedSize);
   // Our own hit/motion acknowledgements must not replace the live rigid body
   // and discard its velocity. External edits, resizes and repairs restore it.
   const preserve=id===preserveId&&old&&bodies[id]&&hp>0&&old.row.extent===row.extent;
-  if(!old||!bodies[id]||(!preserve&&old.poseKey!==key)||(!state.objects[id]&&hp>0))bodies[id]=saved;
+  if(!old||!bodies[id]||(!preserve&&old.poseKey!==key)||(!state.objects[id]&&hp>0)||(held!==id&&old.previewExtent!==undefined))bodies[id]=saved;
   if(old&&state.objects[id]>0&&!hp){
    if(held===id)held=null;
    const b=bodies[id];
    for(let i=0;i<6;i++)debris.push({source:id,kind:'wallChip',variant:i,p:b.p.map((v,j)=>v+(Math.random()-.5)*s[j]*.35),s:s.map(v=>Math.max(.025,Math.min(.22,v*.18))),v:[(Math.random()-.5)*1.8,.6+Math.random(),(Math.random()-.5)*1.8],c:rgb('8b8377'),m:null,r:Math.random()*6});
   }
   if(old&&!state.objects[id]&&hp>0)debris=debris.filter(d=>d.source!==id);
-  spec[id]={imported:true,row,s,p:saved.p,max:100,c:'8b8377',poseKey:key,quiet:old?.poseKey===key?old.quiet||0:0};
+  spec[id]={imported:true,row,s,savedSize,extent,previewExtent,p:saved.p,max:100,c:'8b8377',poseKey:key,quiet:old?.poseKey===key?old.quiet||0:0};
   state.objects[id]=hp;
  }
 }
@@ -662,13 +692,17 @@ async function importedAction(op,id,extra={}){
  roomModelBusy=true;roomModelRevision++;
  try{
   let request={id,revision:o.row.revision};
-  if(op==='place_object')request={...request,action:'place',x:extra.position[0],y:Math.max(0,extra.position[1]-o.s[1]/2),z:extra.position[2],extent:o.row.extent,rotation:extra.rotation,solid:o.row.solid};
+  if(op==='place_object')request={...request,action:'place',x:extra.position[0],y:Math.max(0,extra.position[1]-o.s[1]/2),z:extra.position[2],extent:o.extent??o.row.extent,rotation:extra.rotation,solid:o.row.solid};
   else if(op==='hit')request={...request,action:'hit',weapon:extra.weapon,...(importedMotion(id)||{})};
   else if(op==='repair')request={...request,action:'repair'};
+  else if(op==='drop_import'&&(o.extent??o.row.extent)!==o.row.extent){
+   request={...request,action:'place',x:extra.position[0],y:extra.base_y,z:extra.position[2],extent:o.extent,rotation:heldAngle,solid:o.row.solid};
+  }
   else if(op==='drop_import'||op==='motion')request={...request,action:'motion',...extra};
   else if(op==='hide')request={...request,action:'hide'};
   else return false;
   const result=await api('/api/room-models',request);
+  if((op==='place_object'||op==='drop_import')&&held===id){held=null;o.previewExtent=undefined;}
   applyRoomModelList(result);syncRoomModelBodies(op==='hit'||op==='motion'?id:null);
   if(op!=='motion')$('notice').textContent=op==='hit'?(state.objects[id]?'Modell beschädigt · '+state.objects[id]+' %':'Modell zerstört · R: reparieren'):op==='repair'?'Modell repariert':op==='hide'?'Modell zurück im Inventar':op==='drop_import'?'Modell losgelassen':'Modell abgestellt und gespeichert';
   return true;
@@ -680,7 +714,8 @@ async function importedAction(op,id,extra={}){
 }
 async function dropImported(){
  const id=held,o=spec[id];if(!o?.imported||!placementPoint(id))return;
- const b=bodies[id],q=yawQuat(heldAngle),p=[...b.p],s=turnedSize(o.s,heldAngle);
+ const q=yawQuat(heldAngle),p=heldPosition(id),s=turnedSize(o.s,heldAngle);
+ if(!importedPlacementAllowed(o,p)){$('notice').textContent='Modell passt hier nicht vollständig hinein';return;}
  // Releasing at the carried height uses the existing collision-safe footprint.
  if(collisionRoom().some(x=>p.every((v,i)=>Math.abs(v-x.p[i])<(s[i]+x.s[i])/2-.018))||
  Object.entries(bodies).some(([k,x])=>k!==id&&state.objects[k]>0&&p.every((v,i)=>Math.abs(v-x.p[i])<(s[i]+boundsSize(spec[k].s,x.q)[i])/2-.018))){
@@ -688,6 +723,13 @@ async function dropImported(){
  }
  const motion=importedMotion(id,{p,q});if(!motion)return;
  if(await action('drop_import',id,null,motion))held=null;
+}
+// Match the live preview, collider and the server's conservative placement envelope.
+function heldPosition(id){
+ const o=spec[id],s=o.s,[x,z]=horizontalHold(id),floor=groundAt(x,z),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52;
+ const ceiling=o.imported?Math.min(2.85-s[1]/2,2.9-(o.extent??o.row.extent)+s[1]/2):2.85-s[1]/2;
+ const y=movableDecor(id)?floor+s[1]/2:Math.min(ceiling,Math.max(floor+s[1]/2,player.y+1.2+d[1]*dist));
+ return [x,y,z];
 }
 let importedSaveAt=0;
 function saveSettledImports(dt,now){
@@ -851,7 +893,8 @@ window.addEventListener('wheel',e=>{
 },{passive:false});
 window.addEventListener('pointerup',e=>{if(triggerPointer===null||triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('pointercancel',releaseTrigger);
-window.addEventListener('keydown',e=>{if(!active||!started||!$('updater').hidden)return;if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyC'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyQ')turnHeld(-90);if(e.code==='KeyF'){if(posture?.kind==='lie')secondaryInteraction();else turnHeld(90);}if(e.code==='KeyG'&&!posture)secondaryInteraction();if(e.code==='KeyV'&&!posture){setScopeZoom(false);first=!first;}if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit3')chooseWeapon('m16');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR')repair();});
+window.addEventListener('keydown',e=>{if(!active||!started||!$('updater').hidden)return;if(canPlay()&&held&&spec[held]?.imported&&(e.key==='+'||e.key==='-'||e.code==='NumpadAdd'||e.code==='NumpadSubtract')){e.preventDefault();if(!e.repeat)resizeHeld(e.key==='-'||e.code==='NumpadSubtract'?-1:1);return;}if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyC'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyQ')turnHeld(-90);if(e.code==='KeyF'){if(posture?.kind==='lie')secondaryInteraction();else turnHeld(90);}if(e.code==='KeyG'&&!posture)secondaryInteraction();if(e.code==='KeyV'&&!posture){setScopeZoom(false);first=!first;}if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit3')chooseWeapon('m16');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR')repair();});
+for(const [id,delta] of [['held-size-minus',-1],['held-size-plus',1]])$(id).addEventListener('click',e=>{e.stopPropagation();resizeHeld(delta);});
 window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>keys.clear());document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==canvas)clearControls();});document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas&&canPlay()&&!posture?.sleeping){const sensitivity=scopeZoom ? .0012 : .003;player.yaw-=e.movementX*sensitivity;player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch+e.movementY*sensitivity));}});
 function part(p,s,c,r=0,q=null){draw({p,s,c:rgb(c),r,q,m:mat(c)});}
 function canPlay(){return started&&active&&$('phone').hidden&&$('arsenal').hidden&&$('updater').hidden;}
@@ -923,8 +966,7 @@ function frame(now,xrFrame){
   if(debris.length>80)debris.splice(0,debris.length-80);
   if(started&&!lobbyState){
     syncRoomModelBodies();
-    let holdPoint=[0,0,0];if(held){const s=spec[held].s,[x,z]=horizontalHold(held),floor=groundAt(x,z),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52;
-      const y=movableDecor(held)?floor+s[1]/2:Math.min(2.85-s[1]/2,Math.max(floor+s[1]/2,player.y+1.2+d[1]*dist));holdPoint=[x,y,z];}
+    const holdPoint=held?heldPosition(held):[0,0,0];
     physicsWorld.step(dt,bodies,lobbyEnabled?{...state,unlocked:false}:state,held,holdPoint,debris,yawQuat(heldAngle));
     saveSettledImports(dt,now);
   }
@@ -952,7 +994,7 @@ function frame(now,xrFrame){
   if(state.unlocked&&!lobbyEnabled){part([0,-.12,-10],[10,.24,10],'a8a69a');part([-4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([0,1.4,-15],[10,2.8,.2],'c1b6a6');}
   for(let [id,b] of Object.entries(bodies)){
     let o=spec[id],hp=state.objects[id];
-    if(o.imported){renderer.roomModels.drawBody(id,b,hp);if(!hp&&!debris.some(d=>d.source===id)){for(let i=0;i<3;i++){const a=i*2.1;part([b.p[0]+Math.cos(a)*.15,Math.max(.04,o.row.y+.04),b.p[2]+Math.sin(a)*.15],[.12,.07,.09],o.c,a);}}continue;}
+    if(o.imported){renderer.roomModels.drawBody(id,b,hp,o.extent);if(!hp&&!debris.some(d=>d.source===id)){for(let i=0;i<3;i++){const a=i*2.1;part([b.p[0]+Math.cos(a)*.15,Math.max(.04,o.row.y+.04),b.p[2]+Math.sin(a)*.15],[.12,.07,.09],o.c,a);}}continue;}
     if(o.decor){renderer.drawMovableDecor(id,b.p,o.s,b.q,hp>0,id===held);continue;}
     if(hp>0){if(!renderer.drawModel(id,b.p,o.s,hp,o.max,b.q))part(b.p,o.s,id==='window'?o.c:hp<o.max?'947665':o.c,0,b.q);}else {for(let i=0;i<4;i++){let a=i*1.73;const at=state.placements?.[id]||o.p,x=id==='window'?-4.42:at[0];part([x+Math.cos(a)*.19,at[1]-o.s[1]/2+.032,at[2]+Math.sin(a)*.26],id==='window'?[.13,.012,.08]:[.23,.06,.12],o.c,a);}}
   }

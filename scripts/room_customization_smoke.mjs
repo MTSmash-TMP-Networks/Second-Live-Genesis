@@ -74,6 +74,8 @@ console.log('Room avatar: seated and lying bone poses, restoration, hand-attache
  imports.entries.set('item',e);imports.root.add(e.root);
  imports.drawBody('item',{p:[1,1,2],q:[0,0,0,1]},100);
  assert.ok(Math.abs(e.root.position.y)<1e-8);
+ imports.drawBody('item',{p:[1,.5,2],q:[0,0,0,1]},100,1);
+ assert.ok(Math.abs(e.root.position.y)<1e-8);assert.equal(e.root.scale.x,1);assert.equal(e.row.extent,2);
  const material=raw.children[0].material,initial=material.color.r;
  imports.drawBody('item',{p:[1,1,2],q:[0,0,0,1]},50);assert.ok(material.color.r<initial);
  imports.drawBody('item',{p:[1,1,2],q:[0,0,0,1]},0);assert.equal(e.root.visible,false);

@@ -187,7 +187,7 @@ const normal=importBody({x:1,y:.3,z:2,rotation:90},[.4,.6,.5]);
 assert.equal(normal.p[1],.6);assert.ok(Math.abs(normal.q[1]-Math.SQRT1_2)<.001);
 const fallen=importBody({pose:{p:[2,.4,3],q:[1,0,0,0]}},[.4,.6,.5]);
 assert.equal(fallen.p[0],2);assert.equal(fallen.q[0],1);
-assert.ok(game.includes('syncRoomModelBodies();')&&game.includes('renderer.roomModels.drawBody(id,b,hp)'));
+assert.ok(game.includes('syncRoomModelBodies();')&&game.includes('renderer.roomModels.drawBody(id,b,hp,o.extent)'));
 assert.ok(game.includes("action('drop_import',id,null,motion)")&&game.includes("action('motion',id,null,motion)"));
 console.log('Imported rigid-body state, saved poses, drop and repair UI checks passed');
 
@@ -215,3 +215,29 @@ const importedLifecycle=new Function('assert',`
  `);
 importedLifecycle(assert);
 console.log('Imported object lifecycle: preserve live motion, remote edit, destroy, repair and remove passed');
+
+assert.ok(ids.includes('held-size-minus')&&ids.includes('held-size-plus')&&ids.includes('held-model-extent'));
+const scaling=new Function('assert',`
+ const spec={},bodies={},state={objects:{}};let held=null,debris=[],busy=false,roomModelBusy=false,lobbyState=null,lobbyTransition=false;
+ let rows=[{row:{id:'x',name:'Test',x:1,y:0,z:2,extent:.8,rotation:0,hp:100,revision:0,solid:true},size:[.5,1,.5]}];
+ const renderer={roomModels:{physicsModels:()=>rows}},rgb=()=>[.5,.5,.5],canPlay=()=>true,updateInteractionHint=()=>{};
+ const yawQuat=a=>[0,Math.sin(a*Math.PI/360),0,Math.cos(a*Math.PI/360)];
+ `+getPart('function nextModelExtent(','let mobile=')+getPart('function importedSavedBody(','function importedMotion(')+`
+ syncRoomModelBodies();held='x';
+ assert.equal(nextModelExtent(.1,-1),.1);assert.equal(nextModelExtent(2.4,1),2.4);
+ const body=bodies.x;resizeHeld(1);
+ assert.equal(spec.x.extent,.9);assert.equal(spec.x.row.extent,.8);
+ assert.equal(spec.x.s[1],.9);assert.equal(bodies.x,body);
+ syncRoomModelBodies();assert.equal(spec.x.extent,.9);
+ resizeHeld(-1);assert.equal(spec.x.extent,.8);
+ resizeHeld(1);assert.ok(importedPlacementAllowed(spec.x,[1,.45,2]));
+ assert.ok(!importedPlacementAllowed(spec.x,[4.6,.45,0]));
+ assert.ok(!importedPlacementAllowed(spec.x,[0,.45,-3.6]));
+ held=null;syncRoomModelBodies();assert.equal(spec.x.extent,.8);
+ held='x';resizeHeld(1);rows[0].row={...rows[0].row,extent:1.2,revision:1};
+ syncRoomModelBodies();assert.equal(held,null);assert.equal(spec.x.extent,1.2);
+ held='x';resizeHeld(-1);assert.equal(spec.x.extent,1.1);
+ assert.equal(rows[0].row.extent,1.2);
+ `);
+scaling(assert);
+console.log('Imported model resize: limits, live preview, unchanged saved extent, placement envelope, cancellation and remote revision passed');

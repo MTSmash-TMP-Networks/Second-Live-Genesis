@@ -64,3 +64,10 @@ body.character-editing header,body.character-editing footer,body.character-editi
 #phone .sl-model-delete{color:#ffd0d0;border-color:#985c63;background:#7b272744}
 #phone #room-model-message{color:#a5e3d5;overflow-wrap:anywhere;min-height:14px}
 #phone #room-model-render{color:#c5d7e4;overflow-wrap:anywhere}
+
+/* Live, uniform model scaling while carrying a private imported object. */
+#held-model-size{display:grid;grid-template-columns:44px minmax(82px,1fr) 44px;align-items:center;gap:8px;margin:8px auto 2px;max-width:210px;padding:4px;border:1px solid #ffffff24;border-radius:9px;background:#172331e8}
+#held-model-size button{width:44px;height:44px;margin:0;padding:0;border-radius:7px;font-size:24px;line-height:1;pointer-events:auto;touch-action:manipulation;user-select:none}
+#held-model-size small{display:block;color:#b7c5d1;font-size:10px}
+#held-model-size output{display:block;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+#interaction-prompt:has(#held-model-size:not([hidden])){z-index:3}

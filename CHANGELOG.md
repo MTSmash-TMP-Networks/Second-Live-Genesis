@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.7 – Live Model Scaling
+- Plus-/Minus-Buttons mit aktueller Größenanzeige beim Tragen importierter GLB-Modelle; zusätzlich Plus/Minus-Tasten (auch Ziffernblock). Gleichmäßige Skalierung in 10-cm-Schritten zwischen 0,1 und 2,4 m.
+- Darstellung, Kollisionskörper und Stellplatzprüfung folgen der lokalen Vorschau. Abstellen bzw. Fallenlassen speichert die neue Größe mit der Position; externe Modelländerungen beenden eine veraltete Vorschau. Keine Änderung an bestehenden Größen- oder Speichergrenzen.
+- Regressionstests für Vorschau, Größenlimits, Stellplatz, Kollisionskörper und Rückkehr zur gespeicherten Größe.
+
 ## 0.12.6 – Dynamic Imported Room Objects
 - Eigene GLB-Modelle werden als dynamische Rapier-Starrkörper mit Schwerkraft und vereinfachter Objektkollision eingebunden. E: Aufheben/Abstellen, Q/F: Drehen, G: Fallenlassen.
 - Persistenter Schadenszustand, sichtbare Beschädigung, Bruchstückeffekte und Reparatur per R oder Smartphone. Originaldateien bleiben bei Zerstörung erhalten. Bestehende fiktive Spielschadensprofile werden wiederverwendet.
