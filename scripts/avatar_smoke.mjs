@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { inspectHand,poseHand } from './avatar_hands.js';
+import { inspectHand,poseHand,poseContactHand } from './avatar_hands.js';
 const loader=new GLTFLoader();let tested=0;
 for(const side of ['left','right']){
   const file=`/build/hands/${side}.glb`;
@@ -16,6 +16,13 @@ for(const side of ['left','right']){
   assert.ok(hand.nodes.get('wrist').getWorldPosition(new THREE.Vector3()).distanceTo(new THREE.Vector3(...wrist))<1e-4);
   assert.notEqual(hand.skin.skeleton,src.skin.skeleton);assert.ok([...hand.skin.skeleton.boneMatrices].every(Number.isFinite));
   const bounds=new THREE.Box3().setFromObject(model,true);assert.ok(!bounds.isEmpty()&&bounds.getSize(new THREE.Vector3()).length()<.5);
+  const contact=[.01,-.04,-.31];const posed=poseContactHand(gltf.scene,side,contact,[.9,.1,-.35],[0,1,0],[.74,.97,.57]);
+  const joints=inspectHand(posed).nodes;posed.updateMatrixWorld(true);
+  const actual=joints.get('wrist').getWorldPosition(new THREE.Vector3()).lerp(joints.get('middle-finger-phalanx-proximal').getWorldPosition(new THREE.Vector3()),.64);
+  assert.ok(actual.distanceTo(new THREE.Vector3(...contact))<.001,'Palm anchor mismatch');
+  const proximal=joints.get('middle-finger-phalanx-proximal').position,tip=joints.get('middle-finger-tip').position;
+  const origDistance=src.nodes.get('middle-finger-phalanx-proximal').position.distanceTo(src.nodes.get('middle-finger-tip').position);
+  assert.ok(proximal.distanceTo(tip)<origDistance*.92,'Finger curl not applied');
   tested++;
 }
 console.log(`Three.js imported hand skeletons: ${tested}/2 tested`);

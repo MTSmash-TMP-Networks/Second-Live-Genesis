@@ -276,11 +276,11 @@ class GameStore:
         return result
 
 
-def make_handler(store: ScanStore, token: str, updater=None):
+def make_handler(store: ScanStore, token: str, updater=None, guest_game=False):
     updater = updater or UpdateBridge(None, "")
     game = GameStore(store.path)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.6.8"
+        server_version = "SecondLive/0.6.9"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -316,6 +316,18 @@ def make_handler(store: ScanStore, token: str, updater=None):
                 return False
             return True
 
+        def require_game(self):
+            if not guest_game:
+                return self.require_auth()
+            # The LAN prototype deliberately shares the game world with guests,
+            # but rejects cross-site browser mutations and keeps scans/admin private.
+            if self.command == "POST":
+                origin = self.headers.get("Origin")
+                if self.headers.get("Sec-Fetch-Site") == "cross-site" or (origin and (urlsplit(origin).scheme not in ("http", "https") or urlsplit(origin).netloc.lower() != self.headers.get("Host", "").lower())):
+                    self.send_json(403, {"error": "Fremde Browser-Origin nicht erlaubt"})
+                    return False
+            return True
+
         def require_admin(self):
             if updater.authorized(self.headers.get("X-SecondLive-Admin", "")):
                 return True
@@ -339,18 +351,18 @@ def make_handler(store: ScanStore, token: str, updater=None):
                     self.send_json(404, {"error": "Nicht gefunden"})
                     return
                 filepath = (root / rel).resolve()
-                types = {".glb": "model/gltf-binary", ".gltf": "model/gltf+json", ".bin": "application/octet-stream", ".hdr": "application/octet-stream", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+                types = {".obj": "text/plain; charset=utf-8", ".glb": "model/gltf-binary", ".gltf": "model/gltf+json", ".bin": "application/octet-stream", ".hdr": "application/octet-stream", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
                 typ = "application/json" if rel == "manifest.json" else "text/plain; charset=utf-8" if rel == "hands/LICENSE.txt" else types.get(filepath.suffix.lower())
                 if not typ or not filepath.is_relative_to(root) or not filepath.is_file():
                     self.send_json(404, {"error": "Asset nicht gefunden"})
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.6.8", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "requires_token": bool(token), "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.6.9", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
-                if self.require_auth(): self.send_json(200, game.state())
+                if self.require_game(): self.send_json(200, game.state())
             elif path == "/api/scans":
                 if self.require_auth():
                     self.send_json(200, {"scans": store.list()})
@@ -389,7 +401,7 @@ def make_handler(store: ScanStore, token: str, updater=None):
             if urlsplit(self.path).path not in ("/api/scans", "/api/game"):
                 self.send_json(404, {"error": "Nicht gefunden"})
                 return
-            if not self.require_auth():
+            if not (self.require_game() if urlsplit(self.path).path == "/api/game" else self.require_auth()):
                 return
             try:
                 content_length = int(self.headers.get("Content-Length", "0"))
@@ -422,18 +434,18 @@ def make_handler(store: ScanStore, token: str, updater=None):
     return Handler
 
 
-def create_server(bind="127.0.0.1", port=8765, data_dir=None, token="", updater=None):
+def create_server(bind="127.0.0.1", port=8765, data_dir=None, token="", updater=None, guest_game=False):
     if bind not in ("localhost", "127.0.0.1", "::1") and not token:
         raise ValueError("SECOND_LIVE_TOKEN muss fuer Netzwerkfreigabe gesetzt sein")
     store = ScanStore(Path(data_dir) if data_dir else ROOT / "data")
-    return ThreadingHTTPServer((bind, int(port)), make_handler(store, token, updater))
+    return ThreadingHTTPServer((bind, int(port)), make_handler(store, token, updater, guest_game))
 
 
 def main():
     bind = os.getenv("SECOND_LIVE_BIND", "127.0.0.1")
     port = int(os.getenv("SECOND_LIVE_PORT", "8765"))
     token = os.getenv("SECOND_LIVE_TOKEN", "")
-    srv = create_server(bind, port, os.getenv("SECOND_LIVE_DATA_DIR"), token, UpdateBridge(os.getenv("SECOND_LIVE_UPDATE_BRIDGE"), os.getenv("SECOND_LIVE_UPDATE_ADMIN_TOKEN")))
+    srv = create_server(bind, port, os.getenv("SECOND_LIVE_DATA_DIR"), token, UpdateBridge(os.getenv("SECOND_LIVE_UPDATE_BRIDGE"), os.getenv("SECOND_LIVE_UPDATE_ADMIN_TOKEN")), guest_game=os.getenv("SECOND_LIVE_GUEST_GAME", "1") == "1")
     print(f"Second Live Scanner: http://{bind}:{srv.server_port} (secure token: {'yes' if token else 'no, localhost only'})", flush=True)
     try:
         srv.serve_forever()

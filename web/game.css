@@ -14,3 +14,5 @@
 #updater{z-index:50;overflow:auto;padding:max(12px,env(safe-area-inset-top)) 12px;background:#0b1424e8}#updater .update-card{width:min(100%,480px);max-height:calc(100dvh - 24px);overflow:auto;padding:clamp(16px,4vw,28px)}.secondary-button{background:#304557;color:#f2f7fa}.update-versions{display:grid;gap:5px;padding:12px 0;margin-top:10px;border-top:1px solid #455568;border-bottom:1px solid #455568}.update-versions code{font:12px ui-monospace,monospace;overflow-wrap:anywhere;color:#a7e6d7}.update-card h2{margin:14px 0 5px}.update-card h3{font-size:16px;margin:14px 0 2px}.update-card p{margin:8px 0}.update-card small{display:block;color:#afbfcc}.update-card>small{margin-top:14px}.update-card input{min-width:0}
 
 #ammo{font-size:12px;color:#f3d8a3}#ammo:empty{display:none}.mobile #actions{max-width:48vw}
+
+#game-auth[hidden]{display:none!important}.weaponcards{grid-template-columns:repeat(3,minmax(0,1fr))}#touchFire{touch-action:none;user-select:none}@media(max-width:420px){.weaponcards{grid-template-columns:repeat(2,minmax(0,1fr))}}

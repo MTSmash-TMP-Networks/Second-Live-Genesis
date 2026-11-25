@@ -61,3 +61,8 @@ Die ausgewählten Poly-Haven-IDs `residential_garden`, `service_pistol` und `bol
 - Rechtes GLB: Git-Blob SHA `215f50d70fb7a5a884025b508cf5c58230913371` (94004 Bytes).
 - Die Originaldateien enthalten je 25 Skelettgelenke und ein Material ohne Bildtexturen. Die Spielpose und Hautmaterialien werden im Renderer angepasst. Die Dateien werden beim Build lokal übernommen oder von der festgelegten Revision geladen und verifiziert.
 - Recherchierte Alternative für fototexturierte Arme: https://opengameart.org/content/fps-arms-rigged-only (para / MakeHuman, CC0, FBX/Blend). Nicht integriert, da Konvertierung und Posen noch nicht geprüft sind.
+
+### M16-Spielrequisite (v0.6.9)
+- Bevorzugt: „M16 rifle“ von Osmic (CC BY 3.0), https://opengameart.org/content/m16-rifle, Originalarchiv https://opengameart.org/sites/default/files/m16.zip, https://creativecommons.org/licenses/by/3.0/. Anpassungen: bereinigtes OBJ, Darstellungsmaterial und Skalierung für Second Live. Namensnennung im Inventar und Asset-Manifest.
+- Ersatzquelle: „Low Poly Weapon Pack“ von byzmod3d, CC0, https://opengameart.org/content/low-poly-weapon-pack, https://opengameart.org/sites/default/files/m16.obj.
+- Beide Downloads sind optional und finden ausschließlich im Docker-Build statt. Archive werden ohne Extraktion beliebiger Dateipfade gelesen; Größen und Geometrie begrenzt, externe Materialbibliotheken entfernt und lokale Prüfsummen erzeugt. Bei Ausfall beider Quellen bleibt eine stilisierte lokale Spielrequisite verfügbar. Kein Fertigungsmodell oder reale Waffensimulation.

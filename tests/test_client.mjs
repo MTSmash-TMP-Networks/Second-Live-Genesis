@@ -8,8 +8,8 @@ const code=fs.readFileSync(new URL('../web/game.js',import.meta.url),'utf8').rep
 async function smoke(mobile){
   const callbacks=[], nodes=new Map(), values=new Map();
   const events=new Map();let world={walls:{},marks:[],objects:{crate:60,table:100,chair:60,window:35,sofa:150,coffee_table:100},unlocked:false};let instance;
-  function element(id){if(!nodes.has(id))nodes.set(id,{id,hidden:['phone','arsenal','updater','photo-pistol','photo-rifle'].includes(id),disabled:id==='start',value:'',textContent:'',style:{setProperty(){},removeProperty(){}},classList:{add(){},remove(){},toggle(){}},addEventListener(type,fn){events.set(id+':'+type,fn);},getBoundingClientRect(){return {left:0,top:0,width:100,height:100};},setPointerCapture(){},requestPointerLock(){return Promise.resolve();}});return nodes.get(id);}
-  class RoomRenderer{constructor(_canvas,q,l,status){this.q=q;this.l=l;this.models=[];this.photoPaths=mobile?{}:{pistol:'/assets/polyhaven/photos/pistol.png'};this.previewPaths={pistol:'data:image/png;base64,cHJldmlldw==',rifle:'data:image/png;base64,cmlmbGU='};instance=this;status('ready');}async load(spec){assert.equal(Object.keys(spec).length,6);}setLoop(fn){callbacks.push(fn);}begin(){this.models=[];}drawBox(){}drawModel(id){this.models.push(id);return true;}render(){}syncWalls(walls){this.walls=walls;}syncMarks(marks){this.marks=marks;}surfaceHit(){return this.nextHit||{id:'crate',dist:1.5,mark:{point:[0,.4,.45],normal:[0,0,1]}};}equip(id){this.weapon=id;}shot(kind,ray){this.shots=(this.shots||0)+1;this.lastRay=ray;this.lastKind=kind;}reload(progress){this.reloadProgress=progress;}}
+  function element(id){if(!nodes.has(id))nodes.set(id,{id,hidden:['phone','arsenal','updater','photo-pistol','photo-rifle','photo-m16'].includes(id),disabled:id==='start',value:'',textContent:'',style:{setProperty(){},removeProperty(){}},classList:{add(){},remove(){},toggle(){}},addEventListener(type,fn){events.set(id+':'+type,fn);},getBoundingClientRect(){return {left:0,top:0,width:100,height:100};},setPointerCapture(){},requestPointerLock(){return Promise.resolve();}});return nodes.get(id);}
+  class RoomRenderer{constructor(_canvas,q,l,status){this.q=q;this.l=l;this.models=[];this.photoPaths=mobile?{}:{pistol:'/assets/polyhaven/photos/pistol.png'};this.previewPaths={pistol:'data:image/png;base64,cHJldmlldw==',rifle:'data:image/png;base64,cmlmbGU=',m16:'data:image/png;base64,bTE2'};instance=this;status('ready');}async load(spec){assert.equal(Object.keys(spec).length,6);}setLoop(fn){callbacks.push(fn);}begin(){this.models=[];}drawBox(){}drawModel(id){this.models.push(id);return true;}render(){}syncWalls(walls){this.walls=walls;}syncMarks(marks){this.marks=marks;}surfaceHit(){return this.nextHit||{id:'crate',dist:1.5,mark:{point:[0,.4,.45],normal:[0,0,1]}};}equip(id){this.weapon=id;}shot(kind,ray){this.shots=(this.shots||0)+1;this.lastRay=ray;this.lastKind=kind;}reload(progress){this.reloadProgress=progress;}}
   class RoomPhysics{static async create(){return new RoomPhysics();}step(){}impulse(id){this.hit=id;}}
   const ctx=vm.createContext({console,RoomRenderer,RoomPhysics,WALLS,REMOVED,cellBox,solidRuns,solidContains,solidRay,floorSupported,DECOR:{bed:{p:[3.40,0,3.71],s:[1.56,1.20,2.26]},nightstand:{p:[2.24,0,4.53],s:[.55,.64,.52]}},document:{getElementById:element,body:element('body'),pointerLockElement:null,addEventListener(){},exitPointerLock(){}},window:{addEventListener(){}},matchMedia:()=>({matches:mobile}),innerWidth:mobile?390:1280,sessionStorage:{getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v)},location:{reload(){}},fetch:async(_path,opts)=>{if(opts?.body){const a=JSON.parse(opts.body);if(a.action==='hit'){world.objects[a.id]=Math.max(0,world.objects[a.id]-25);if(a.mark)world.marks.push({id:1,target:a.id,...a.mark});}if(a.action==='repair')world.objects[a.id]=60;if(a.action==='damage_wall'){world.walls[a.id]=[[0,0,REMOVED]];world.wall_result={stage:REMOVED};}if(a.action==='repair_surface')delete world.walls[a.id];}return {ok:true,json:async()=>structuredClone(world)};},performance:{now:()=>0},requestAnimationFrame:fn=>callbacks.push(fn),setInterval(){},setTimeout(){},devicePixelRatio:1});
   vm.runInContext(code,ctx);await new Promise(r=>setImmediate(r));
@@ -33,6 +33,18 @@ async function smoke(mobile){
   instance.nextHit={id:'surface_6',dist:1,mark:{point:[-.1,0,0],normal:[-1,0,0]}};
   vm.runInContext("chooseWeapon('rifle');fire()",ctx);await new Promise(r=>setImmediate(r));assert.equal(world.walls.surface_6[0][2],REMOVED);assert.equal(instance.walls.surface_6[0][2],REMOVED);assert.ok(vm.runInContext("debris.some(d=>d.source==='surface_6')",ctx));
   vm.runInContext('repair()',ctx);await new Promise(r=>setImmediate(r));assert.equal(world.walls.surface_6,undefined);assert.ok(!vm.runInContext("debris.some(d=>d.source==='surface_6')",ctx));
+  assert.equal(element('game-auth').hidden,true);
+  instance.nextHit={id:null,dist:8.01};
+  vm.runInContext("chooseWeapon('m16');pressTrigger();stepTrigger(.2)",ctx);
+  assert.equal(vm.runInContext('ammo.m16',ctx),22);
+  vm.runInContext('releaseTrigger();stepTrigger(.3)',ctx);
+  assert.equal(vm.runInContext('ammo.m16',ctx),22);
+  events.get('touchFire:pointerdown')({pointerId:42,preventDefault(){}});
+  assert.equal(vm.runInContext('triggerHeld',ctx),true);
+  events.get('touchFire:pointercancel')({pointerId:42});
+  assert.equal(vm.runInContext('triggerHeld',ctx),false);
+  vm.runInContext('pressTrigger();phone();stepTrigger(.5)',ctx);
+  assert.equal(vm.runInContext('triggerHeld',ctx),false);
   console.log(`${mobile?'Mobile 1K':'Desktop 2K'}: profile, game start, model draw, hit, reload, ammo and phone OK (mock renderer)`);
 }
 await smoke(false);await smoke(true);

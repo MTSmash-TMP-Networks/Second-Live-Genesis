@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.9 – Avatar Grip und LAN-Gastmodus
+- Geometriebezogene Handanker, stabiler Fingerbogen und Ärmel am berechneten Handgelenk.
+- Drittes virtuelles Spielobjekt M16, optionaler texturierter CC-BY-Import mit CC0-Ersatzquelle, Inventarvorschau, fiktiver Dauerfeuermodus auf Desktop und Touch.
+- Gastspiel ohne wiederholte Spielschlüsselabfrage; Scanner und Admin-Updates bleiben geschützt. Bestehende Schadensdaten unverändert.
+
 ## 0.6.8 – Advanced Destruction
 - Deterministische unregelmäßige Voronoi-Bruchzellen für alle elf Hauptflächen, gemeinsam genutzte Mesh-/Collider-Geometrie und sichtbarer Materialkern.
 - Boden und Decke zerstörbar, tiefer sichtbarer Sicherheitsuntergrund, erhaltene Zell-IDs und additive SQLite-Migration.

@@ -37,6 +37,10 @@ COPY scripts/download_hands.py ./download_hands.py
 COPY optional-hands/ /build/optional-hands/
 RUN python -u download_hands.py --output /build/polyhaven --local /build/optional-hands
 
+FROM hands AS gameprops
+COPY scripts/download_m16.py ./download_m16.py
+RUN python -u download_m16.py --output /build/polyhaven
+
 FROM renderer AS avatar-check
 COPY --from=hands /build/polyhaven/hands /build/hands
 COPY scripts/avatar_smoke.mjs ./avatar_smoke.mjs
@@ -48,7 +52,7 @@ COPY server.py updater_api.py wall_damage.py /app/
 COPY web/ /app/web/
 COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bundle.js
 COPY --from=renderer /build/THREE-LICENSE.txt /app/web/engine/THREE-LICENSE.txt
-COPY --from=hands /build/polyhaven /app/web/assets/polyhaven/
+COPY --from=gameprops /build/polyhaven /app/web/assets/polyhaven/
 ARG SECOND_LIVE_REVISION=local
 LABEL org.opencontainers.image.revision=${SECOND_LIVE_REVISION}
 ENV SECOND_LIVE_REVISION=${SECOND_LIVE_REVISION}

@@ -37,7 +37,7 @@ async function submit(body){
   finally{await poll();}
 }
 function open(){document.exitPointerLock?.();panel.hidden=false;input.focus();if(timer===null)timer=setInterval(poll,2000);poll();}
-function close(){panel.hidden=true;input.value='';latest=null;busy=false;epoch++;if(timer!==null){clearInterval(timer);timer=null;}check.disabled=install.disabled=true;reload.hidden=true;$('update-phase').textContent='Admin-Anmeldung';$('update-message').textContent='Separaten Schlüssel aus der .env eingeben.';}
+function close(){panel.hidden=true;latest=null;busy=false;epoch++;if(timer!==null){clearInterval(timer);timer=null;}check.disabled=install.disabled=true;reload.hidden=true;$('update-phase').textContent='Admin-Anmeldung';$('update-message').textContent='Separaten Schlüssel aus der .env eingeben.';}
 for(const id of ['update-open-welcome','update-open-phone'])$(id).addEventListener('click',open);
 $('update-close').addEventListener('click',close);
 $('update-login').addEventListener('click',poll);

@@ -1,5 +1,6 @@
 export { RoomPhysics } from './physics.js';
 import * as THREE from 'three';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
@@ -10,7 +11,7 @@ import { ShotEffects } from './shotfx.js';
 import { ImpactMarks } from './impact_marks.js';
 import { WallMeshes } from './wall_mesh.js';
 import { WALLS, floorSupported } from './wall_layout.js';
-import { inspectHand, poseHand } from './avatar_hands.js';
+import { inspectHand, poseContactHand } from './avatar_hands.js';
 export { WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported } from './wall_layout.js';
 import { isolateDisplayProp } from './display_prop.js';
 import { buildRoomDecor } from './room_decor.js';
@@ -43,7 +44,7 @@ export class RoomRenderer {
     this.camera.add(this.weaponRoot);
     this.weaponRoot.position.set(.24,-.25,-.44);
     this.weaponRoot.rotation.set(.02,.16,0);
-    this.weaponModels={pistol:this.buildPistol(),rifle:this.buildRifle()};
+    this.weaponModels={pistol:this.buildPistol(),rifle:this.buildRifle(),m16:this.buildM16()};
     for(const model of Object.values(this.weaponModels)){ model.visible=false; this.weaponRoot.add(model); }
     this.weaponRoot.visible=false;
     this.viewHands={};
@@ -171,6 +172,31 @@ export class RoomRenderer {
     return g;
   }
 
+  // A deliberately stylized local game silhouette, not a mechanical model.
+  buildM16(){
+    const g=new THREE.Group(),dark=new THREE.MeshStandardMaterial({color:0x22272a,roughness:.67,metalness:.25}),soft=new THREE.MeshStandardMaterial({color:0x343a3b,roughness:.85});
+    this.cosmeticBox([.065,.105,.34],[0,0,-.08],dark,g);
+    this.cosmeticBox([.068,.085,.22],[0,.005,.19],soft,g);
+    this.cosmeticBox([.082,.085,.34],[0,.017,-.37],soft,g);
+    this.makeCylinder(.012,.012,.22,12,[0,.02,-.64],dark,g,[Math.PI/2,0,0]);
+    this.cosmeticBox([.05,.115,.08],[0,-.075,.045],soft,g,[.18,0,0]);
+    this.cosmeticBox([.065,.13,.085],[0,-.075,-.13],dark,g,[.14,0,0]);
+    g.userData.front=[0,.02,-.75];return g;
+  }
+
+  async loadM16(manifest,path,manager){
+    this.realismStatus.m16='local';if(!manifest.m16_obj)return;
+    try{
+      const raw=await new OBJLoader(manager).loadAsync(path(manifest.m16_obj));
+      const reference=this.weaponModels.m16.clone(true);reference.visible=true;
+      const textures=new THREE.TextureLoader(manager);let color=null,normal=null;
+      if(manifest.m16_color){color=await textures.loadAsync(path(manifest.m16_color));color.colorSpace=THREE.SRGBColorSpace;}
+      if(manifest.m16_normal)normal=await textures.loadAsync(path(manifest.m16_normal));
+      raw.traverse(o=>{if(o.isMesh){const uv=!!o.geometry?.attributes?.uv;o.material=new THREE.MeshStandardMaterial({color:color&&uv?0xffffff:0x323638,map:uv?color:null,normalMap:uv?normal:null,metalness:.18,roughness:.66});}});
+      const root=isolateDisplayProp(raw,reference);this.weaponRoot.remove(this.weaponModels.m16);this.weaponRoot.add(root);this.weaponModels.m16=root;this.propPaths.m16=manifest.m16_obj;this.realismStatus.m16='ready';this.m16Credit=manifest.m16_credit||'OpenGameArt';
+    }catch(e){console.warn('Optionales M16-Spielmodell nicht verfuegbar',e);}
+  }
+
   // Imported skinned avatar meshes, with local sleeve geometry. The old
   // disconnected procedural hand is not drawn if the asset is unavailable.
   buildGloves(kind){
@@ -178,12 +204,25 @@ export class RoomRenderer {
     const sleeve=new THREE.MeshStandardMaterial({color:0x343b42,roughness:.93,normalMap:this.textured?.rough_linen?.normalMap||null,normalScale:new THREE.Vector2(.28,.28)});
     const cuff=new THREE.MeshStandardMaterial({color:0x25292e,roughness:.88});
     const capsule=(a,b,r,mat)=>{const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),d=end.clone().sub(start);const mesh=new THREE.Mesh(new THREE.CapsuleGeometry(r,Math.max(.006,d.length()-2*r),8,18),mat);mesh.position.copy(start).add(end).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());g.add(mesh);};
-    const hand=(side,wrist,palm,elbow)=>{if(!this.handModels?.[side])return;try{
-      const model=poseHand(this.handModels[side],side,wrist,palm);const a=new THREE.Vector3(...wrist),b=new THREE.Vector3(...elbow);
+    const prop=this.weaponModels[kind].clone(true);prop.visible=true;prop.updateMatrixWorld(true);
+    const bounds=new THREE.Box3().setFromObject(prop,true),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
+    if(bounds.isEmpty()||!Number.isFinite(size.length()))return g;
+    // Derive avatar contact points from the displayed mesh, not from a fixed
+    // hand pose shared between unrelated props. These are game-art anchors.
+    const verts=[];prop.traverse(o=>{if(!o.isMesh)return;const a=o.geometry?.attributes?.position;if(!a)return;const step=Math.max(1,Math.floor(a.count/1600));for(let i=0;i<a.count;i+=step)verts.push(new THREE.Vector3().fromBufferAttribute(a,i).applyMatrix4(o.matrixWorld));});
+    const contact=(along,span,edge)=>{
+      const z=bounds.min.z+size.z*along, band=verts.filter(v=>Math.abs(v.z-z)<=size.z*span);
+      if(!band.length)return [center.x,bounds.min.y-.012,z];
+      const ys=band.map(v=>v.y).sort((a,b)=>a-b),xs=band.map(v=>v.x).sort((a,b)=>a-b);
+      const y=ys[Math.floor((ys.length-1)*(edge==='side'?.22:.12))],x=edge==='side'?xs[Math.floor((xs.length-1)*.78)]+.009:xs[Math.floor((xs.length-1)*.5)];
+      return [x,y-(edge==='side'?0:.012),z];
+    };
+    const hand=(side,anchor,forward,normal,curl,elbow)=>{if(!this.handModels?.[side])return;try{
+      const model=poseContactHand(this.handModels[side],side,anchor,forward,normal,curl),a=new THREE.Vector3(...model.userData.wrist),b=new THREE.Vector3(...elbow);
       capsule(a.toArray(),b.toArray(),.034,sleeve);capsule(a.toArray(),a.clone().lerp(b,.16).toArray(),.035,cuff);g.add(model);g.userData.importedHands++;
     }catch(e){console.warn('Handpose nicht verfuegbar',side,e);}};
-    if(kind==='pistol')hand('right',[.078,-.134,.166],[.029,-.073,.071],[.182,-.265,.342]);
-    else {hand('right',[.084,-.132,.186],[.036,-.080,.103],[.190,-.272,.358]);hand('left',[-.076,-.095,-.252],[-.034,-.040,-.332],[-.224,-.248,.176]);}
+    hand('right',contact(kind==='pistol'?.76:.69,.12,'side'),[-.50,.40,-.76],[-1,.05,0],[.95,1.0,.65],[.182,-.265,.342]);
+    if(kind!=='pistol')hand('left',contact(.38,.11,'under'),[.90,.10,-.35],[0,1,0],[.74,.97,.57],[-.224,-.248,.176]);
     return g;
   }
 
@@ -194,7 +233,7 @@ export class RoomRenderer {
     scene.add(new THREE.HemisphereLight(0xf4f5f2,0x33404c,1.6));
     for(const [p,color,intensity] of [[[2,3,2],0xfff4df,2.2],[[-2,1,-1],0xadc3d7,1.1]]){const light=new THREE.DirectionalLight(color,intensity);light.position.set(...p);scene.add(light);}
     const model=source.clone(true);model.visible=true;const root=new THREE.Group();root.add(model);scene.add(root);
-    root.rotation.set(-.08,id==='rifle'?Math.PI*.45:Math.PI*.38,.04);root.updateMatrixWorld(true);
+    root.rotation.set(-.08,id!=='pistol'?Math.PI*.45:Math.PI*.38,.04);root.updateMatrixWorld(true);
     const box=new THREE.Box3().setFromObject(root),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
     if(box.isEmpty()||!Number.isFinite(size.length()))return null;
     const aspect=width/height,half=Math.max(size.y/2,size.x/(2*aspect),.05)*1.18;
@@ -211,7 +250,7 @@ export class RoomRenderer {
   }
   ensureInventoryPreviews(){
     this.previewPaths={};
-    for(const id of ['pistol','rifle']){
+    for(const id of ['pistol','rifle','m16']){
       try{const uri=this.createWeaponPreview(id);if(uri)this.previewPaths[id]=uri;}
       catch(e){console.warn('Lokale Inventarvorschau fehlgeschlagen',id,e);}
     }
@@ -298,13 +337,14 @@ export class RoomRenderer {
 
     const loader=new GLTFLoader(manager);
     await this.loadRealism(manifest,path,loader,manager);
+    await this.loadM16(manifest,path,manager);
     this.ensureInventoryPreviews();
     this.status('Originale WebXR-Handmodelle werden geladen');
     this.handModels={};
     for(const side of ['left','right']){const url=manifest.hands?.[side];if(!url)continue;try{const gltf=await loader.loadAsync(path(url));inspectHand(gltf.scene);this.handModels[side]=gltf.scene;}catch(e){console.warn('Originalhand nicht verfuegbar',side,e);}}
     this.realismStatus.hands='partial';
-    for(const id of ['pistol','rifle']){try{this.viewHands[id]=this.buildGloves(id);this.viewHands[id].visible=false;this.weaponRoot.add(this.viewHands[id]);}catch(e){console.warn('Optionales Handmesh nicht verfügbar',id,e);}}
-    if(this.viewHands.pistol?.userData.importedHands===1&&this.viewHands.rifle?.userData.importedHands===2)this.realismStatus.hands='ready';
+    for(const id of ['pistol','rifle','m16']){try{this.viewHands[id]=this.buildGloves(id);this.viewHands[id].visible=false;this.weaponRoot.add(this.viewHands[id]);}catch(e){console.warn('Optionales Handmesh nicht verfügbar',id,e);}}
+    if(this.viewHands.pistol?.userData.importedHands===1&&this.viewHands.rifle?.userData.importedHands===2&&this.viewHands.m16?.userData.importedHands===2)this.realismStatus.hands='ready';
     for(const [id,asset] of Object.entries(MODEL_IDS)){
       this.status('Möbelmodell: '+asset);
       const gltf=await loader.loadAsync(path(profile.models[asset]));
@@ -422,12 +462,12 @@ export class RoomRenderer {
   equip(id,first){this.currentWeapon=id||null;this.weaponRoot.visible=!!id&&first&&!this.xrMode.active;for(const [key,g] of Object.entries(this.weaponModels))g.visible=key===id;for(const [key,g] of Object.entries(this.viewHands))g.visible=key===id;this.xrMode.equip(this.xrMode.active?id:null);}
   setLoop(fn){this.renderer.setAnimationLoop(fn);}
   shot(kind,ray){
-    this.kick=kind==='rifle'?.085:.060;
+    this.kick=kind!=='pistol'?.085:.060;
     if(ray){
       let source=null,caseSource=null;
       if(this.weaponRoot.visible&&!this.xrMode.active){
         this.camera.updateMatrixWorld(true);
-        const anchor=this.weaponModels[kind]?.userData.front||[0,.035,kind==='rifle'?-.79:-.20];
+        const anchor=this.weaponModels[kind]?.userData.front||[0,.035,kind!=='pistol'?-.79:-.20];
         const front=this.weaponRoot.localToWorld(new THREE.Vector3(...anchor));
         if(front.distanceTo(new THREE.Vector3(...ray.origin))<ray.distance)source=front.toArray();
         caseSource=this.weaponRoot.localToWorld(new THREE.Vector3(.055,.025,0)).toArray();
