@@ -1,8 +1,16 @@
 # Second Live – World Genesis
 
-**v0.9.6 · Room Life**
+**v0.10.0 · Shared Hotel Lobby**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.10.0 – Gemeinsamer Hotelflur
+
+Mit E an der Zimmertür (Touch: Aktionstaste) wechselst du in einen 42 m langen, 3,6 m breiten, gemeinsam genutzten Hotelkorridor mit 24 Türen, Teppich, Leuchten und Zimmernummern. Alle Gäste desselben Serverprozesses im Flur sehen einander als bewegte 3D-Avatare. Deine für den aktuellen Flurbesuch zugewiesene Tür ist grün markiert. E an dieser Tür bringt dich zurück in deinen bestehenden privaten Raum. Fremde Türen sind nicht betretbar. Die beiden Bereiche sind getrennte Szenen mit einem Übergang an der Tür, noch keine nahtlos zusammenhängende Hotelarchitektur. Zimmernummern werden für jeden Flurbesuch vergeben, nicht dauerhaft gebunden.
+
+Der Flur ist ein unbewaffneter Begegnungsbereich; Möbel, Schäden und Aktionen aus dem eigenen Zimmer bleiben dort privat. Der erste Mehrspielermodus nutzt authentifizierte bestehende Spielersitzungen und HTTP-Positionsabgleich viermal pro Sekunde; die Avatare werden zwischen Aktualisierungen interpoliert. Maximal 24 gleichzeitige Flurgäste pro Serverprozess, keine Veröffentlichung von Anmeldeinformationen oder privaten Raumdaten. Nach 15 Sekunden ohne gültiges Positionssignal verfällt die Präsenz. Bei Verbindungsabbruch kehrt der Client in sein Zimmer zurück. Dies ist ein lokaler/LAN-Prototyp ohne Chat, echte Avatar-Konten, Kollisionsphysik zwischen Gästen oder vollständigen Cheatschutz. Die bestehenden Cookie-Identitäten und privaten SQLite-Spielstände werden nicht migriert oder gelöscht.
+
+**Test:** Auf zwei verschiedenen Geräten oder Browserprofilen dieselbe Serveradresse öffnen, das Spiel betreten, die Zimmertüren anvisieren und E drücken. Beide Gäste müssen im selben Korridor sichtbar sein. Die eigenen Zimmer bleiben unabhängig. Ohne persönliche Sitzungen ist der gemeinsame Flur nicht verfügbar.
 
 ## Neu in 0.9.6 – Zimmerleben und Steuerung
 
