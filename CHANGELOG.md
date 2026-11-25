@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.7 – Guided Mobile World Capture
+- Smartphone-orientierter Ablauf mit vier Schritten, grossen Bedienelementen, konkreten Aufnahmehinweisen und sichtbarer Fotozahl.
+- Aufnahme pausieren, Fotos pruefen und entfernen; Galerie-/native Kamera-Alternativen und technische Optionen getrennt.
+- Echte Statusanzeige der Bildvorbereitung und Rekonstruktion ohne erfundene Prozentwerte; nach erneutem Oeffnen Status wiederherstellen.
+- 3D-Vorschau automatisch an Bildschirmformat angepasst, Touch-Rotation/Zoom/Verschieben und Ansicht zuruecksetzen.
+- Unveraenderte Scan-Rechte, HTTPS, CPU-Rekonstruktion und Spielstaende; keine metrische AR-Abdeckung oder begehbare Welt.
+
 ## 0.7.6 – Furniture Placement & Rotation
 - Bett und Schrank lassen sich wie die bisherigen fünf Gegenstände aufnehmen, verschieben und abstellen.
 - Q/F und kontextabhängige Touch-Buttons drehen gehaltene Möbel um jeweils 90 Grad.
