@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Second Live MVP: zero-dependency scan API and web scanner host."""
+"""Second Live game host; historical capture APIs are disabled in production."""
 from __future__ import annotations
 
 import base64
@@ -24,7 +24,6 @@ from updater_api import UpdateBridge
 import wall_damage
 from http.cookies import SimpleCookie, CookieError
 from world_capture import CaptureStore, CaptureError
-from panorama_capture import PanoramaStore
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -33,6 +32,12 @@ MAX_IMAGE = 6 * 1024 * 1024
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
 SAFE_FILES = {"/device-access.js":"device-access.js","/audio.js":"audio.js","/capture.js":"capture.js", "/capture-quality.js":"capture-quality.js", "/capture-flow.js":"capture-flow.js", "/capture.css":"capture.css", "/engine/capture-view.bundle.js":"engine/capture-view.bundle.js", "/updater.js": "updater.js", **{f"/assets/{n}.jpg": f"assets/{n}.jpg" for n in ("wood", "wall", "fabric")},"/scanner.html": "scanner.html", "/panorama.html":"panorama.html", "/panorama.js":"panorama.js", "/panorama-flow.js":"panorama-flow.js", "/panorama.css":"panorama.css", "/game.js": "game.js", "/bootstrap.js": "bootstrap.js", "/engine/renderer.bundle.js": "engine/renderer.bundle.js", "/engine/THREE-LICENSE.txt": "engine/THREE-LICENSE.txt", "/engine/RAPIER-LICENSE.txt": "engine/RAPIER-LICENSE.txt", "/game.css": "game.css", "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css", "/manifest.webmanifest": "manifest.webmanifest", "/icon.svg": "icon.svg"}
 
+# Archive-only routes: never serve scanner assets in the normal game.
+LEGACY_SCAN_FILES = frozenset((
+    '/device-access.js','/capture.js','/capture-quality.js','/capture-flow.js','/capture.css',
+    '/engine/capture-view.bundle.js','/scanner.html','/panorama.html','/panorama.js',
+    '/panorama-flow.js','/panorama.css','/app.js','/style.css',
+))
 
 def clean_location(value):
     if value is None:
@@ -334,13 +339,17 @@ class GameStore:
         return result
 
 
-def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, world_capture=False):
+def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, world_capture=False, legacy_capture=False):
     updater = updater or UpdateBridge(None, "")
     game = GameStore(store.path) # preserve the original legacy world unchanged in personal mode
     capture = CaptureStore(store.path) if world_capture else None
-    panorama = PanoramaStore(capture) if capture else None
+    # Keep the original player/cookie/home database, independent of image capture.
+    panorama = None
+    if legacy_capture and capture:
+        from panorama_capture import PanoramaStore
+        panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.9.0"
+        server_version = "SecondLive/0.9.1"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -350,7 +359,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("X-Frame-Options", "DENY")
-            self.send_header("Permissions-Policy", "camera=(self), geolocation=(self), xr-spatial-tracking=(self)")
+            self.send_header("Permissions-Policy", ("camera=(self), geolocation=(self), " if legacy_capture else "camera=(), geolocation=(), ") + "xr-spatial-tracking=(self)")
             self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self'; worker-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' blob: data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 
         def send_data(self, status, body: bytes, content_type="application/json; charset=utf-8", cache_control="no-store"):
@@ -418,7 +427,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
         def read_capture_body(self):
             try: n=int(self.headers.get('Content-Length','0'))
             except ValueError: n=0
-            if not 0<n<=3_100_000:raise CaptureError('Ungueltige Anfragegroesse',413)
+            if not 0<n<=(3_100_000 if legacy_capture else 4096):raise CaptureError('Ungueltige Anfragegroesse',413)
             if self.headers.get('Content-Type','').split(';')[0].strip()!='application/json':raise CaptureError('JSON erwartet',415)
             data=json.loads(self.rfile.read(n))
             if not isinstance(data,dict):raise CaptureError('JSON-Objekt erwartet',400)
@@ -429,6 +438,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             def handle():
                 data=self.read_capture_body()
                 if path=='/api/session':return capture.profile(self.new_session())
+                if not legacy_capture:raise CaptureError('Aufnahmefunktion eingestellt',404)
                 if path=='/api/session/pair':
                     player,key=capture.redeem(data.get('code'));self.set_player_cookie(key);return capture.profile(player)
                 player=self.player()
@@ -482,6 +492,8 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
 
         def do_GET(self):
             path = unquote(urlsplit(self.path).path)
+            if not legacy_capture and (path in LEGACY_SCAN_FILES or path in ('/api/scans','/api/world','/api/capture','/api/capture/locate','/api/session/pair') or path.startswith(('/api/capture/','/api/scans/','/media/'))):
+                self.send_json(404,{'error':'Aufnahmefunktion eingestellt'});return
             if capture and path.startswith('/api/capture/photo/'):
                 try:
                     parts=path.split('/')
@@ -513,7 +525,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.9.0", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.9.1", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
@@ -541,6 +553,8 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
 
         def do_POST(self):
             path=urlsplit(self.path).path
+            if not legacy_capture and (path in ('/api/scans','/api/world','/api/session/pair','/api/capture') or path.startswith(('/api/capture/','/api/scans/','/media/'))):
+                self.send_json(404,{'error':'Aufnahmefunktion eingestellt'});return
             if capture and path in ("/api/session","/api/session/pair","/api/capture/locate","/api/capture"):
                 self.capture_post(path);return
             if urlsplit(self.path).path == "/api/update":
@@ -574,7 +588,9 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             try:
                 data = json.loads(self.rfile.read(content_length).decode("utf-8"))
                 if path=="/api/game":
-                    if capture and isinstance(data,dict) and data.get('action')=='unlock': raise CaptureError('Reale Rekonstruktion muss zuerst geprueft werden; alte Testfreigabe deaktiviert',409)
+                    if isinstance(data,dict) and data.get('action')=='unlock':
+                        if not legacy_capture:raise CaptureError('Weitere Weltbereiche folgen mit der Welterweiterung',409)
+                        if capture:raise CaptureError('Alte Testfreigabe deaktiviert',409)
                     row=self.personal_game().action(data,store)
                 else: row=store.add(data)
             except CaptureError as exc:
@@ -586,6 +602,8 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             self.send_json(201, row)
 
         def do_DELETE(self):
+            if not legacy_capture:
+                self.send_json(404,{"error":"Nicht gefunden"});return
             if not self.require_auth():
                 return
             path = urlsplit(self.path).path
@@ -598,11 +616,11 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     return Handler
 
 
-def create_server(bind="127.0.0.1", port=8765, data_dir=None, token="", updater=None, guest_game=False, world_capture=False):
+def create_server(bind="127.0.0.1", port=8765, data_dir=None, token="", updater=None, guest_game=False, world_capture=False, legacy_capture=False):
     if bind not in ("localhost", "127.0.0.1", "::1") and not token:
         raise ValueError("SECOND_LIVE_TOKEN muss fuer Netzwerkfreigabe gesetzt sein")
     store = ScanStore(Path(data_dir) if data_dir else ROOT / "data")
-    return ThreadingHTTPServer((bind, int(port)), make_handler(store, token, updater, guest_game, world_capture))
+    return ThreadingHTTPServer((bind, int(port)), make_handler(store, token, updater, guest_game, world_capture, legacy_capture))
 
 
 def main():
@@ -610,25 +628,18 @@ def main():
     port = int(os.getenv("SECOND_LIVE_PORT", "8765"))
     token = os.getenv("SECOND_LIVE_TOKEN", "")
     data_dir=Path(os.getenv("SECOND_LIVE_DATA_DIR",str(ROOT/"data")))
-    personal=os.getenv("SECOND_LIVE_WORLD_CAPTURE","1")=="1"
+    personal=os.getenv("SECOND_LIVE_PERSONAL_WORLD",os.getenv("SECOND_LIVE_WORLD_CAPTURE","1"))=="1"
     srv = create_server(bind, port, data_dir, token, UpdateBridge(os.getenv("SECOND_LIVE_UPDATE_BRIDGE"), os.getenv("SECOND_LIVE_UPDATE_ADMIN_TOKEN")), guest_game=os.getenv("SECOND_LIVE_GUEST_GAME", "1") == "1",world_capture=personal)
-    import subprocess,sys,signal
+    import signal
     def terminate(_sig,_frame):raise KeyboardInterrupt
     signal.signal(signal.SIGTERM,terminate)
-    worker=None
-    if personal and os.getenv("SECOND_LIVE_WORKER","1")=="1":
-        worker=subprocess.Popen([sys.executable,str(ROOT/'capture_compute.py'),str(data_dir)])
-    print(f"Second Live Scanner: http://{bind}:{srv.server_port} (secure token: {'yes' if token else 'no, localhost only'})", flush=True)
+    print(f"Second Live Game: http://{bind}:{srv.server_port} (secure token: {'yes' if token else 'no, localhost only'})", flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         srv.server_close()
-        if worker and worker.poll() is None:
-            worker.terminate()
-            try:worker.wait(timeout=5)
-            except subprocess.TimeoutExpired:worker.kill();worker.wait()
 
 
 if __name__ == "__main__":
