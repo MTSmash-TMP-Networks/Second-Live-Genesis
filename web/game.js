@@ -106,7 +106,8 @@ function syncWallState(next){
 }
 function collisionRoom(){return [...room.filter(o=>(!o.surfaceId||!WALLS[o.surfaceId])&&!movableDecor(o.surfaceId)&&(state.decor?.[o.surfaceId]||0)<REMOVED),...wallSolids];}
 function syncDecorState(next){
-  for(const [id,o] of Object.entries(DECOR_BOUNDS)){
+  for(const [id,original] of Object.entries(DECOR_BOUNDS)){
+    const o=decorBoundsAt(id,original);
     const was=(state.decor?.[id]||0)>=REMOVED,now=(next[id]||0)>=REMOVED;
     if(was&&!now)debris=debris.filter(d=>d.source!==id);
     if(started&&!was&&now)for(let j=0;j<6;j++){const pos=movableDecor(id)?bodies[id].p:o.p;const s=o.s.map(x=>Math.max(.025,Math.min(.24,x*(.12+Math.random()*.14))));debris.push({source:id,kind:'wallChip',variant:j,p:pos.map((x,i)=>x+(Math.random()-.5)*o.s[i]*.65),s,v:[(Math.random()-.5)*1.2,.4+Math.random()*.6,(Math.random()-.5)*1.2],c:rgb(j%2?'806b52':'b5aa9a'),m:null,r:Math.random()*6});}
@@ -171,6 +172,7 @@ function doorInView(hit,ray=null){
   const d=rayBox(origin,direction,[0,1.1,-4.95],[1.245,2.25,.30]);
   return d<=3&&d<=hit.dist+.06;
 }
+function decorBoundsAt(id,original){return id==='surface_curtain_l'||id==='surface_curtain_r'?curtainBounds(id,renderer?.curtainProgress??Number(!!state.curtains_closed)):original;}
 function damaged(id){
   if(!id)return false;
   if(spec[id]&&!movableDecor(id)&&state.objects[id]<spec[id].max)return true;
@@ -193,7 +195,7 @@ function updateInteractionHint(vr=false){
     else if(id&&CURTAIN_TARGETS.has(id)&&!curtainsUsable()){name=objectName(id);lines.push('Vorhänge oder Stange zuerst reparieren');}
     if(fix&&damaged(fix.id)){
       if(!name)name=objectName(fix.id);
-      lines.push((mobile?'':'R · ')+(fix.id===id||!primary&&!door?'Reparieren':objectName(fix.id)+' reparieren'));canRepair=true;
+      lines.push((mobile?'':'R · ')+(objectName(fix.id)===name?'Reparieren':objectName(fix.id)+' reparieren'));canRepair=true;
     }
     if(!name&&id&&!WALLS[id]){name=objectName(id);lines.push('Keine Aktion verfügbar');}
   }
@@ -259,11 +261,11 @@ function fire(ray=null){
   if(a.id&&state.objects[a.id]>0&&!movableDecor(a.id)){physicsWorld.impulse(a.id,direction);action('hit',a.id,a.mark);}else if(WALLS[a.id])action('damage_wall',a.id,a.mark);else if(DECOR_BOUNDS[a.id])action('damage_decor',a.id,a.mark);else if(a.id?.startsWith('surface_'))action('mark_surface',a.id,a.mark);else $('notice').textContent=a.dist<=8?'Oberfläche ohne Schadensspeicher':'Kein Objekt getroffen';
 }
 function repairTarget(ray=null,surface=null){
-  const {origin,direction}=interactionRay(ray);surface=surface||interactionTarget(ray);const a=aim(ray);let wall=null,dist=3;
+  const {origin,direction}=interactionRay(ray);surface=surface||interactionTarget(ray);const a=Object.entries(spec).some(([id,o])=>!o.decor&&state.objects[id]===0)?aim(ray):{id:null,dist:Infinity};let wall=null,dist=3;
   for(const [id,w] of Object.entries(WALLS)){if(!state.walls?.[id]?.some(c=>c[2]>=REMOVED))continue;const d=rayBox(origin,direction,w.p,w.s);if(d<dist&&d<=surface.dist+.01){dist=d;wall=id;}}
   for(const [id,original] of Object.entries(DECOR_BOUNDS)){
     if(!removed(id))continue;
-    const o=id==='surface_curtain_l'||id==='surface_curtain_r'?curtainBounds(id,renderer?.curtainProgress??Number(!!state.curtains_closed)):original;
+    const o=decorBoundsAt(id,original);
     const p=movableDecor(id)?(state.placements?.[id]||spec[id].p):o.p,q=movableDecor(id)?yawQuat(state.rotations?.[id]||0):null;
     const d=rayBox(origin,direction,p,o.s,q);if(d<dist&&d<=surface.dist+.01){dist=d;wall=id;}
   }
