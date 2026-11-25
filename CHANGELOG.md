@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.4 – Hotel Service & Movement
+- Erster gemeinsamer NPC: eigener stilisierter KI-Hotelmitarbeiter mit roter Uniform, goldenen Details, Mütze und serverseitiger Flurpatrouille.
+- „Hallo!“ bei Annäherung mit kurzer Geste, lokaler räumlicher Sprachausgabe und Untertitel; erneute Begrüßung erst nach Trennung und Abklingzeit.
+- Shift zum Sprinten, Strg/C zum Ducken, Touch-Umschalttasten, sanfter Kamerawechsel, variable Kollisionshöhe und sichere Aufstehprüfung.
+- Synchronisierte Sprint- und Duckbewegungen im Flur, unveränderte private Räume und Admin-Update-Funktion.
+
 ## 0.11.3 – Shared Wall Openings
 - Eingangswandöffnungen werden anhand der vorhandenen gespeicherten Wandzellen auf beiden Seiten mit identischer Bruchgeometrie dargestellt.
 - Flurgäste erhalten dieselben Öffnungen und Reparaturen über den authentifizierten Präsenzabgleich; ein Sekunden-Cache begrenzt die Datenbanklast.
