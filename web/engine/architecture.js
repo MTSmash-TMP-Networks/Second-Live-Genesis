@@ -19,6 +19,21 @@ export function curtainGeometry({x,z0,z1,top,bottom,folds,amplitude,segments=96,
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(index);g.computeVertexNormals();g.computeBoundingSphere();return g;
 }
 
+// Both curtain leaves slide along the existing rail. Keep their original
+// root coordinate system so existing fabric damage/decal coordinates follow.
+const CURTAIN_ENDS={left:[-2.58,-1.99],right:[-.01,.58]};
+export function curtainPose(side,progress){
+  const [a,b]=CURTAIN_ENDS[side],anchor=side==='left'?a:b;
+  const t=Math.max(0,Math.min(1,progress)),eased=t*t*(3-2*t);
+  // Each curtain reaches slightly beyond the window centre at z=-1.
+  const scale=1+eased*(1.61/(b-a)-1);
+  return {scale,offset:anchor*(1-scale)};
+}
+export function curtainBounds(id,progress){
+  const side=id==='surface_curtain_l'?'left':'right';
+  const [a,b]=CURTAIN_ENDS[side],{scale,offset}=curtainPose(side,progress);
+  return {p:[-4.53,1.48,(a+b)*.5*scale+offset],s:[.36,2.89,(b-a)*scale+.12]};
+}
 export function buildArchitecture(r,spec) {
   const group=new THREE.Group();group.name='Window frame';r.staticGroup.add(group);r.impacts?.register('surface_windowframe',group,'wood');
   const white=new THREE.MeshStandardMaterial({color:0xf3f1e9,roughness:.64,metalness:0});
@@ -73,13 +88,46 @@ export function buildArchitecture(r,spec) {
   const low=r.quality==='1k';
   const curtains={left:new THREE.Group(),right:new THREE.Group()},rod=new THREE.Group();r.staticGroup.add(curtains.left,curtains.right,rod);r.impacts?.register('surface_curtain_l',curtains.left,'fabric');r.impacts?.register('surface_curtain_r',curtains.right,'fabric');r.impacts?.register('surface_curtainrod',rod,'wood');
   const add=(a,mat,shadow)=>{const m=new THREE.Mesh(curtainGeometry({...a,segments:low?56:112,rows:low?14:28}),mat);m.castShadow=shadow;m.receiveShadow=true;m.renderOrder=shadow?0:2;curtains[a.z0<-1?'left':'right'].add(m);};
-  for(const [a,b] of [[-2.41,-1.62],[-.38,.41]])add({x:-4.67,z0:a,z1:b,top:2.87,bottom:.08,folds:5,amplitude:.037},sheer,false);
-  for(const [a,b] of [[-2.58,-1.99],[-.01,.58]])add({x:-4.49,z0:a,z1:b,top:2.90,bottom:.035,folds:4.5,amplitude:.084},thick,true);
+  for(const [a,b] of Object.values(CURTAIN_ENDS))add({x:-4.67,z0:a,z1:b,top:2.87,bottom:.08,folds:5,amplitude:.037},sheer,false);
+  for(const [a,b] of Object.values(CURTAIN_ENDS))add({x:-4.49,z0:a,z1:b,top:2.90,bottom:.035,folds:4.5,amplitude:.084},thick,true);
   r.makeCylinder(.019,.019,3.27,16,[-4.48,2.925,-1],satin,rod,[Math.PI/2,0,0]);
   for(const z of [-2.52,.52]){r.makeBox([.35,.045,.045],[-4.70,2.925,z],satin,rod);const cap=new THREE.Mesh(new THREE.SphereGeometry(.033,12,8),satin);cap.position.set(-4.48,2.925,z+(z<0?-.14:.14));rod.add(cap);}
-  for(const [a,b] of [[-2.58,-1.99],[-.01,.58]])for(let i=0;i<7;i++){
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(.027,.004,6,14),satin);ring.position.set(-4.48,2.925,a+(b-a)*i/6);curtains[a<-1?'left':'right'].add(ring);
+  const rings={left:[],right:[]};
+  for(const [side,[a,b]] of Object.entries(CURTAIN_ENDS))for(let i=0;i<7;i++){
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(.027,.004,6,14),satin);
+    ring.position.set(-4.48,2.925,a+(b-a)*i/6);curtains[side].add(ring);rings[side].push(ring);
   }
-
+  // No per-frame allocation or reconstruction of the fabric meshes.
+  let progress=0,target=0,applied=-1;
+  function apply(decor={}){
+    if(applied!==progress){
+      for(const [side,root] of Object.entries(curtains)){
+        const {scale,offset}=curtainPose(side,progress);
+        root.scale.z=scale;root.position.z=offset;
+        for(const ring of rings[side])ring.scale.z=1/scale;
+        root.updateMatrixWorld(true);
+      }
+      applied=progress;
+    }
+    const surviving=Number((decor.surface_curtain_l||0)<4)+Number((decor.surface_curtain_r||0)<4);
+    const t=progress*progress*(3-2*progress)*surviving/2;
+    if(r.windowDaylight){
+      r.windowDaylight.fill.intensity=4.0*(1-.87*t);
+      r.windowDaylight.spill.intensity=42*(1-.91*t);
+    }
+  }
+  r.curtainControl={
+    get progress(){return progress;},
+    setClosed(closed,immediate=false,decor={}){
+      target=closed?1:0;if(immediate)progress=target;apply(decor);
+    },
+    step(dt,decor={}){
+      const delta=Math.max(0,Math.min(.1,dt))/.85;
+      if(progress<target)progress=Math.min(target,progress+delta);
+      else if(progress>target)progress=Math.max(target,progress-delta);
+      apply(decor);
+    }
+  };
+  apply();
 }
 
