@@ -33,3 +33,14 @@ header{padding-top:max(12px,env(safe-area-inset-top));gap:10px;font-size:13px}
 
 .photo-goal{font-size:12px;margin:3px 0}.camera-actions{position:sticky;bottom:max(6px,env(safe-area-inset-bottom));z-index:3;background:var(--surface);border-radius:9px;padding:5px 0}
 @media(max-width:480px){body[data-capture-stage="2"] .wizard-head h1{font-size:22px}body[data-capture-stage="2"] .wizard-head p{display:none}body[data-capture-stage="2"] .steps button{min-height:51px;padding:4px 2px}body[data-capture-stage="2"] .status-line{margin:5px 0 8px}body[data-capture-stage="2"] .camera .view{height:clamp(215px,calc(100svh - 355px),400px)}}
+
+/* Progressive SfM while the rear camera remains active. */
+.live-model{position:absolute;top:8px;right:8px;z-index:2;width:42%;max-width:220px;height:clamp(100px,30%,150px);border:1px solid #70dfc688;border-radius:9px;overflow:hidden;background:#0c141cf0;display:flex;flex-direction:column;box-shadow:0 4px 12px #0007}
+.live-model-head{display:flex;align-items:center;justify-content:space-between;padding:4px 6px;gap:4px;font-size:10px;font-weight:750;letter-spacing:.04em;color:var(--accent);background:#10202a;flex:none}
+.capture-wizard .live-model-head button{padding:5px 6px;min-height:32px;font-size:10px;background:#243644;color:var(--text);border-radius:5px}
+.live-viewport{flex:1;min-height:0;position:relative}.live-viewport canvas{display:block;width:100%;height:100%;touch-action:none}
+.live-empty{position:absolute;inset:34px 0 0;display:grid;place-items:center;text-align:center;color:var(--muted);font-size:12px;padding:6px;pointer-events:none;background:#0c141c}
+.live-model.expanded{left:8px;right:8px;bottom:66px;width:auto;max-width:none;height:auto}
+.live-info{background:#111e29;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-top:12px}.live-stats{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px}.live-stats strong{color:var(--accent)}.live-info[data-state="insufficient"] .live-stats strong,.live-info[data-state="error"] .live-stats strong{color:#ffbfad}.live-info p{font-size:13px;margin:5px 0}.live-note{font-size:11px!important}
+.frame-card .linked{color:var(--accent)}.frame-card .unlinked{color:#ffbfad}
+@media(max-width:480px){.live-model{width:46%;height:clamp(106px,35%,140px)}.live-model-head{font-size:10px}.capture-wizard .live-model-head button{font-size:10px;min-height:36px;padding:4px 5px}.live-model.expanded{height:auto;width:auto}}
