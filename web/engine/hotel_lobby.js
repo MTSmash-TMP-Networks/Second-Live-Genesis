@@ -12,7 +12,7 @@ function labelTexture(value){
  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=96;
  const ctx=canvas.getContext('2d');ctx.fillStyle='#23292d';ctx.fillRect(0,0,256,96);
  ctx.strokeStyle='#ae9665';ctx.lineWidth=3;ctx.strokeRect(3,3,250,90);
- ctx.font='500 '+(String(value).length>18?22:String(value).length>12?30:48)+'px sans-serif';ctx.fillStyle='#f7e8cb';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(value,128,51);
+ ctx.font='500 '+(String(value).length>18?22:String(value).length>12?30:48)+'px sans-serif';ctx.fillStyle='#f7e8cb';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(value,128,51,232);
  const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;return tex;
 }
 function plaque(g,text,p,yaw,w=.33,h=.124){
@@ -102,7 +102,7 @@ export class HotelLobbyView{
    g.position.lerp(new THREE.Vector3(...a.position),t);const diff=Math.atan2(Math.sin(a.yaw-g.rotation.y),Math.cos(a.yaw-g.rotation.y));g.rotation.y+=diff*t;
    animateCharacter(g,dt,d>.035);
   }
-  if(third&&this.own!==null){if(!this.local){this.local=avatar(this.own,this.profile);this.scene.add(this.local);}this.local.visible=true;this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=player.yaw;}
+  if(third&&this.own!==null){if(!this.local){this.local=avatar(this.own,this.profile);this.scene.add(this.local);}this.local.visible=true;const moving=Math.hypot(this.local.position.x-player.x,this.local.position.z-player.z)>.005;this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=player.yaw;animateCharacter(this.local,dt,moving);}
   else if(this.local)this.local.visible=false;
  }
  clear(){this.sync([]);this.setOwn(null);this.setRooms([]);}
