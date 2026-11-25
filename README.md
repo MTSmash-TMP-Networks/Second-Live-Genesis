@@ -1,6 +1,6 @@
 # Second Live – World Genesis
 
-**v0.7.8 · Live 3D World Capture / CPU-Testversion**
+**v0.7.9 · Live 3D World Capture / Docker Build Hotfix**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spieler sollen ihre gemeinsame Welt aus realen Aufnahmen erschaffen, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
 
