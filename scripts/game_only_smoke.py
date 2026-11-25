@@ -178,6 +178,34 @@ class GameOnlyTest(unittest.TestCase):
             hidden=act('hide');self.assertFalse(hidden['placed'])
             self.assertEqual(hidden['hp'],100)
 
+    def test_wall_mount_persistence_release_and_validation(self):
+        from room_models import RoomModelStore
+        from wall_damage import WALLS, nearest
+        with tempfile.TemporaryDirectory() as tmp:
+            store=RoomModelStore(tmp)
+            added=store.add('a','picture.glb',room_model_fixture())['added']
+            row=store.action('a',{'action':'place','id':added,'x':1,'y':0,'z':1,'extent':.8,'rotation':0,'solid':True})['models'][0]
+            data={'action':'mount','id':added,'revision':row['revision'],'wall':'surface_3','anchor':[-4.88,1.7,2],'size':[.8,.6,.1],'extent':.8,'solid':True}
+            for bad in ({'wall':'surface_0'},{'anchor':[-5.12,1.7,2]},{'anchor':[-4.88,2.95,2]},{'size':[1.1,.6,.1]}):
+                with self.assertRaises(ValueError):store.action('a',{**data,**bad},walls={})
+            mounted=store.action('a',data,walls={})['models'][0]
+            self.assertEqual(mounted['mount']['wall'],'surface_3')
+            self.assertAlmostEqual(mounted['pose']['p'][0],-4.818)
+            self.assertEqual(mounted['rotation'],90)
+            self.assertEqual(RoomModelStore(tmp).list('a')['models'][0],mounted)
+            with self.assertRaises(CaptureError):store.action('b',data,walls={})
+            w=WALLS['surface_3'];c,r=nearest(w,2-w['p'][2],1.7-w['p'][1])
+            store.release_unsupported('a',{'surface_3':[[c,r,3]]})
+            self.assertIsNotNone(store.list('a')['models'][0]['mount'])
+            store.release_unsupported('a',{'surface_3':[[c,r,4]]})
+            loose=store.list('a')['models'][0]
+            self.assertIsNone(loose['mount']);self.assertEqual(loose['pose'],mounted['pose'])
+            with self.assertRaises(ValueError):store.action('a',{**data,'revision':loose['revision']},walls={'surface_3':[[c,r,4]]})
+            again=store.action('a',{**data,'revision':loose['revision']},walls={})['models'][0]
+            dropped=store.action('a',{'action':'motion','id':added,'revision':again['revision'],'position':[0,1,0],'quaternion':[0,0,0,1],'base_y':.7})['models'][0]
+            self.assertIsNone(dropped['mount'])
+            self.assertEqual(store.get('a',added),room_model_fixture())
+
     def test_private_room_model_validation_and_persistence(self):
         from room_models import RoomModelStore, validate_glb, MAX_MODELS
         blob=room_model_fixture()

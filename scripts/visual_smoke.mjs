@@ -108,7 +108,7 @@ console.log('Portal geometry and optional door fallback OK');
 // Exercise actual animated curtain roots and ray intersections without a GPU.
 import {buildArchitecture,curtainBounds,curtainPose} from './architecture.js';
 const curtainScene=new THREE.Group(),curtainDynamic=new THREE.Group(),curtainImpacts=new ImpactMarks();
-const curtainRenderer={quality:'1k',textured:{},staticGroup:curtainScene,dynamicGroup:curtainDynamic,impacts:curtainImpacts,models:{},windowDaylight:{fill:{intensity:4},spill:{intensity:42}},
+const curtainRenderer={quality:'1k',textured:{},staticGroup:curtainScene,dynamicGroup:curtainDynamic,impacts:curtainImpacts,models:{},windowDaylight:{fill:{intensity:4},spill:{intensity:42}},roomSun:{intensity:2.5},roomHemi:{intensity:.36},scene:{environmentIntensity:.36},roomIndoorLight:false,
  makeBox(s,p,m,g){const o=new THREE.Mesh(new THREE.BoxGeometry(...s),m);o.position.set(...p);g.add(o);return o;},
  makeCylinder(a,b,h,n,p,m,g,rot=[0,0,0]){const o=new THREE.Mesh(new THREE.CylinderGeometry(a,b,h,n),m);o.position.set(...p);o.rotation.set(...rot);g.add(o);return o;}
 };
@@ -125,8 +125,17 @@ for(let i=0;i<8;i++)control.step(.1);
 assert.equal(control.progress,1);
 const closedL=curtainBounds('surface_curtain_l',1),closedR=curtainBounds('surface_curtain_r',1);
 assert.ok(closedL.p[2]+closedL.s[2]/2>=closedR.p[2]-closedR.s[2]/2);
-assert.ok(curtainRenderer.windowDaylight.fill.intensity<1);
-assert.ok(curtainRenderer.windowDaylight.spill.intensity<5);
+assert.equal(curtainRenderer.windowDaylight.fill.intensity,0);
+assert.equal(curtainRenderer.windowDaylight.spill.intensity,0);
+assert.equal(curtainRenderer.roomSun.intensity,0);
+assert.equal(curtainRenderer.roomHemi.intensity,0);
+assert.equal(curtainRenderer.scene.environmentIntensity,0);
+curtainRenderer.roomIndoorLight=true;control.step(0);
+assert.ok(curtainRenderer.roomHemi.intensity>0);
+assert.ok(curtainRenderer.scene.environmentIntensity>0);
+assert.equal(curtainRenderer.roomSun.intensity,0);
+curtainRenderer.roomIndoorLight=false;control.step(0);
+assert.equal(curtainRenderer.scene.environmentIntensity,0);
 curtainScene.updateMatrixWorld(true);
 for(const z of [-2,-1,0]){
  const hit=curtainImpacts.cast([-3,1.6,z],[-1,0,0],[curtainScene]);

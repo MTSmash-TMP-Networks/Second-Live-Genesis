@@ -34,6 +34,18 @@ export function curtainBounds(id,progress){
   const [a,b]=CURTAIN_ENDS[side],{scale,offset}=curtainPose(side,progress);
   return {p:[-4.53,1.48,(a+b)*.5*scale+offset],s:[.36,2.89,(b-a)*scale+.12]};
 }
+// All daylight contributions follow curtain coverage, not only the window spotlight.
+export function applyRoomDaylight(r,progress,decor={}){
+ const t=Math.max(0,Math.min(1,progress)),surviving=(decor.surface_curtainrod||0)>=4?0:
+  Number((decor.surface_curtain_l||0)<4)+Number((decor.surface_curtain_r||0)<4);
+ const daylight=1-t*t*(3-2*t)*surviving/2;
+ const bounce=r.roomIndoorLight?(1-daylight)*.10:0;
+ if(r.windowDaylight){r.windowDaylight.fill.intensity=4*daylight;r.windowDaylight.spill.intensity=42*daylight;}
+ if(r.roomSun)r.roomSun.intensity=2.5*daylight;
+ if(r.roomHemi)r.roomHemi.intensity=.36*daylight+bounce;
+ if(r.scene)r.scene.environmentIntensity=.36*daylight+bounce;
+ return daylight;
+}
 export function buildArchitecture(r,spec) {
   const group=new THREE.Group();group.name='Window frame';r.staticGroup.add(group);r.impacts?.register('surface_windowframe',group,'wood');
   const white=new THREE.MeshStandardMaterial({color:0xf3f1e9,roughness:.64,metalness:0});
@@ -109,12 +121,7 @@ export function buildArchitecture(r,spec) {
       }
       applied=progress;
     }
-    const surviving=Number((decor.surface_curtain_l||0)<4)+Number((decor.surface_curtain_r||0)<4);
-    const t=progress*progress*(3-2*progress)*surviving/2;
-    if(r.windowDaylight){
-      r.windowDaylight.fill.intensity=4.0*(1-.87*t);
-      r.windowDaylight.spill.intensity=42*(1-.91*t);
-    }
+    applyRoomDaylight(r,progress,decor);
   }
   r.curtainControl={
     get progress(){return progress;},

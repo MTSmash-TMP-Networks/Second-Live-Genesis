@@ -71,3 +71,5 @@ body.character-editing header,body.character-editing footer,body.character-editi
 #held-model-size small{display:block;color:#b7c5d1;font-size:10px}
 #held-model-size output{display:block;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
 #interaction-prompt:has(#held-model-size:not([hidden])){z-index:3}
+
+#held-model-size #held-mount{grid-column:1/-1;width:100%;height:38px;font-size:12px;line-height:1.2;padding:7px;pointer-events:auto}

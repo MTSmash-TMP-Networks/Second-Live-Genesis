@@ -241,3 +241,16 @@ const scaling=new Function('assert',`
  `);
 scaling(assert);
 console.log('Imported model resize: limits, live preview, unchanged saved extent, placement envelope, cancellation and remote revision passed');
+
+assert.ok(ids.includes('held-mount')&&game.includes("e.code==='KeyB'"));
+const mountPose=new Function('turnedSize',getPart('function wallMountPose(','function mountCandidate(')+'return wallMountPose;')((s,a)=>a===90||a===270?[s[2],s[1],s[0]]:s);
+const west={p:[-5,1.5,2.65],s:[.24,3,4.7],axis:2};
+const m=mountPose(west,[-4.88,1.7,2],[.8,.6,.1]);
+assert.equal(m.rotation,90);assert.ok(Math.abs(m.center[0]+4.818)<1e-6);assert.equal(m.center[1],1.7);assert.equal(m.size[0],.1);
+assert.equal(mountPose(west,[-5.12,1.7,2],[.8,.6,.1]),null);
+assert.equal(mountPose(west,[-4.88,2.95,2],[.8,.6,.1]),null);
+assert.equal(mountPose(west,[-4.88,1.7,.31],[.8,.6,.1]),null);
+const north=mountPose({p:[-3,1.5,-5],s:[4,3,.2],axis:0},[-3,1.4,-4.9],[.8,.6,.1]);
+assert.equal(north.rotation,0);assert.ok(Math.abs(north.center[2]+4.838)<1e-6);
+assert.equal(mountPose({kind:'floor'},[0,0,0],[1,1,1]),null);
+console.log('Wall mounting: inner face, orientation, height, fit and opening checks passed');

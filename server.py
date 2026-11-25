@@ -394,7 +394,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.12.7"
+        server_version = "SecondLive/0.12.8"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -601,7 +601,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.12.7", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.12.8", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/room-models" or path.startswith("/api/room-models/"):
@@ -652,7 +652,10 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                 if not self.require_game():return
                 def model_action():
                     owner=self.player()
-                    if path=="/api/room-models":return room_models.action(owner,self.read_capture_body(),GameStore.WEAPON_DAMAGE)
+                    if path=="/api/room-models":
+                        data=self.read_capture_body()
+                        walls=self.personal_game().state()['walls'] if data.get('action')=='mount' else None
+                        return room_models.action(owner,data,GameStore.WEAPON_DAMAGE,walls)
                     if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Type','').split(';')[0].strip()!='model/gltf-binary':
                         raise CaptureError('GLB-Datei erwartet',415)
                     try:n=int(self.headers.get('Content-Length','0'))
@@ -766,6 +769,8 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                         if not legacy_capture:raise CaptureError('Weitere Weltbereiche folgen mit der Welterweiterung',409)
                         if capture:raise CaptureError('Alte Testfreigabe deaktiviert',409)
                     row=self.personal_game().action(data,store)
+                    if room_models and data.get('action')=='damage_wall':
+                        room_models.release_unsupported(self.player(),row['walls'])
                 else: row=store.add(data)
             except CaptureError as exc:
                 self.send_json(exc.status, capture_error_body(exc))

@@ -1,4 +1,4 @@
-import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell, PORTAL_SIDES } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
@@ -189,7 +189,7 @@ function sync(s){
   const wasOpen=state.unlocked;state=s;renderer?.setCurtainsClosed?.(s.curtains_closed===true,!started,s.decor||{});renderer?.setDoorOpen?.(!lobbyEnabled&&s.unlocked);if(started&&!lobbyEnabled&&wasOpen!==s.unlocked)audio.play('door',[0,1.1,-4.95]); updateWorldStatus();
 }
 let mutationVersion=0;async function refresh(){const v=mutationVersion;try{let s=await api('/api/game');if(!busy&&v===mutationVersion)sync(s);}catch(e){if(started&&accountsEnabled&&e.status===401)location.reload();throw e;}}
-async function action(action,id,mark,extra={}){if(busy||lobbyState||lobbyTransition)return false;busy=true;mutationVersion++;try{if(spec[id]?.imported)return await importedAction(action,id,extra);const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);$('notice').textContent=action==='reset_hotel_layout'?'Hotelanordnung wiederhergestellt':action==='toggle_curtains'?(result.curtains_closed?'Vorhänge geschlossen':'Vorhänge geöffnet'):action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
+async function action(action,id,mark,extra={}){if(busy||lobbyState||lobbyTransition)return false;busy=true;mutationVersion++;try{if(spec[id]?.imported)return await importedAction(action,id,extra);const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);if(action==='damage_wall'&&roomModelAllowed())void refreshRoomModels().catch(()=>{});$('notice').textContent=action==='reset_hotel_layout'?'Hotelanordnung wiederhergestellt':action==='toggle_curtains'?(result.curtains_closed?'Vorhänge geschlossen':'Vorhänge geöffnet'):action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
 function dir(){let a=player.yaw,p=player.pitch;return [-Math.sin(a)*Math.cos(p),-Math.sin(p),-Math.cos(a)*Math.cos(p)];}
 function rotateInverse(v,q){if(!q)return v;const [x,y,z,w]=q,u=[-x,-y,-z],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],t=cross(u,v).map(n=>2*n),c=cross(u,t);return v.map((n,i)=>n+w*t[i]+c[i]);}
 function rayBox(eye,d,p,s,q=null){let pos=rotateInverse(eye.map((v,i)=>v-p[i]),q),dir=rotateInverse(d,q),lo=0,hi=8;for(let i=0;i<3;i++){if(Math.abs(dir[i])<1e-8){if(Math.abs(pos[i])>s[i]/2)return Infinity;}else{let a=(-s[i]/2-pos[i])/dir[i],z=(s[i]/2-pos[i])/dir[i];lo=Math.max(lo,Math.min(a,z));hi=Math.min(hi,Math.max(a,z));if(lo>hi)return Infinity;}}return lo;}
@@ -399,6 +399,9 @@ function updateInteractionHint(vr=false){
   const resize=playing&&!lobbyState&&!lobbyTransition&&!!held&&!!spec[held]?.imported&&state.objects[held]>0;
   $('held-model-size').hidden=!resize;
   if(resize){const extent=spec[held].extent??spec[held].row.extent;
+    const mount=mountCandidate(held);
+    $('held-mount').disabled=busy||roomModelBusy||!mount;
+    $('held-mount').title=mount?'An dieser Wand befestigen (B)':'Auf eine freie Wandfläche in Reichweite schauen';
     $('held-model-extent').textContent=extent.toFixed(2).replace('.',',')+' m';
     $('held-size-minus').disabled=busy||roomModelBusy||extent<=.1;
     $('held-size-plus').disabled=busy||roomModelBusy||extent>=2.4;
@@ -416,7 +419,7 @@ function updateInteractionHint(vr=false){
     name=objectName(held);canAct=clear;short='Abstellen';
     lines.push(clear?(mobile?'Abstellen: Stellplatz frei':'E · Abstellen'):'Stellplatz blockiert');
     lines.push(mobile?'Drehtasten · 90°':'Q / F · Drehen');
-    if(spec[held]?.imported){secondary='Fallenlassen';lines.push(mobile?secondary:'G · Fallenlassen');if(!mobile)lines.push('+ / − · Größe');}
+    if(spec[held]?.imported){secondary='Fallenlassen';lines.push(mobile?secondary:'G · Fallenlassen');if(!mobile)lines.push('+ / − · Größe','B · Wandbefestigung');}
   }else if(playing){
     const hit=interactionTarget(),primary=primaryInteraction(hit),fix=repairTarget(null,hit),id=hit.dist<=3?hit.id:null;
     const door=doorInView(hit);
@@ -443,6 +446,35 @@ function updateInteractionHint(vr=false){
   $('touchReload').disabled=!!posture||!!lobbyState||!equipped;
   const movement=player.stance==='crouch'?' · Geduckt':player.stance==='sprint'?' · Sprint':'';
   $('hint').textContent=started?((lobbyState?'Gemeinsamer Hotelflur · E: eigenes Zimmer':mobile?'Handy · Inventar':'P: Smartphone · I: Inventar')+(mobile?'':' · Shift: Sprint · Strg/C: Ducken')+movement):'Spiel starten';
+}
+// Upright wall attachment is separate from ordinary floor placement.
+function wallMountPose(w,anchor,size){
+ if(!w||w.kind==='floor'||w.kind==='ceiling'||(w.verticalAxis??1)!==1)return null;
+ const u=w.axis,b=2-u,inward=w.p[b]>0?-1:1,face=w.p[b]+inward*w.s[b]/2;
+ if(Math.abs(anchor[b]-face)>=.035||Math.abs(anchor[u]-w.p[u])+size[0]/2+.02>w.s[u]/2||
+    Math.abs(anchor[1]-w.p[1])+size[1]/2+.02>w.s[1]/2)return null;
+ const at=[...anchor];at[b]=face;const center=[...at];center[b]+=inward*(size[2]/2+.012);
+ const rotation=b===0?(inward>0?90:270):(inward>0?0:180);
+ return {anchor:at,center,rotation,size:turnedSize(size,rotation)};
+}
+function mountCandidate(id,ray=null){
+ const o=spec[id];if(!o?.imported||!state.objects[id])return null;
+ const {origin,direction}=interactionRay(ray),hit=interactionTarget(ray),w=WALLS[hit.id];
+ if(!w||hit.dist>3||!Number.isFinite(hit.dist))return null;
+ const anchor=origin.map((v,i)=>v+direction[i]*hit.dist),mount=wallMountPose(w,anchor,o.s);
+ if(!mount)return null;
+ const cell=nearestCell(w,mount.anchor[w.axis]-w.p[w.axis],mount.anchor[1]-w.p[1]);
+ if((state.walls?.[hit.id]||[]).some(c=>c[0]===cell[0]&&c[1]===cell[1]&&c[2]>=REMOVED))return null;
+ const overlap=(p,s)=>mount.center.every((v,i)=>Math.abs(v-p[i])<(mount.size[i]+s[i])/2-.018);
+ if(overlap([player.x,player.y+.8,player.z],[.56,1.6,.56])||collisionRoom().some(b=>overlap(b.p,b.s)))return null;
+ if(Object.entries(bodies).some(([k,b])=>k!==id&&state.objects[k]>0&&overlap(b.p,boundsSize(spec[k].s,b.q))))return null;
+ return {...mount,wall:hit.id};
+}
+async function mountHeld(){
+ if(!canPlay()||busy||roomModelBusy||lobbyState||lobbyTransition||!held||!spec[held]?.imported)return;
+ const id=held,m=mountCandidate(id);
+ if(!m){$('notice').textContent='Auf eine freie, passende Wandfläche in Reichweite schauen';return;}
+ await action('mount_import',id,null,{wall:m.wall,anchor:m.anchor});
 }
 function horizontalHold(id){
   const s=turnedSize(spec[id].s,heldAngle),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52,flat=Math.hypot(d[0],d[2]);
@@ -666,11 +698,11 @@ function syncRoomModelBodies(preserveId=null){
   const previewExtent=held===id&&hp>0?old?.previewExtent:undefined;
   const extent=previewExtent??row.extent;
   const s=size.map(v=>Math.max(.015,v*extent)),savedSize=size.map(v=>Math.max(.015,v*row.extent));
-  const key=JSON.stringify([row.x,row.y,row.z,row.extent,row.rotation,row.pose]);
+  const key=JSON.stringify([row.x,row.y,row.z,row.extent,row.rotation,row.pose,row.mount]);
   const saved=importedSavedBody(row,savedSize);
   // Our own hit/motion acknowledgements must not replace the live rigid body
   // and discard its velocity. External edits, resizes and repairs restore it.
-  const preserve=id===preserveId&&old&&bodies[id]&&hp>0&&old.row.extent===row.extent;
+  const preserve=id===preserveId&&old&&bodies[id]&&hp>0&&old.row.extent===row.extent&&JSON.stringify(old.row.mount)===JSON.stringify(row.mount);
   if(!old||!bodies[id]||(!preserve&&old.poseKey!==key)||(!state.objects[id]&&hp>0)||(held!==id&&old.previewExtent!==undefined))bodies[id]=saved;
   if(old&&state.objects[id]>0&&!hp){
    if(held===id)held=null;
@@ -678,7 +710,7 @@ function syncRoomModelBodies(preserveId=null){
    for(let i=0;i<6;i++)debris.push({source:id,kind:'wallChip',variant:i,p:b.p.map((v,j)=>v+(Math.random()-.5)*s[j]*.35),s:s.map(v=>Math.max(.025,Math.min(.22,v*.18))),v:[(Math.random()-.5)*1.8,.6+Math.random(),(Math.random()-.5)*1.8],c:rgb('8b8377'),m:null,r:Math.random()*6});
   }
   if(old&&!state.objects[id]&&hp>0)debris=debris.filter(d=>d.source!==id);
-  spec[id]={imported:true,row,s,savedSize,extent,previewExtent,p:saved.p,max:100,c:'8b8377',poseKey:key,quiet:old?.poseKey===key?old.quiet||0:0};
+  spec[id]={imported:true,row,mounted:!!row.mount,s,savedSize,extent,previewExtent,p:saved.p,max:100,c:'8b8377',poseKey:key,quiet:old?.poseKey===key?old.quiet||0:0};
   state.objects[id]=hp;
  }
 }
@@ -693,7 +725,8 @@ async function importedAction(op,id,extra={}){
  try{
   let request={id,revision:o.row.revision};
   if(op==='place_object')request={...request,action:'place',x:extra.position[0],y:Math.max(0,extra.position[1]-o.s[1]/2),z:extra.position[2],extent:o.extent??o.row.extent,rotation:extra.rotation,solid:o.row.solid};
-  else if(op==='hit')request={...request,action:'hit',weapon:extra.weapon,...(importedMotion(id)||{})};
+  else if(op==='mount_import')request={...request,action:'mount',wall:extra.wall,anchor:extra.anchor,size:o.s,extent:o.extent??o.row.extent,solid:o.row.solid};
+  else if(op==='hit')request={...request,action:'hit',weapon:extra.weapon,...(o.mounted?{}:importedMotion(id)||{})};
   else if(op==='repair')request={...request,action:'repair'};
   else if(op==='drop_import'&&(o.extent??o.row.extent)!==o.row.extent){
    request={...request,action:'place',x:extra.position[0],y:extra.base_y,z:extra.position[2],extent:o.extent,rotation:heldAngle,solid:o.row.solid};
@@ -702,9 +735,9 @@ async function importedAction(op,id,extra={}){
   else if(op==='hide')request={...request,action:'hide'};
   else return false;
   const result=await api('/api/room-models',request);
-  if((op==='place_object'||op==='drop_import')&&held===id){held=null;o.previewExtent=undefined;}
+  if((op==='place_object'||op==='drop_import'||op==='mount_import')&&held===id){held=null;o.previewExtent=undefined;}
   applyRoomModelList(result);syncRoomModelBodies(op==='hit'||op==='motion'?id:null);
-  if(op!=='motion')$('notice').textContent=op==='hit'?(state.objects[id]?'Modell beschädigt · '+state.objects[id]+' %':'Modell zerstört · R: reparieren'):op==='repair'?'Modell repariert':op==='hide'?'Modell zurück im Inventar':op==='drop_import'?'Modell losgelassen':'Modell abgestellt und gespeichert';
+  if(op!=='motion')$('notice').textContent=op==='hit'?(state.objects[id]?'Modell beschädigt · '+state.objects[id]+' %':'Modell zerstört · R: reparieren'):op==='repair'?'Modell repariert':op==='hide'?'Modell zurück im Inventar':op==='drop_import'?'Modell losgelassen':op==='mount_import'?'Modell an der Wand befestigt und gespeichert':'Modell abgestellt und gespeichert';
   return true;
  }catch(e){
   $('notice').textContent=e.message;
@@ -735,7 +768,7 @@ let importedSaveAt=0;
 function saveSettledImports(dt,now){
  if(!roomModelAllowed()||busy||roomModelBusy||held||now<importedSaveAt)return;
  for(const [id,o] of Object.entries(spec)){
-  if(!o.imported||!state.objects[id])continue;
+  if(!o.imported||!state.objects[id]||o.mounted)continue;
   const b=bodies[id],saved=importedSavedBody(o.row,o.s);
   if(b.p[1]<-1.5||b.p[1]>4.5||Math.abs(b.p[0])>5.2||Math.abs(b.p[2])>5.2){importedSaveAt=now+1200;void action('hide',id);return;}
   if(Math.hypot(...b.v)>.055||Math.hypot(...(b.angular||[0,0,0]))>.075){o.quiet=0;continue;}
@@ -788,7 +821,7 @@ function updateRoomModelUI(){
  $('room-model-repair').disabled=!ready||!row||(row.hp??100)===100;
  const entry=row?renderer?.roomModels?.status(row.id):null;
  $('room-model-retry').hidden=entry?.status!=='error';
- $('room-model-render').textContent=!row?'':!row.placed?'Im Inventar · noch nicht platziert':entry?.status==='ready'?((row.hp??100)>0?'Im Zimmer · Zustand '+(row.hp??100)+' %':'Zerstört · Reparatur möglich'):entry?.status==='error'?'Darstellung fehlgeschlagen: '+entry.error:'3D-Modell wird geladen …';
+ $('room-model-render').textContent=!row?'':!row.placed?'Im Inventar · noch nicht platziert':entry?.status==='ready'?((row.hp??100)>0?(row.mount?'An Wand befestigt':'Im Zimmer')+' · Zustand '+(row.hp??100)+' %':'Zerstört · Reparatur möglich'):entry?.status==='error'?'Darstellung fehlgeschlagen: '+entry.error:'3D-Modell wird geladen …';
 }
 function applyRoomModelList(data,prefer=null,fill=false){
  if(!Array.isArray(data.models))throw Error('Ungültige Modellliste');
@@ -893,8 +926,9 @@ window.addEventListener('wheel',e=>{
 },{passive:false});
 window.addEventListener('pointerup',e=>{if(triggerPointer===null||triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('pointercancel',releaseTrigger);
-window.addEventListener('keydown',e=>{if(!active||!started||!$('updater').hidden)return;if(canPlay()&&held&&spec[held]?.imported&&(e.key==='+'||e.key==='-'||e.code==='NumpadAdd'||e.code==='NumpadSubtract')){e.preventDefault();if(!e.repeat)resizeHeld(e.key==='-'||e.code==='NumpadSubtract'?-1:1);return;}if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyC'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyQ')turnHeld(-90);if(e.code==='KeyF'){if(posture?.kind==='lie')secondaryInteraction();else turnHeld(90);}if(e.code==='KeyG'&&!posture)secondaryInteraction();if(e.code==='KeyV'&&!posture){setScopeZoom(false);first=!first;}if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit3')chooseWeapon('m16');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR')repair();});
+window.addEventListener('keydown',e=>{if(!active||!started||!$('updater').hidden)return;if(canPlay()&&held&&spec[held]?.imported&&(e.key==='+'||e.key==='-'||e.code==='NumpadAdd'||e.code==='NumpadSubtract')){e.preventDefault();if(!e.repeat)resizeHeld(e.key==='-'||e.code==='NumpadSubtract'?-1:1);return;}if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyC'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyB')void mountHeld();if(e.code==='KeyQ')turnHeld(-90);if(e.code==='KeyF'){if(posture?.kind==='lie')secondaryInteraction();else turnHeld(90);}if(e.code==='KeyG'&&!posture)secondaryInteraction();if(e.code==='KeyV'&&!posture){setScopeZoom(false);first=!first;}if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit3')chooseWeapon('m16');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR')repair();});
 for(const [id,delta] of [['held-size-minus',-1],['held-size-plus',1]])$(id).addEventListener('click',e=>{e.stopPropagation();resizeHeld(delta);});
+$('held-mount').addEventListener('click',e=>{e.stopPropagation();void mountHeld();});
 window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>keys.clear());document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==canvas)clearControls();});document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas&&canPlay()&&!posture?.sleeping){const sensitivity=scopeZoom ? .0012 : .003;player.yaw-=e.movementX*sensitivity;player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch+e.movementY*sensitivity));}});
 function part(p,s,c,r=0,q=null){draw({p,s,c:rgb(c),r,q,m:mat(c)});}
 function canPlay(){return started&&active&&$('phone').hidden&&$('arsenal').hidden&&$('updater').hidden;}

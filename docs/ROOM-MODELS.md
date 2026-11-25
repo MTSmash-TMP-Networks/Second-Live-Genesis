@@ -29,3 +29,6 @@ Existing models are migrated in place with 100 HP and optional saved centre/quat
 
 ### Live sizing (0.12.7)
 While carrying an imported object, use the on-screen minus/plus controls or the corresponding keyboard/numpad keys to change its longest dimension in 0.10 m steps (0.10–2.40 m). The model remains proportional, its box collider and clearance checks follow the preview, and placement or dropping commits the new size. With desktop mouse lock, use keyboard keys or release the mouse with Escape to click the buttons. A cancelled or stale grab discards the local preview without changing the saved model.
+
+### Wall mounting (0.12.8)
+Hold an imported model, aim at a clear inner vertical wall within 3 m, and press B or click **An Wand befestigen** under the size controls. The model is oriented with its local +Z front into the room, and fixed to the selected wall at the aimed height. The server validates the face, fit and supporting wall cell; existing object damage stays intact. Pick it up with E to reposition, place on the floor or drop. If the supporting wall cell is removed, the attachment is cleared and gravity resumes. Existing imports gain this feature automatically. Closed intact curtains reduce all simulated daylight contributions to zero; indoor lamps remain independently controlled.

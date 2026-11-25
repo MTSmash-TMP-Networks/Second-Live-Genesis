@@ -6,7 +6,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { buildArchitecture } from './architecture.js';
+import { buildArchitecture, applyRoomDaylight } from './architecture.js';
 export { curtainBounds } from './architecture.js';
 import { XRMode } from './xr.js';
 import { ShotEffects } from './shotfx.js';
@@ -14,7 +14,7 @@ import { ImpactMarks } from './impact_marks.js';
 import { WallMeshes } from './wall_mesh.js';
 import { WALLS, floorSupported } from './wall_layout.js';
 import { inspectHand, poseContactHand } from './avatar_hands.js';
-export { WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported } from './wall_layout.js';
+export { WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell } from './wall_layout.js';
 import { isolateDisplayProp } from './display_prop.js';
 import { buildRoomDecor, fitDecor } from './room_decor.js';
 import { withAssetDeadline } from './optional_asset.js';
@@ -92,7 +92,7 @@ export class RoomRenderer {
     this.scene.add(this.staticGroup,this.dynamicGroup);
 
     const hemi=new THREE.HemisphereLight(0xf5f2eb,0xb2a393,.36);
-    this.scene.add(hemi);
+    this.scene.add(hemi);this.roomHemi=hemi;this.roomIndoorLight=true;
 
     const sun=new THREE.DirectionalLight(0xffead1,2.5);
     sun.position.set(-8,3.65,-1.7);
@@ -104,7 +104,7 @@ export class RoomRenderer {
     sun.shadow.normalBias=.023;
     sun.shadow.radius=3;
     sun.shadow.bias=-.00015;
-    this.scene.add(sun,sun.target);
+    this.scene.add(sun,sun.target);this.roomSun=sun;
 
     RectAreaLightUniformsLib.init();
     const windowFill=new THREE.RectAreaLight(0xeaf0f5,4.0,2.2,1.5);
@@ -477,7 +477,8 @@ export class RoomRenderer {
     if(this.bedsideBulb)this.bedsideBulb.emissiveIntensity=lamp?1.3:0;
     if(this.switchRocker)this.switchRocker.rotation.x=on?-.14:.14;
     for(const h of this.hotelLights||[]){const active=on&&(decor[h.surface]||0)<4&&(h.surface!=='surface_lamp'||(decor.surface_nightstand||0)<4);h.light.intensity=active?h.intensity:0;if(h.material)h.material.emissiveIntensity=active?h.emissive:0;}
-    // Window/daylight sources deliberately remain active.
+    this.roomIndoorLight=ceiling||lamp||(this.hotelLights||[]).some(h=>h.light.intensity>0);
+    applyRoomDaylight(this,this.curtainProgress,decor);
   }
   begin(){this.cursor=0;for(const m of Object.values(this.models))m.root.visible=false;for(const m of Object.values(this.contactShadows))m.visible=false;}
   chipGeometry(variant){

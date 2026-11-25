@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.8 – Wall Mounting & Blackout Curtains
+- Importierte GLB-Objekte können mit B oder „An Wand befestigen“ auf einer freien senkrechten Zimmerwand angebracht werden. Gespeicherte Befestigung hält den Starrkörper fest; Aufheben, Abstellen, Fallenlassen und Entfernen der tragenden Wandzelle lösen die Befestigung. Größenwahl und Schadenszustand bleiben erhalten.
+- Intakte geschlossene Vorhänge dimmen alle Tageslichtquellen einschließlich Sonne, Fensterlicht, Hemisphärenlicht und HDR-Umgebung auf null. Innenlampen bleiben separat schaltbar; zerstörte Vorhänge lassen Tageslicht wieder herein.
+- Neue Tests für Wandpassform, Befestigung, Speicherung, Freigabe und Lichtzustände. Bestehende Daten werden ohne Neuimport erweitert.
+
 ## 0.12.7 – Live Model Scaling
 - Plus-/Minus-Buttons mit aktueller Größenanzeige beim Tragen importierter GLB-Modelle; zusätzlich Plus/Minus-Tasten (auch Ziffernblock). Gleichmäßige Skalierung in 10-cm-Schritten zwischen 0,1 und 2,4 m.
 - Darstellung, Kollisionskörper und Stellplatzprüfung folgen der lokalen Vorschau. Abstellen bzw. Fallenlassen speichert die neue Größe mit der Position; externe Modelländerungen beenden eine veraltete Vorschau. Keine Änderung an bestehenden Größen- oder Speichergrenzen.
