@@ -4,7 +4,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from server import create_server, GameStore
 class GameTest(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory(); self.srv=create_server(port=0,data_dir=self.tmp.name,token='test-secret'); self.thread=threading.Thread(target=self.srv.serve_forever,daemon=True); self.thread.start(); self.url=f'http://127.0.0.1:{self.srv.server_port}'
+        self.tmp=tempfile.TemporaryDirectory(); self.srv=create_server(port=0,data_dir=self.tmp.name,token='test-secret',legacy_capture=True); self.thread=threading.Thread(target=self.srv.serve_forever,daemon=True); self.thread.start(); self.url=f'http://127.0.0.1:{self.srv.server_port}'
     def tearDown(self):
         self.srv.shutdown(); self.srv.server_close(); self.thread.join(); self.tmp.cleanup()
     def req(self,path,data=None,auth=True):
