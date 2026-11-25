@@ -16,7 +16,7 @@ import { inspectHand, poseContactHand } from './avatar_hands.js';
 export { WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported } from './wall_layout.js';
 import { isolateDisplayProp } from './display_prop.js';
 import { buildRoomDecor } from './room_decor.js';
-import { HOTEL_LAYOUT, hotelMaterials, createHotelModel } from './hotel_room.js';
+import { HOTEL_LAYOUT, hotelMaterials, applyPhotoMaterials, createHotelModel } from './hotel_room.js';
 export { HOTEL_LAYOUT };
 import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
 export { PORTAL_SIDES };
@@ -32,7 +32,7 @@ export class RoomRenderer {
     this.renderer=new THREE.WebGLRenderer({canvas,antialias:quality==='2k',powerPreference:'high-performance'});
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure=1.12;
+    this.renderer.toneMappingExposure=1.02;
     this.renderer.shadowMap.enabled=true;
     this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     this.scene=new THREE.Scene();
@@ -80,26 +80,28 @@ export class RoomRenderer {
     this.dynamicGroup=new THREE.Group();
     this.scene.add(this.staticGroup,this.dynamicGroup);
 
-    const hemi=new THREE.HemisphereLight(0xf3f2ef,0xa69e8f,.76);
+    const hemi=new THREE.HemisphereLight(0xf5f2eb,0xb2a393,.36);
     this.scene.add(hemi);
 
-    const sun=new THREE.DirectionalLight(0xfff1db,2.0);
-    sun.position.set(-8,3.1,-1.4);
-    sun.target.position.set(1,.55,-.4);
+    const sun=new THREE.DirectionalLight(0xffead1,2.5);
+    sun.position.set(-8,3.65,-1.7);
+    sun.target.position.set(.8,.35,.15);
     sun.castShadow=true;
     const shadowSize=quality==='1k'?1024:2048;
     sun.shadow.mapSize.set(shadowSize,shadowSize);
     Object.assign(sun.shadow.camera,{left:-7,right:7,top:7,bottom:-7,near:.1,far:22});
-    sun.shadow.normalBias=.012;
+    sun.shadow.normalBias=.023;
     sun.shadow.radius=3;
     sun.shadow.bias=-.00015;
     this.scene.add(sun,sun.target);
 
     RectAreaLightUniformsLib.init();
-    const windowFill=new THREE.RectAreaLight(0xeaf0f5,3.1,2.2,1.5);
+    const windowFill=new THREE.RectAreaLight(0xeaf0f5,4.0,2.2,1.5);
     windowFill.position.set(-4.15,1.78,-1);
     windowFill.lookAt(.2,1.5,-1);
     this.scene.add(windowFill);
+    // Soft window spill produces furniture shadows even when the exterior sun is occluded.
+    const spill=new THREE.SpotLight(0xffefd9,42,12,Math.PI/3,.72,2);spill.position.set(-4.51,2.36,-1.0);spill.target.position.set(-.8,.3,.4);spill.castShadow=true;spill.shadow.mapSize.set(shadowSize,shadowSize);spill.shadow.normalBias=.024;spill.shadow.bias=-.0002;spill.shadow.camera.near=.1;spill.shadow.camera.far=13;this.scene.add(spill,spill.target);
 
     const ceilingBounce=new THREE.PointLight(0xffefd9,2.0,10,2);
     ceilingBounce.position.set(0,2.75,.2);
@@ -328,7 +330,9 @@ export class RoomRenderer {
       }
       this.textured[id]=mat;
     }
-    const hotel=hotelMaterials(this);this.textured.hotel_carpet=hotel.carpet;this.textured.hotel_stripe=hotel.stripe;
+    const hotel=hotelMaterials(this);this.textured.hotel_carpet=hotel.carpet;this.textured.hotel_stripe=hotel.stripe;this.textured.hotel_wall=hotel.wall;this.textured.hotel_ceiling=hotel.ceiling;
+    this.status('Fotovorlage: Tapete, Teppich und Stoff');
+    await applyPhotoMaterials(this,new THREE.TextureLoader(new THREE.LoadingManager()),anisotropy);
     this.status('Inventarbildquellen werden geprüft');
     await this.loadOptionalWeaponPhotos(manifest,path,textureLoader);
 
@@ -338,7 +342,7 @@ export class RoomRenderer {
     const pmrem=new THREE.PMREMGenerator(this.renderer);
     this.environmentTarget=pmrem.fromEquirectangular(hdri);
     this.scene.environment=this.environmentTarget.texture;
-    this.scene.environmentIntensity=.58;
+    this.scene.environmentIntensity=.36;
     hdri.dispose();pmrem.dispose();
 
     const loader=new GLTFLoader(manager);
@@ -429,7 +433,7 @@ export class RoomRenderer {
   setDoorOpen(open){this.portalDoor?.setOpen(open);}
   setRoomLight(on,decor={}){
     const ceiling=on&&(decor.surface_ceilinglamp||0)<4;
-    if(this.ceilingLight)this.ceilingLight.intensity=ceiling?2:0;
+    if(this.ceilingLight)this.ceilingLight.intensity=ceiling?2.8:0;
     if(this.ceilingDiffuser)this.ceilingDiffuser.material.emissiveIntensity=ceiling?.35:0;
     const lamp=on&&(decor.surface_lamp||0)<4&&(decor.surface_nightstand||0)<4;
     if(this.bedsideLight)this.bedsideLight.intensity=lamp?6:0;
