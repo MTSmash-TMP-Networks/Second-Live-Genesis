@@ -35,3 +35,32 @@ export function renderPreview(container,data,{live=false}={}){
   const dispose=()=>{renderer.setAnimationLoop(null);ro.disconnect();controls.removeEventListener('change',draw);controls.dispose();clear();renderer.dispose();renderer.domElement.remove();};
   dispose.reset=()=>{reset();draw();};dispose.update=next=>{update(next);draw();};return dispose;
 }
+
+// Look around the real equirectangular image from its capture point.
+// No positional movement: this is an optical panorama, not a 3D mesh.
+export function renderPanorama(container,src){
+  const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:'low-power'});
+  renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio||1,1.5));
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  const scene=new THREE.Scene();scene.background=new THREE.Color(0x0c141c);
+  const camera=new THREE.PerspectiveCamera(75,1,.01,20);
+  let yaw=0,pitch=0,fov=75,disposed=false,drag=null;
+  const canvas=renderer.domElement;canvas.setAttribute('aria-label','360 Grad Panorama, ziehen zum Umsehen');
+  const draw=()=>{if(disposed)return;const p=pitch*Math.PI/180,a=yaw*Math.PI/180;camera.lookAt(Math.sin(a)*Math.cos(p),Math.sin(p),Math.cos(a)*Math.cos(p));renderer.render(scene,camera);};
+  const texture=new THREE.TextureLoader().load(src,()=>draw());texture.colorSpace=THREE.SRGBColorSpace;
+  const geo=new THREE.SphereGeometry(5,64,32),material=new THREE.MeshBasicMaterial({map:texture,side:THREE.BackSide});
+  const sphere=new THREE.Mesh(geo,material);sphere.rotation.y=-Math.PI/2;scene.add(sphere);
+  container.replaceChildren(canvas);
+  const resize=()=>{const w=Math.max(1,container.clientWidth),h=Math.max(1,container.clientHeight);renderer.setSize(w,h,false);camera.aspect=w/h;camera.fov=fov;camera.updateProjectionMatrix();draw();};
+  const reset=()=>{yaw=0;pitch=0;fov=75;resize();};
+  const down=e=>{if(drag!==null)return;drag={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);};
+  const move=e=>{if(!drag||drag.id!==e.pointerId)return;const rate=fov/Math.max(1,canvas.clientHeight);yaw-=(e.clientX-drag.x)*rate;pitch=Math.max(-89,Math.min(89,pitch+(e.clientY-drag.y)*rate));drag.x=e.clientX;drag.y=e.clientY;draw();};
+  const up=e=>{if(drag?.id===e.pointerId)drag=null;};
+  const wheel=e=>{e.preventDefault();fov=Math.max(35,Math.min(95,fov+e.deltaY*.025));resize();};
+  canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);
+  for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,up);
+  canvas.addEventListener('wheel',wheel,{passive:false});
+  const ro=new ResizeObserver(resize);ro.observe(container);resize();
+  const dispose=()=>{disposed=true;ro.disconnect();canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.removeEventListener(event,up);canvas.removeEventListener('wheel',wheel);texture.dispose();geo.dispose();material.dispose();renderer.dispose();canvas.remove();};
+  dispose.reset=reset;return dispose;
+}
