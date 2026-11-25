@@ -549,7 +549,7 @@ export class RoomRenderer {
     if(this.localCharacter)disposeCharacter(this.localCharacter);
     this.localCharacter=createCharacter(profile.avatar);this.localCharacter.visible=false;this.scene.add(this.localCharacter);
   }
-  showCharacter(player,visible,dt,moving=false){if(!this.localCharacter)return;const root=this.localCharacter;root.visible=visible;if(visible){root.position.set(player.x,player.y,player.z);root.rotation.y=player.yaw;animateCharacter(root,dt,moving);}}
+  showCharacter(player,visible,dt,moving=false){if(!this.localCharacter)return;const root=this.localCharacter;root.visible=visible;if(visible){root.position.set(player.x,player.y,player.z);root.rotation.y=player.yaw;animateCharacter(root,dt,moving,player.stance);}}
   renderStudio(canvas,dt){
     const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),dpr=Math.min(devicePixelRatio||1,1.5);
     if(w!==this.width||h!==this.height||dpr!==this.dpr){this.width=w;this.height=h;this.dpr=dpr;this.renderer.setPixelRatio(dpr);this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
