@@ -1,0 +1,188 @@
+{
+  "body": {
+    "label": "Körperform",
+    "values": [
+      "Schlank",
+      "Sportlich",
+      "Kräftig",
+      "Kurvig"
+    ],
+    "default": 1
+  },
+  "height": {
+    "label": "Körpergröße",
+    "values": [
+      "Klein",
+      "Mittel",
+      "Groß"
+    ],
+    "default": 1
+  },
+  "face": {
+    "label": "Gesichtsform",
+    "values": [
+      "Oval",
+      "Markant",
+      "Rund"
+    ],
+    "default": 0
+  },
+  "skin": {
+    "label": "Hautton",
+    "values": [
+      "Sehr hell",
+      "Hell",
+      "Warm",
+      "Oliv",
+      "Braun",
+      "Dunkel"
+    ],
+    "colors": [
+      "f0ceae",
+      "ddad8d",
+      "c48e6b",
+      "ac805f",
+      "89563e",
+      "5e382d"
+    ],
+    "default": 2
+  },
+  "hair": {
+    "label": "Frisur",
+    "values": [
+      "Kurz",
+      "Seitenscheitel",
+      "Bob",
+      "Locken",
+      "Pferdeschwanz",
+      "Glatze"
+    ],
+    "default": 1
+  },
+  "hairColor": {
+    "label": "Haarfarbe",
+    "values": [
+      "Schwarz",
+      "Dunkelbraun",
+      "Braun",
+      "Blond",
+      "Kupfer",
+      "Grau"
+    ],
+    "colors": [
+      "201a18",
+      "3b2923",
+      "775138",
+      "c4a166",
+      "994b30",
+      "a5a29e"
+    ],
+    "default": 1
+  },
+  "eyes": {
+    "label": "Augenfarbe",
+    "values": [
+      "Braun",
+      "Haselnuss",
+      "Grün",
+      "Blau",
+      "Grau"
+    ],
+    "colors": [
+      "573d2c",
+      "8c7040",
+      "547256",
+      "6087aa",
+      "869399"
+    ],
+    "default": 0
+  },
+  "top": {
+    "label": "Oberteil",
+    "values": [
+      "T-Shirt",
+      "Pullover",
+      "Hemd",
+      "Jacke"
+    ],
+    "default": 0
+  },
+  "topColor": {
+    "label": "Oberteilfarbe",
+    "values": [
+      "Creme",
+      "Schwarz",
+      "Marine",
+      "Salbei",
+      "Bordeaux",
+      "Ocker",
+      "Rosé",
+      "Grau"
+    ],
+    "colors": [
+      "e6ddd0",
+      "272a2e",
+      "354a65",
+      "658277",
+      "833f50",
+      "c7a044",
+      "c48b90",
+      "85878d"
+    ],
+    "default": 2
+  },
+  "trousers": {
+    "label": "Hose",
+    "values": [
+      "Jeans",
+      "Stoffhose",
+      "Chino"
+    ],
+    "default": 0
+  },
+  "trousersColor": {
+    "label": "Hosenfarbe",
+    "values": [
+      "Dunkelblau",
+      "Anthrazit",
+      "Sand",
+      "Schwarz",
+      "Hellblau"
+    ],
+    "colors": [
+      "344d6c",
+      "53565e",
+      "b9a288",
+      "24262a",
+      "7798b5"
+    ],
+    "default": 0
+  },
+  "shoes": {
+    "label": "Schuhe",
+    "values": [
+      "Sneaker hell",
+      "Sneaker dunkel",
+      "Lederschuhe"
+    ],
+    "default": 0
+  },
+  "beard": {
+    "label": "Bart",
+    "values": [
+      "Kein Bart",
+      "Stoppeln",
+      "Kurzer Bart"
+    ],
+    "default": 0
+  },
+  "glasses": {
+    "label": "Brille",
+    "values": [
+      "Keine",
+      "Rund",
+      "Eckig"
+    ],
+    "default": 0
+  }
+}
