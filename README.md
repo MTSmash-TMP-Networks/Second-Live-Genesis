@@ -1,8 +1,24 @@
 # Second Live – World Genesis
 
-**v0.11.1 · Connected Hotel**
+**v0.11.2 · Account Admin Update**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.11.2 – System-Updates über das Admin-Konto
+
+Das System-Update verwendet jetzt die normale Kontoanmeldung. Die Update-App erscheint nur für das serverseitig freigeschaltete Konto; auch Status, Prüfung und Installation sind serverseitig geschützt. Der bisherige separate Update-Schlüssel wird von den HTTP-Endpunkten nicht mehr akzeptiert. Ohne konfigurierte und lokal bestätigte Admin-Identität sind System-Updates im Browser vollständig gesperrt. Private Spielstände, Zimmer und Charaktere bleiben erhalten.
+
+**Einmaliges manuelles Update von 0.11.1 oder früher:** Im ursprünglichen Installationsordner die Host-Dateien von `main` holen (lokale Änderungen nicht verwerfen). Der neue Compose-Parameter wird vom laufenden Host-Agenten erst beim nächsten Containerwechsel übernommen.
+
+```bash
+git pull --ff-only origin main
+python3 scripts/manual_update.py --admin-email admin@example.invalid
+docker compose --env-file .env -f compose.yaml exec second-live python -m game_accounts --activate-update-admin
+```
+
+Die Beispieladresse durch die E-Mail des eigenen Kontos ersetzen. Der manuelle Helfer konfiguriert diese ausschließlich in der lokalen `.env`, stellt über die bestehende Host-Brücke einen Check-/Installationsauftrag und wartet auf die bestätigte Revision. Wenn der Host-Agent offline ist, zunächst `./start.sh` im gleichen Projektordner ausführen. Ein direktes `start.sh --build` kann bei einer aktiven Update-Revision weiterhin den alten Build-Kontext verwenden. Deshalb bleibt die vorhandene Revisions-/Rollback-Logik aktiv. Keine Datenvolumes oder `.sl-update` löschen.
+
+Der letzte Befehl fragt das normale Konto-Passwort verdeckt im Terminal ab. Ein bestehendes Konto wird dabei nicht neu erstellt. Ist das Konto noch nicht vorhanden, kann es ausschließlich über diesen lokalen Befehl angelegt werden. Die konfigurierte Adresse ist für die öffentliche Registrierung reserviert. Die einmalige lokale Bestätigung ist notwendig, weil E-Mail-Adressen derzeit nicht per E-Mail verifiziert werden. Danach genügt die normale Spielanmeldung (auch bei bereits gültigen Sitzungen nach Neuladen). Bestehende alte Update-Schlüssel bleiben nur für einen eventuellen Rollback in der lokalen Konfiguration erhalten. Für Administratoren HTTPS verwenden.
 
 ## Neu in 0.11.1 – Räumlich verbundenes Hotel
 
@@ -112,7 +128,7 @@ chmod +x start.sh
 ./start.sh
 ```
 
-Die `.env`, ein zufälliger optionaler Spielschlüssel sowie ein unabhängiger Update-Admin-Schlüssel werden automatisch angelegt. Vorhandene Schlüssel, Port, HTTPS-Einstellungen und Compose-Projektname bleiben unverändert. Das Spiel ist unter `http://localhost:8765` bzw. `http://SERVER-IP:8765` im WLAN erreichbar. `start.sh --lan` öffnet eine bestehende Loopback-Bindung. Docker und Firewall werden nicht automatisch installiert oder verändert. Bei nicht interaktivem Start stehen die Schlüssel nur in `.env`.
+Die `.env` und ein zufälliger optionaler Spielschlüssel werden automatisch angelegt. Der Update-Administrator wird lokal als Konto konfiguriert und aktiviert. Vorhandene Schlüssel, Port, HTTPS-Einstellungen und Compose-Projektname bleiben unverändert. Das Spiel ist unter `http://localhost:8765` bzw. `http://SERVER-IP:8765` im WLAN erreichbar. `start.sh --lan` öffnet eine bestehende Loopback-Bindung. Docker und Firewall werden nicht automatisch installiert oder verändert. Bei nicht interaktivem Start stehen die Schlüssel nur in `.env`.
 
 **Update von älteren ZIP-Versionen:** Dateien in den bisherigen Projektordner kopieren, `.env` und Docker-Volume unverändert lassen; `chmod +x start.sh stop.sh && ./start.sh --build` (ohne aktive Ingame-Update-Konfiguration). Ordnername/Compose-Projektname beibehalten, damit das existierende Datenvolume verwendet wird. Nicht `docker compose down -v` ausführen.
 
@@ -124,7 +140,7 @@ Die frühere Rekonstruktionsentwicklung ist in [World Capture CPU](docs/WORLD-CA
 
 ## System-Update direkt im Spiel
 
-Im Startbildschirm oder virtuellen Smartphone (`P` bzw. Handy-Button) **System-Update** öffnen. Den Wert `SECOND_LIVE_UPDATE_ADMIN_TOKEN` aus der lokalen `.env` eingeben. „Anmelden / Status anzeigen“, „Auf Updates prüfen“, „Update installieren“ und nach Erfolg „Spiel neu laden“ wählen. Die Anzeige vergleicht die installierte Git-Revision mit `main` (nicht nur Versionsnummern oder Releases). Lokale ZIP-Builds werden als `local` erkannt; beim ersten Update wird der identifizierte GitHub-Commit installiert.
+Mit dem lokal aktivierten Admin-Konto anmelden und im Startbildschirm oder virtuellen Smartphone (`P` bzw. Handy-Button) **System-Update** öffnen. Der Status wird automatisch angezeigt. „Auf Updates prüfen“, „Update installieren“ und nach Erfolg „Spiel neu laden“ wählen. Andere Konten sehen die App nicht und erhalten serverseitig keinen Zugriff. Die Anzeige vergleicht die installierte Git-Revision mit `main` (nicht nur Versionsnummern oder Releases). Lokale ZIP-Builds werden als `local` erkannt; beim ersten Update wird der identifizierte GitHub-Commit installiert.
 
 - Der separate Host-Prozess wird durch `start.sh` gestartet und bleibt aktiv, auch wenn der Spielcontainer neu startet. Nach einem Host-Neustart `./start.sh` ausführen. Ohne Python/Git kann das Spiel gestartet werden, der Updater bleibt jedoch offline.
 - Das Update baut nur den Spielcontainer aus dem geprüften Commit in `.sl-update/releases/`. Erst nach erfolgreichem Build wird der bestehende Dienst ersetzt. Healthcheck und Image-Revision müssen stimmen. Bei Fehlern vor dem Wechsel bleibt das alte Image aktiv; bei fehlgeschlagenem Wechsel versucht der Agent den Rollback zum alten Image. Der nächste Agentstart bzw. `start.sh` kann ein unterbrochenes Wechsel-Journal konservativ zurückrollen.
@@ -172,6 +188,6 @@ Auf Zielserver Projekt und `.env` sicher kopieren, Daten in das richtige Volume 
 
 ### v0.6.9: Gastspiel, Inventar und Handpose
 
-Beim Spielstart ist standardmäßig kein Spielschlüssel mehr notwendig. Alle Geräte, die den Server erreichen, können die gemeinsame persistente Testwelt verändern. Das ist nur für ein vertrauenswürdiges LAN gedacht. Der separate Update-Admin-Zugang bleibt geschützt; der Update-Schlüssel bleibt nur solange die Seite geöffnet ist im Speicher des Eingabefelds. Der Server gibt keine Schlüssel an Gäste aus. `SECOND_LIVE_GUEST_GAME=0` **im Container-Environment** stellt die ursprüngliche Spielschlüssel-Abfrage wieder her (für den aktuellen Compose-Stand kann ein Override genutzt werden). Öffentliche Bereitstellung benötigt weiterhin Benutzerkonten und Rechte.
+Beim Spielstart ist standardmäßig kein Spielschlüssel mehr notwendig. Alle Geräte, die den Server erreichen, können die gemeinsame persistente Testwelt verändern. Das ist nur für ein vertrauenswürdiges LAN gedacht. Seit 0.11.2 erfolgt die System-Update-Autorisierung ausschließlich über das lokal aktivierte Admin-Konto; die alte separate Schlüsselabfrage ist entfallen. `SECOND_LIVE_GUEST_GAME=0` **im Container-Environment** stellt die ursprüngliche Spielschlüssel-Abfrage wieder her (für den aktuellen Compose-Stand kann ein Override genutzt werden). Öffentliche Bereitstellung benötigt weiterhin Benutzerkonten und Rechte.
 
 Taste `3` oder die dritte Inventarkarte wählt das M16-Spielmodell. Auf Desktop die linke Maustaste, auf Mobilgeräten die Feuer-Schaltfläche gedrückt halten; Loslassen, Fokusverlust, Menüwechsel, Waffenwechsel oder Pointer-Cancel beenden das Dauerfeuer. Spielwerte und Effekte sind fiktiv; Schäden laufen über die bestehende serverseitige Schadenslogik. Im VR-Modus bleibt die bisherige Einzelaktion erhalten. Der Importer bevorzugt das texturierte CC-BY-Spielmodell von Osmic, mit Namensnennung im Inventar, und versucht bei Fehlern ein CC0-OBJ. Beide Quellen werden geprüft und lokal serviert; bei Ausfall nutzt das Spiel eine stilisierte lokale Darstellung. Die importierten WebXR-Hände werden jetzt an den tatsächlich sichtbaren Mesh-Kontaktpunkten ausgerichtet, mit korrigiertem Finger-/Daumenbogen und daran ausgerichteten Ärmeln. Eine visuelle Abnahme mit den echten Modellen steht noch aus.
