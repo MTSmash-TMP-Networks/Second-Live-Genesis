@@ -20,6 +20,11 @@ class GameOnlyTest(unittest.TestCase):
                 result=game.action({'action':'place_object','id':key,'position':spec['p'],'rotation':0},None)
                 self.assertEqual(result['placements'][key],spec['p'])
             self.assertEqual(len(game.state()['placements']),7)
+            game.action({'action':'hit','id':'crate'},None)
+            hp=game.state()['objects']['crate']
+            with self.assertRaises(ValueError):game.action({'action':'reset_hotel_layout'},None)
+            result=game.action({'action':'reset_hotel_layout','confirm':True},None)
+            self.assertFalse(result['placements']);self.assertFalse(result['rotations']);self.assertEqual(result['objects']['crate'],hp)
 
 
     def test_preserve_home_and_disable_capture(self):
