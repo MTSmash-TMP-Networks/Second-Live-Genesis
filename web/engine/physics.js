@@ -39,10 +39,10 @@ export class RoomPhysics {
     for(const [id,b] of Object.entries(bodies)){
       let e=this.entries.get(id);const spec=this.spec[id];
       if(!state.objects[id]){if(e){this.remove(e);this.entries.delete(id);}continue;}
-      if(!e||e.ref!==b){if(e)this.remove(e);e=this.add(b.p,spec.s,id==='window'||spec.decor);if(b.q)e.body.setRotation({x:b.q[0],y:b.q[1],z:b.q[2],w:b.q[3]},true);e.ref=b;this.entries.set(id,e);}
+      if(!e||e.ref!==b){if(e)this.remove(e);e=this.add(b.p,spec.s,id==='window'||spec.decor);if(id==='surface_rug')e.col.setSensor(true);if(b.q)e.body.setRotation({x:b.q[0],y:b.q[1],z:b.q[2],w:b.q[3]},true);e.ref=b;this.entries.set(id,e);}
       if(id==='window')continue;
       if(id===held){if(!e.held){e.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased,true);e.col.setSensor(true);e.held=true;}e.body.setNextKinematicTranslation(vector(holdPoint));e.body.setNextKinematicRotation({x:holdRotation[0],y:holdRotation[1],z:holdRotation[2],w:holdRotation[3]});}
-      else if(e.held){e.body.setBodyType(spec.decor?RAPIER.RigidBodyType.Fixed:RAPIER.RigidBodyType.Dynamic,true);e.col.setSensor(false);e.body.setLinvel(vector(b.v),true);e.body.setAngvel({x:0,y:0,z:0},true);e.held=false;}
+      else if(e.held){e.body.setBodyType(spec.decor?RAPIER.RigidBodyType.Fixed:RAPIER.RigidBodyType.Dynamic,true);e.col.setSensor(id==='surface_rug');e.body.setLinvel(vector(b.v),true);e.body.setAngvel({x:0,y:0,z:0},true);e.held=false;}
     }
     const current=new Set(debris);
     for(const [b,e] of this.fragments)if(!current.has(b)){this.remove(e);this.fragments.delete(b);}
