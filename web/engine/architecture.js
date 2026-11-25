@@ -47,6 +47,17 @@ export function buildArchitecture(r,spec) {
     bx([.035,.15,.055],[x+.13,1.67,z+dz],satin);
     r.makeCylinder(.021,.021,.105,16,[x+.165,1.66,z+dz],satin,group);
   }
+  // A real shallow French balcony railing gives the outdoor view parallax.
+  const railing=new THREE.Group();railing.name='French balcony';r.staticGroup.add(railing);
+  const iron=new THREE.MeshStandardMaterial({color:0x282a28,roughness:.54,metalness:.55});
+  r.makeBox([.055,.045,2.53],[-5.31,1.22,z],iron,railing);
+  r.makeBox([.05,.035,2.53],[-5.31,.94,z],iron,railing);
+  for(let i=0;i<=12;i++){
+    const zz=-2.22+i*.203;
+    r.makeCylinder(.012,.012,.30,10,[-5.31,1.07,zz],iron,railing);
+    if(i<12&&i%2===0){const arc=new THREE.Mesh(new THREE.TorusGeometry(.095,.009,7,24,Math.PI),iron);arc.rotation.y=Math.PI/2;arc.position.set(-5.31,1.04,zz+.10);railing.add(arc);}
+  }
+  railing.traverse(o=>{o.userData.noImpact=true;});
   // Glass is rendered only when the persistent window is alive.
   const glassRoot=new THREE.Group();glassRoot.visible=false;r.dynamicGroup.add(glassRoot);
   const glass=new THREE.MeshPhysicalMaterial({color:0xe0eff0,transparent:true,opacity:.13,roughness:.075,metalness:0,depthWrite:false,side:THREE.DoubleSide,clearcoat:.65,clearcoatRoughness:.07,envMapIntensity:.85});
