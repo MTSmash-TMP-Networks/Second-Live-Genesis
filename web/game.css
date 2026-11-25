@@ -30,3 +30,5 @@
 
 /* Rotation controls appear only while carrying. */
 #touchRotateLeft[hidden],#touchRotateRight[hidden]{display:none!important}
+#interaction-prompt{position:absolute;left:50%;top:calc(50% + 24px);transform:translateX(-50%);max-width:min(92vw,410px);padding:7px 12px;text-align:center;color:#f5f8fa;background:#101820db;border:1px solid #ffffff24;border-radius:8px;box-shadow:0 3px 18px #0003;pointer-events:none;font-size:12px;line-height:1.4;z-index:1}#interaction-prompt strong{display:block;font-size:13px;color:#f4f6f5;margin-bottom:3px}#interaction-actions{color:#c6eee4}#interaction-prompt[hidden],.xr-playing #interaction-prompt{display:none!important}#cross.actionable:not(.pulse){color:#9df1d8}#actions button:disabled{opacity:.42;cursor:default}.mobile #interaction-prompt{padding:6px 9px;max-width:min(80vw,310px);font-size:11px;top:calc(50% + 20px)}
+
