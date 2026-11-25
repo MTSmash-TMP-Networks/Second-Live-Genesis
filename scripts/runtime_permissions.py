@@ -4,10 +4,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-MODULES = ('server.py', 'updater_api.py', 'wall_damage.py', 'world_capture.py', 'hotel_lobby.py',
+MODULES = ('server.py', 'updater_api.py', 'wall_damage.py', 'world_capture.py', 'hotel_lobby.py', 'game_accounts.py',
            'runtime_permissions.py')
 REQUIRED_WEB = ('index.html', 'game.js', 'audio.js', 'updater.js',
-                'engine/renderer.bundle.js', 'engine/wall_layout.json', 'engine/hotel_layout.json', 'engine/lobby_layout.json',
+                'engine/renderer.bundle.js', 'engine/wall_layout.json', 'engine/hotel_layout.json', 'engine/lobby_layout.json', 'engine/character_options.json',
                 'assets/polyhaven/manifest.json')
 
 
