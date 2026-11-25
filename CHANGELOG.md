@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.0 – Free World Creative & PvP
+- Zusätzliche Tür FREE WORLD am nördlichen Ende des Hotelflurs. Separater, weißer Gemeinschaftsraum (80 × 80 × 24 m) mit freier Eingangszone und Rückkehr zum Hotel.
+- Persistenter Blockbau auf einem 0,5-m-Raster, Würfel von 0,5–4 m, Wand-/Bodenplatten, Vorschau, Stapeln, Kollision und Sprung auf Blöcke. Eigene Blöcke lassen sich wieder entfernen; andere Bauwerke sind gegen fremdes Löschen geschützt.
+- Smartphone-App mit eigenen JPEG/PNG/WebP-Bildern als Blocktexturen. Lokale Umwandlung zu JPEG bis 512 px; gemeinsame, authentifizierte und begrenzte Speicherung.
+- Separater virtueller PvP-Impuls, serverseitiger Lebenszustand, Punktezähler, Respawn und Spawn-Schutz. Hotelzimmer und Hotelflur bleiben unverändert; PvP gilt auch beim Bauen.
+- Lokale Minimap und Desktop-/Touch-Bausteuerung. Erste Version mit festen Bau- und Texturgrenzen; kein immersives VR in der Free World.
+
 ## 0.13.0 – Genesis Phone & Live Minimap
 - Ein durchgängiges virtuelles Smartphone für Anmeldung, Registrierung, Kontowiederaufnahme, Charakterstudio mit gerenderter Live-Vorschau, Inventar, Einstellungen und administrativen System-Updater. Spielmenüs werden nicht mehr als separate Vollbilddialoge dargestellt.
 - Lokale, mit der Blickrichtung rotierende Minimap unten rechts: aktueller Grundriss, Möbelpositionen, Tür und Fenster; im öffentlichen Flur eigene Zimmertür, anwesende Gäste und KI-Hotelservice. Keine fremden privaten Zimmereinrichtungen oder externen Kartenanfragen.

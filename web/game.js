@@ -1,10 +1,11 @@
-import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell, PORTAL_SIDES } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell, PORTAL_SIDES, FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeBlocked, freeGround, freeExitAt, freeWorldDoorAt } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
 let renderer=null, physicsWorld=null, graphicsReady=false;
 let equipped=null, xrEntering=false, xrReturnFirst=true, posture=null, scopeZoom=false, lastWheel=-Infinity;
 let lobbyEnabled=false,lobbyState=null,lobbyTransition=false;
+let freeEnabled=false,freeState=null,freeView=null,freeTool='build',freeSize=2,freeShape='cube',freeTexture=null;
 let hotelHallPending=false,hotelNeighborPending=false,hotelViewEpoch=0,hotelViewMask='',hotelNeighborAt=0;
 let accountsEnabled=false,accountProfile=null,authMode='login',studioOpen=false,editingFromGame=false,characterDraft=null,accountBusy=false;
 const weaponIds=['pistol','rifle','m16'];
@@ -189,7 +190,7 @@ function sync(s){
   const wasOpen=state.unlocked;state=s;renderer?.setCurtainsClosed?.(s.curtains_closed===true,!started,s.decor||{});renderer?.setDoorOpen?.(!lobbyEnabled&&s.unlocked);if(started&&!lobbyEnabled&&wasOpen!==s.unlocked)audio.play('door',[0,1.1,-4.95]); updateWorldStatus();
 }
 let mutationVersion=0;async function refresh(){const v=mutationVersion;try{let s=await api('/api/game');if(!busy&&v===mutationVersion)sync(s);}catch(e){if(started&&accountsEnabled&&e.status===401)location.reload();throw e;}}
-async function action(action,id,mark,extra={}){if(busy||lobbyState||lobbyTransition)return false;busy=true;mutationVersion++;try{if(spec[id]?.imported)return await importedAction(action,id,extra);const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);if(action==='damage_wall'&&roomModelAllowed())void refreshRoomModels().catch(()=>{});$('notice').textContent=action==='reset_hotel_layout'?'Hotelanordnung wiederhergestellt':action==='toggle_curtains'?(result.curtains_closed?'Vorhänge geschlossen':'Vorhänge geöffnet'):action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
+async function action(action,id,mark,extra={}){if(busy||lobbyState||freeState||lobbyTransition)return false;busy=true;mutationVersion++;try{if(spec[id]?.imported)return await importedAction(action,id,extra);const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);if(action==='damage_wall'&&roomModelAllowed())void refreshRoomModels().catch(()=>{});$('notice').textContent=action==='reset_hotel_layout'?'Hotelanordnung wiederhergestellt':action==='toggle_curtains'?(result.curtains_closed?'Vorhänge geschlossen':'Vorhänge geöffnet'):action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
 function dir(){let a=player.yaw,p=player.pitch;return [-Math.sin(a)*Math.cos(p),-Math.sin(p),-Math.cos(a)*Math.cos(p)];}
 function rotateInverse(v,q){if(!q)return v;const [x,y,z,w]=q,u=[-x,-y,-z],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],t=cross(u,v).map(n=>2*n),c=cross(u,t);return v.map((n,i)=>n+w*t[i]+c[i]);}
 function rayBox(eye,d,p,s,q=null){let pos=rotateInverse(eye.map((v,i)=>v-p[i]),q),dir=rotateInverse(d,q),lo=0,hi=8;for(let i=0;i<3;i++){if(Math.abs(dir[i])<1e-8){if(Math.abs(pos[i])>s[i]/2)return Infinity;}else{let a=(-s[i]/2-pos[i])/dir[i],z=(s[i]/2-pos[i])/dir[i];lo=Math.max(lo,Math.min(a,z));hi=Math.min(hi,Math.max(a,z));if(lo>hi)return Infinity;}}return lo;}
@@ -202,15 +203,15 @@ function setScopeZoom(on){
  document.body.classList.toggle('scope-zoom',scopeZoom);
 }
 function toggleScope(){if(equipped!=='rifle'||held||posture||reloadId||!canPlay()||renderer?.xrMode?.active)return;if(!first)first=true;setScopeZoom(!scopeZoom);}
-function chooseWeapon(id){if((held||posture||lobbyState||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Einzelfeuer':equipped==='rifle'?'Scharfschützengewehr · Einzelschuss · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer':'Unbewaffnet';}
-function arsenal(){if(!started||studioOpen||lobbyState||lobbyTransition){$('notice').textContent='Das Inventar ist in deinem Hotelzimmer verfügbar.';return;}phone('inventory');}
+function chooseWeapon(id){if((held||posture||lobbyState||freeState||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Einzelfeuer':equipped==='rifle'?'Scharfschützengewehr · Einzelschuss · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer':'Unbewaffnet';}
+function arsenal(){if(freeState){phone('free');return;}if(!started||studioOpen||lobbyState||lobbyTransition){$('notice').textContent='Das Inventar ist in deinem Hotelzimmer verfügbar.';return;}phone('inventory');}
 $('closearsenal').onclick=()=>showPhonePage('home');
 for(const id of [...weaponIds,'none'])$('equip-'+id).onclick=()=>{if(!started||studioOpen||lobbyState||lobbyTransition)return;chooseWeapon(id);$('closephone').onclick();};
 chooseWeapon('none');
 function phone(page='home'){if(!started||studioOpen)return;if(renderer?.xrMode?.active){renderer.xrMode.end().then(()=>phone(page)).catch(e=>$('notice').textContent=e.message);return;}document.exitPointerLock?.();clearControls();$('phone').hidden=false;active=false;audio.stopAll();audio.play('phone');showPhonePage(page);updatePhone();}
 const movable=id=>id&&id!=='window'&&Object.hasOwn(spec,id)&&state.objects[id]>0;
 function updateWorldStatus(){
- const message=lobbyState?'Hotelflur · '+lobbyState.online+' / '+lobbyState.capacity+' Gäste · Zimmer '+lobbyDoor(lobbyState.slot).number:accountProfile?'Zimmer '+lobbyDoor(accountProfile.slot).number+' · '+accountProfile.nickname:personalWorld?'Privater Startraum':state.unlocked?'Testbereich freigeschaltet':'Startraum';
+ const message=freeState?'Free World · '+freeState.online+' Spieler':lobbyState?'Hotelflur · '+lobbyState.online+' / '+lobbyState.capacity+' Gäste · Zimmer '+lobbyDoor(lobbyState.slot).number:accountProfile?'Zimmer '+lobbyDoor(accountProfile.slot).number+' · '+accountProfile.nickname:personalWorld?'Privater Startraum':state.unlocked?'Testbereich freigeschaltet':'Startraum';
  $('worldstate').textContent=message;$('phone-worldstate').textContent=message;
 }
 async function lobbyRequest(data,keepalive=false){
@@ -221,7 +222,7 @@ async function lobbyRequest(data,keepalive=false){
  }finally{clearTimeout(timer);}
 }
 async function enterLobby(){
- if(!lobbyEnabled||lobbyState||lobbyTransition||busy||held||posture)return;
+ if(!lobbyEnabled||lobbyState||freeState||lobbyTransition||busy||held||posture)return;
  lobbyTransition=true;chooseWeapon('none');clearControls();$('notice').textContent='Hotelflur wird verbunden …';
  try{
   const result=await lobbyRequest({action:'enter'});
@@ -263,14 +264,14 @@ function resetHotelViews(){
  renderer?.setNeighborSnapshot(null);
 }
 async function hotelViews(){
- if(!started||!accountProfile||!renderer||lobbyState||lobbyTransition||studioOpen)return;
+ if(!started||!accountProfile||!renderer||lobbyState||freeState||lobbyTransition||studioOpen)return;
  const opening=hotelOpenings(state.walls||{}),mask=String(opening.hall)+String(opening.neighbor);
  if(mask!==hotelViewMask){
   resetHotelViews();hotelViewMask=mask;
   if(!opening.hall){renderer.lobby.sync([]);renderer.lobby.syncNpc(null);}
  }
  const epoch=hotelViewEpoch,profile=accountProfile;
- const current=()=>epoch===hotelViewEpoch&&profile===accountProfile&&!lobbyState&&!lobbyTransition;
+ const current=()=>epoch===hotelViewEpoch&&profile===accountProfile&&!lobbyState&&!freeState&&!lobbyTransition;
  if(opening.hall&&!hotelHallPending){
   hotelHallPending=true;
   api('/api/hotel/view',{action:'hall'}).then(data=>{if(current()&&hotelOpenings(state.walls||{}).hall){renderer.lobby.setRooms(data.rooms||[]);renderer.lobby.sync(data.peers||[]);renderer.lobby.syncNpc(data.npc);renderer.syncHallFacades(data.facades||[],profile.slot,state);}}).catch(()=>{}).finally(()=>hotelHallPending=false);
@@ -303,7 +304,7 @@ function updateGreeting(now,eye,direction){
  $('npc-greeting').hidden=now>=greeting.until;
 }
 function lobbyInteraction(ray=null){
- if(!lobbyState)return null;const {origin,direction}=interactionRay(ray);return lobbyDoorAt(origin,direction);
+ if(!lobbyState)return null;const {origin,direction}=interactionRay(ray);if(freeEnabled&&freeWorldDoorAt(origin,direction))return {free:true};return lobbyDoorAt(origin,direction);
 }
 const CURTAIN_TARGETS=new Set(['surface_curtain_l','surface_curtain_r','surface_curtainrod','surface_windowframe','window']);
 const OBJECT_NAMES={surface_bed:'Bett',surface_wardrobe:'Garderobe',surface_nightstand:'Nachttisch',surface_lamp:'Nachttischleuchte',surface_rug:'Teppich',surface_picture:'Kopfteil und Wandregal',surface_ceilinglamp:'Deckenbeleuchtung',surface_switch:'Lichtschalter',surface_outlet:'Steckdose',surface_doortrim:'Türzarge',surface_windowframe:'Fensterrahmen',surface_curtain_l:'Vorhänge',surface_curtain_r:'Vorhänge',surface_curtainrod:'Vorhangstange',surface_radiator:'Heizkörper',crate:'Koffer',table:'Schreibtisch',chair:'Stuhl',sofa:'Sofa',coffee_table:'Couchtisch',window:'Fenster'};
@@ -382,6 +383,7 @@ function leavePosture(){
  $('notice').textContent='Aufgestanden';return true;
 }
 function secondaryInteraction(){
+ if(freeState){if(freeTool==='build')void freeEdit('remove');return;}
  if(canPlay()&&!lobbyState&&!lobbyTransition&&!busy&&held&&spec[held]?.imported){void dropImported();return;}
  if(!canPlay()||lobbyState||lobbyTransition||busy||held)return;
  if(posture){if(posture.kind==='lie')setSleeping(!posture.sleeping);return;}
@@ -394,6 +396,8 @@ function pickUp(id){
  $('notice').textContent=spec[id].imported?'Gegenstand aufgenommen · +/-: Größe · Q/F: drehen · E: abstellen':'Gegenstand aufgenommen · Q/F: drehen · E: abstellen';
 }
 function updateInteractionHint(vr=false){
+  if(freeState){updateFreeHint(vr);return;}
+  $('touchFreeMode').hidden=true;$('touchFire').textContent='Feuer';$('touchArsenal').textContent='Inventar';
   const playing=canPlay()&&!vr,panel=$('interaction-prompt'),actionButton=$('touchInteract'),repairButton=$('touchRepair');
   $('touchRotateLeft').hidden=$('touchRotateRight').hidden=!held;
   const resize=playing&&!lobbyState&&!lobbyTransition&&!!held&&!!spec[held]?.imported&&state.objects[held]>0;
@@ -408,7 +412,7 @@ function updateInteractionHint(vr=false){
   }
   let name='',lines=[],short='Aktion',secondary='',canAct=false,canRepair=false;
   if(playing&&lobbyState){
-    const door=lobbyInteraction();if(door){name='Zimmer '+door.number;if(door.slot===lobbyState.slot){short='Zimmer betreten';canAct=true;lines.push(mobile?short:'E · '+short);}else lines.push('Privates Gästezimmer · kein Zutritt');}
+    const door=lobbyInteraction();if(door?.free){name='Free World';short='Betreten';canAct=true;lines.push(mobile?short:'E · Free World betreten');}else if(door){name='Zimmer '+door.number;if(door.slot===lobbyState.slot){short='Zimmer betreten';canAct=true;lines.push(mobile?short:'E · '+short);}else lines.push('Privates Gästezimmer · kein Zutritt');}
   }else if(playing&&posture){
     name=posture.kind==='sit'?'Sofa · sitzend':posture.sleeping?'Bett · schlafend':'Bett · liegend';
     short=posture.sleeping?'Aufwachen':'Aufstehen';canAct=true;
@@ -492,7 +496,7 @@ function placementPoint(id){
   if(id!=='surface_rug'&&Object.entries(bodies).some(([k,b])=>k!==id&&k!=='surface_rug'&&state.objects[k]>0&&overlap(b.p,boundsSize(spec[k].s,b.q))))return null;
   return p.map(v=>Math.round(v*10000)/10000);
 }
-async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if(lobbyState){const door=lobbyInteraction(ray);if(door?.slot===lobbyState.slot)returnToRoom();else if(door)$('notice').textContent='Dieses Gästezimmer ist privat.';return;}if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
+async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if(freeState){if(freeExitAt(playerEye(),dir()))await leaveFreeWorld();else if(freeTool==='build')void freeEdit('place');return;}if(lobbyState){const door=lobbyInteraction(ray);if(door?.free){await enterFreeWorld();return;}if(door?.slot===lobbyState.slot)returnToRoom();else if(door)$('notice').textContent='Dieses Gästezimmer ist privat.';return;}if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
   const hit=interactionTarget(ray),primary=primaryInteraction(hit,ray);
   if(primary?.op==='toggle_light'){audio.play('click');await action(primary.op,primary.id);return;}
   if(primary?.op==='toggle_curtains'){await action(primary.op,primary.id);return;}
@@ -500,8 +504,8 @@ async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if
   if(primary?.op==='pick_up'){pickUp(primary.id);return;}
   if(doorInView(hit,ray)){if(lobbyEnabled)await enterLobby();else $('notice').textContent='Gemeinsamer Hotelflur nicht verfügbar.';}
 }
-function groundAt(x,z){if(lobbyState)return 0;if(z<-5&&state.unlocked&&!lobbyEnabled)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
-function coll(x,z,height=player.stance==='crouch'?1.12:1.6){if(lobbyState)return !lobbyWalkable(x,z);if(Math.abs(x)>4.65||z>4.65||z<(!lobbyEnabled&&state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+height&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,height*.53,height-.15].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(!spec[id].imported||spec[id].row.solid)&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+height&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
+function groundAt(x,z){if(freeState)return freeGround(freeState.blocks,x,player.y,z);if(lobbyState)return 0;if(z<-5&&state.unlocked&&!lobbyEnabled)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
+function coll(x,z,height=player.stance==='crouch'?1.12:1.6){if(freeState)return freeBlocked(freeState.blocks,x,player.y,z,height);if(lobbyState)return !lobbyWalkable(x,z);if(Math.abs(x)>4.65||z>4.65||z<(!lobbyEnabled&&state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+height&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,height*.53,height-.15].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(!spec[id].imported||spec[id].row.solid)&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+height&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
 let enteringGame=false,pendingAvatar=null;
 function isPersonalSessionError(e){
  return e?.status===401&&(e.code==='session_required'||/^Persoenliche Sitzung fehlt/i.test(e.message||''));
@@ -558,7 +562,7 @@ function applyAccount(profile){
  renderer?.setCharacter(accountProfile);$('account-phone').hidden=false;$('account-phone-name').textContent=accountProfile.nickname+' · Zimmer '+lobbyDoor(accountProfile.slot).number;updateWorldStatus();window.dispatchEvent(new Event('sl-account-change'));
 }
 function openStudio(fromGame=false){
- if(!accountProfile||!graphicsReady||lobbyState||lobbyTransition)return;
+ if(!accountProfile||!graphicsReady||lobbyState||freeState||lobbyTransition)return;
  if(fromGame&&posture&&!leavePosture())return;
  editingFromGame=fromGame;studioOpen=true;characterDraft={...accountProfile.avatar};clearControls();active=false;document.exitPointerLock?.();
  document.body.classList.add('character-editing');showPhonePage('character');
@@ -668,14 +672,14 @@ $('character-save').onclick=async()=>{if(accountBusy||!studioOpen)return;account
  }catch(e){if(!recoverAccountSession(e))$('character-error').textContent=e.message;}
  finally{accountBusy=false;$('character-save').disabled=false;authButtons();}
 };
-$('edit-character').onclick=()=>{if(lobbyState){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}openStudio(true);};
+$('edit-character').onclick=()=>{if(lobbyState||freeState){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}openStudio(true);};
 $('account-logout').onclick=async()=>{if(accountBusy||!confirm('Vom Spiel abmelden? Dein Zimmer und Charakter bleiben gespeichert.'))return;accountBusy=true;try{await api('/api/account',{action:'logout'});location.reload();}catch(e){$('notice').textContent=e.message;accountBusy=false;}};
 $('start').onclick=()=>enterGame();
-const phonePages={welcome:'welcome',character:'character-editor',home:'phone-page-home',world:'phone-page-world',settings:'phone-page-settings',models:'phone-page-models',inventory:'arsenal'};
+const phonePages={welcome:'welcome',character:'character-editor',home:'phone-page-home',world:'phone-page-world',settings:'phone-page-settings',models:'phone-page-models',inventory:'arsenal',free:'phone-page-free'};
 function allowedPhonePage(page,playing,editing){
  if(editing)return 'character';
  if(!playing)return 'welcome';
- return ['home','world','settings','models','inventory'].includes(page)?page:'home';
+ return ['home','world','settings','models','inventory','free'].includes(page)?page:'home';
 }
 function showPhonePage(page){
  page=allowedPhonePage(page,started,studioOpen);
@@ -683,11 +687,202 @@ function showPhonePage(page){
  $('phone').hidden=false;
  $('closephone').hidden=!started||studioOpen;$('phone-home').hidden=!started||studioOpen;
  if(page==='settings'||page==='welcome')$(page==='settings'?'settings-graphics':'login-graphics').append($('phone-graphics'));
+ if(page==='free')updateFreeUI();
  $('phone').querySelector('.sl-phone-content').scrollTop=0;
 }
 function updatePhone(){const now=new Date();$('phone-clock').textContent=now.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});$('phone-date').textContent=now.toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'});$('phone-worldstate').textContent=$('worldstate').textContent;$('phone-volume').value=String(Math.round(audio.volume*100));$('phone-sound').checked=audio.enabled;$('phone-volume-label').textContent=Math.round(audio.volume*100)+' %';}
 $('phone-home').onclick=()=>{if(started&&!studioOpen&&$('updater').hidden)showPhonePage('home');};
-$('phone-app-models').onclick=$('world-open-models').onclick=()=>{showPhonePage('models');updateRoomModelUI();void refreshRoomModels(true).catch(e=>{$('room-model-message').textContent=e.message;});};$('phone-app-world').onclick=()=>{showPhonePage('world');updatePhone();};$('phone-app-settings').onclick=()=>{showPhonePage('settings');updatePhone();};$('phone-app-inventory').onclick=()=>arsenal();
+$('phone-app-models').onclick=$('world-open-models').onclick=()=>{showPhonePage('models');updateRoomModelUI();void refreshRoomModels(true).catch(e=>{$('room-model-message').textContent=e.message;});};$('phone-app-world').onclick=()=>{showPhonePage('world');updatePhone();};$('phone-app-settings').onclick=()=>{showPhonePage('settings');updatePhone();};$('phone-app-inventory').onclick=()=>arsenal();$('phone-app-free').onclick=()=>showPhonePage('free');
+
+
+// Free World is a separate, authenticated shared scene and server lease.
+// The private room stays untouched while the player is in the creative area.
+function freeDims(size=freeSize,shape=freeShape){
+ return shape==='wall-z'?[size,size,1]:shape==='wall-x'?[1,size,size]:shape==='floor'?[size,1,size]:[size,size,size];
+}
+function freeShapeLabel(){return {'cube':'Würfel','wall-z':'Wandplatte Z','wall-x':'Wandplatte X','floor':'Bodenplatte'}[freeShape];}
+function freeCandidate(){
+ if(!freeState||freeExitAt(playerEye(),dir()))return null;
+ const hit=freeRay(playerEye(),dir(),freeState.blocks);
+ return freePlacement(hit,freeDims(),freeState.blocks,[[player.x,player.y,player.z],...freeState.peers.map(p=>p.position)]);
+}
+function freeTextureHeaders(){return protectedGame?{'X-SecondLive-Token':token}:{};}
+async function freeRequest(data,keepalive=false){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),6000);
+ try{
+  const r=await fetch('/api/free-world',{method:'POST',cache:'no-store',credentials:'same-origin',keepalive,signal:controller.signal,headers:{...freeTextureHeaders(),'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const j=await r.json();if(!r.ok){const e=Error(j.error||'HTTP '+r.status);e.status=r.status;throw e;}return j;
+ }finally{clearTimeout(timer);}
+}
+async function loadFreeTexture(id){
+ const r=await fetch('/api/free-world/texture/'+encodeURIComponent(id),{headers:freeTextureHeaders(),credentials:'same-origin',cache:'no-store'});
+ if(!r.ok)throw Error('Textur nicht verfügbar');return r.blob();
+}
+function applyFreeSnapshot(s,result,initial=false){
+ if(freeState!==s)return;
+ if(initial||result.life!==s.life||result.corrected){
+  Object.assign(player,{x:result.position[0],y:result.position[1],z:result.position[2],yaw:result.yaw,pitch:0,vy:0,stance:'walk',eyeHeight:1.65});
+  if(!initial&&result.life!==s.life){clearControls();$('notice').textContent='Neu gespawnt · kurzer Schutz aktiv';}
+  else if(!initial&&result.corrected)$('notice').textContent='Position korrigiert';
+ }
+ s.hp=result.hp;s.life=result.life;s.score=result.score;s.online=result.online;s.peers=result.peers||[];s.textures=result.textures||[];
+ if(Array.isArray(result.blocks)){s.blocks=result.blocks;s.revision=result.revision;freeView.setBlocks(s.blocks,s.revision,loadFreeTexture);}
+ freeView.sync(s.peers);s.lastOK=performance.now();
+ if(result.notice)$('notice').textContent=result.notice;
+ updateWorldStatus();updateFreeUI();
+}
+async function enterFreeWorld(){
+ if(!freeEnabled||!lobbyState||lobbyTransition||freeState)return;
+ if(renderer.xrMode?.active){$('notice').textContent='Bitte VR beenden, um die Free World zu betreten.';return;}
+ const hall=lobbyState;lobbyTransition=true;clearControls();
+ try{
+  const result=await freeRequest({action:'enter',lease:hall.lease});
+  if(lobbyState!==hall)return;
+  lobbyState=null;resetHotelViews();renderer.lobby.clear();resetGreeting();chooseWeapon('none');
+  freeView??=new FreeWorldView();freeView.clear();
+  freeState={lease:result.lease,life:0,blocks:[],peers:[],textures:[],revision:-1,online:1,hp:100,score:0,lastOK:performance.now(),pending:null,editing:false};
+  freeTool='build';freeSize=2;freeShape='cube';freeTexture=null;
+  document.body.classList.add('free-playing');$('free-hud').hidden=false;
+  applyFreeSnapshot(freeState,result,true);audio.play('door');$('notice').textContent='Willkommen in der Free World · B: Baumodus / PvP · P: Texturen';
+ }catch(e){$('notice').textContent=e.message||'Free World nicht erreichbar';}
+ finally{lobbyTransition=false;clearControls();}
+}
+async function leaveFreeWorld(){
+ const s=freeState;if(!s||lobbyTransition||s.editing)return;
+ lobbyTransition=true;clearControls();
+ try{
+  if(s.pending)await s.pending.catch(()=>{});
+  const result=await freeRequest({action:'leave',lease:s.lease});
+  if(freeState!==s)return;
+  freeState=null;freeView?.clear();document.body.classList.remove('free-playing');$('free-hud').hidden=true;
+  lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
+  resetHotelViews();renderer.lobby.restoreProjection();renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);renderer.lobby.syncNpc(result.npc);renderer.syncHallFacades(result.facades||[],result.slot,state);
+  Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0,stance:'walk',eyeHeight:1.65});
+  resetGreeting();updateWorldStatus();updateFreeUI();if(!$('phone').hidden)$('closephone').onclick();
+  audio.play('door');$('notice').textContent='Zurück im Hotelflur';
+ }catch(e){$('notice').textContent=e.message;if(e.status===401||e.status===409)location.reload();}
+ finally{lobbyTransition=false;clearControls();}
+}
+function freeMove(s){return {action:'update',lease:s.lease,revision:s.revision,life:s.life,position:[player.x,player.y,player.z],yaw:player.yaw,stance:player.stance};}
+function freePoll(){
+ const s=freeState;if(!s||s.pending||s.editing||lobbyTransition)return;
+ const p=freeRequest(freeMove(s)).then(result=>applyFreeSnapshot(s,result)).catch(e=>{
+  if(freeState!==s)return;
+  if(e.status===401||e.status===409||performance.now()-s.lastOK>FREE_LAYOUT.leaseSeconds*1000){location.reload();return;}
+  $('notice').textContent='Free World: Verbindung wird wiederhergestellt';
+ }).finally(()=>{if(s.pending===p)s.pending=null;});
+ s.pending=p;
+}
+async function freeEdit(op){
+ const s=freeState;if(!s||!canPlay()||s.editing||lobbyTransition)return;
+ if((op==='pulse')!==(freeTool==='pvp'))return;
+ s.editing=true;
+ try{
+  if(s.pending)await s.pending;
+  if(freeState!==s||lobbyTransition||!canPlay())return;
+  const life=s.life;
+  applyFreeSnapshot(s,await freeRequest(freeMove(s)));
+  if(freeState!==s||lobbyTransition||s.life!==life||!canPlay())return;
+  let extra={};
+  if(op==='place'){const c=freeCandidate();if(!c){$('notice').textContent='Kein freier Bauplatz';return;}extra={...c,texture:freeTexture||null};}
+  else if(op==='remove'){const hit=freeRay(playerEye(),dir(),s.blocks);if(!hit?.id){$('notice').textContent='Kein Block ausgewählt';return;}extra={id:hit.id};}
+  else if(op==='pulse'){extra={direction:dir()};$('cross').classList.add('pulse');setTimeout(()=>$('cross').classList.remove('pulse'),100);}
+  const result=await freeRequest({action:op,lease:s.lease,revision:s.revision,life:s.life,...extra});
+  applyFreeSnapshot(s,result);audio.play('click');
+ }catch(e){$('notice').textContent=e.message;if(e.status===401)location.reload();}
+ finally{s.editing=false;}
+}
+function freePrimary(){void freeEdit(freeTool==='build'?'remove':'pulse');}
+function setFreeTool(mode){
+ if(!freeState)return;
+ freeTool=mode==='pvp'?'pvp':'build';updateFreeUI();updateFreeHint(false);
+}
+function freeKey(code){
+ if(code==='KeyB'){setFreeTool(freeTool==='build'?'pvp':'build');return true;}
+ if(code==='KeyQ'){const shapes=['cube','wall-z','wall-x','floor'];freeShape=shapes[(shapes.indexOf(freeShape)+1)%shapes.length];updateFreeUI();return true;}
+ if(/^Digit[1-4]$/.test(code)){freeSize=FREE_LAYOUT.sizes[Number(code.at(-1))-1];updateFreeUI();return true;}
+ if(code==='KeyE'){void interact();return true;}
+ if(code==='KeyG'){if(freeTool==='build')void freeEdit('remove');return true;}
+ if(code==='KeyI'){phone('free');return true;}
+ if(['Digit0','KeyR','KeyT','KeyF'].includes(code))return true;
+ return false;
+}
+let freeTextureKey='';
+function updateFreeUI(){
+ const s=freeState;$('free-outside').hidden=!!s;$('free-tools').hidden=!s;
+ $('free-hud').hidden=!s||!$('phone').hidden||studioOpen;
+ if(!s)return;
+ $('free-online').textContent=s.online+' Spieler';$('free-health-bar').style.width=Math.max(0,Math.min(100,s.hp))+'%';
+ $('free-hud-detail').textContent=s.hp+' HP · '+(freeTool==='build'?'Baumodus':'PvP')+' · '+s.score+' Punkte';
+ $('free-hud-size').textContent=(freeSize*FREE_LAYOUT.grid).toFixed(2).replace('.',',')+' m · '+freeShapeLabel();
+ $('free-size').value=String(freeSize);$('free-shape').value=freeShape;
+ $('free-build-mode').disabled=freeTool==='build';$('free-pvp-mode').disabled=freeTool==='pvp';
+ const key=JSON.stringify(s.textures);if(key!==freeTextureKey){
+  const select=$('free-texture-select');select.replaceChildren(new Option('Weiß / Standard',''));
+  for(const t of s.textures)select.add(new Option(t.name,t.id));
+  if(!s.textures.some(t=>t.id===freeTexture))freeTexture=null;
+  freeTextureKey=key;
+ }
+ $('free-texture-select').value=freeTexture||'';
+ $('free-texture-delete').disabled=!freeTexture||s.editing;
+ $('free-texture-upload').disabled=s.editing;$('free-leave').disabled=s.editing||lobbyTransition;
+ $('free-usage').textContent=s.blocks.filter(b=>b.ownerSlot===accountProfile?.slot).length+' / '+FREE_LAYOUT.maxOwned+' eigene Blöcke · '+s.blocks.length+' / '+FREE_LAYOUT.maxBlocks+' gesamt · '+s.textures.length+' / '+FREE_LAYOUT.maxOwnTextures+' Bilder';
+}
+function updateFreeHint(vr=false){
+ const s=freeState;if(!s)return;
+ const playing=canPlay()&&!vr,exit=freeExitAt(playerEye(),dir()),candidate=playing&&freeTool==='build'?freeCandidate():null;
+ const panel=$('interaction-prompt');panel.hidden=!playing;
+ $('held-model-size').hidden=true;$('touchRotateLeft').hidden=$('touchRotateRight').hidden=true;$('touchZoom').hidden=true;
+ $('touchSecondary').hidden=true;$('touchFreeMode').hidden=false;
+ $('touchFire').disabled=!playing||s.editing;$('touchFire').textContent=freeTool==='build'?'Abbauen':'Impuls';
+ $('touchInteract').disabled=!playing||(!exit&&!candidate)||s.editing;$('touchInteract').textContent=exit?'Hotel':'Setzen';
+ $('touchRepair').disabled=$('touchReload').disabled=true;$('touchArsenal').disabled=false;$('touchArsenal').textContent='Bauen';
+ $('touchJump').disabled=player.stance==='crouch';$('touchSprint').disabled=$('touchCrouch').disabled=!playing;
+ $('touchSprint').setAttribute('aria-pressed',String(player.stance==='sprint'||touchSprint));$('touchCrouch').setAttribute('aria-pressed',String(player.stance==='crouch'||touchCrouch));
+ $('interaction-name').textContent=exit?'HOTEL · Ausgang':freeTool==='build'?(candidate?'Bauplatz frei':'Baumodus'):'PvP-Modus';
+ $('interaction-actions').textContent=exit?'E · Zum Hotel':freeTool==='build'?'E / Rechtsklick: setzen · G / Linksklick: abbauen · B: PvP':'Linksklick: Spielimpuls · B: Bauen';
+ $('cross').classList.toggle('actionable',playing&&(exit||!!candidate));
+ $('hint').textContent='Free World · B: Bauen / PvP · I: Bauwerkzeug';
+ updateFreeUI();
+}
+$('free-size').onchange=()=>{freeSize=Number($('free-size').value);updateFreeUI();};
+$('free-shape').onchange=()=>{freeShape=$('free-shape').value;updateFreeUI();};
+$('free-texture-select').onchange=()=>{freeTexture=$('free-texture-select').value||null;updateFreeUI();};
+$('free-build-mode').onclick=()=>{setFreeTool('build');$('closephone').onclick();};
+$('free-pvp-mode').onclick=()=>{setFreeTool('pvp');$('closephone').onclick();};
+$('free-leave').onclick=()=>void leaveFreeWorld();
+$('free-texture-upload').onclick=async()=>{
+ const s=freeState,file=$('free-texture-file').files[0];if(!s||s.editing||!file)return;
+ s.editing=true;updateFreeUI();
+ try{
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>8*1024*1024)throw Error('PNG, JPEG oder WebP bis 8 MiB auswählen');
+  const bitmap=await createImageBitmap(file);
+  let blob;
+  try{
+   const factor=Math.min(1,FREE_LAYOUT.textureSize/Math.max(bitmap.width,bitmap.height));
+   const c=document.createElement('canvas');c.width=Math.max(1,Math.round(bitmap.width*factor));c.height=Math.max(1,Math.round(bitmap.height*factor));
+   const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(bitmap,0,0,c.width,c.height);
+   blob=await new Promise(resolve=>c.toBlob(resolve,'image/jpeg',.82));
+  }finally{bitmap.close?.();}
+  if(!blob||blob.size>FREE_LAYOUT.textureBytes)throw Error('Bild konnte nicht auf 256 KiB verkleinert werden');
+  if(freeState!==s)return;
+  if(s.pending)await s.pending;
+  const r=await fetch('/api/free-world/texture?name='+encodeURIComponent(file.name.slice(0,64)),{method:'POST',cache:'no-store',credentials:'same-origin',headers:{...freeTextureHeaders(),'Content-Type':'image/jpeg','X-SecondLive-World-Lease':s.lease},body:blob});
+  const j=await r.json();if(!r.ok)throw Error(j.error||'Texturimport fehlgeschlagen');
+  if(freeState!==s)return;
+  s.textures=j.textures;freeTexture=j.added;$('free-texture-file').value='';$('free-texture-message').textContent='Textur importiert und ausgewählt. Neue Blöcke verwenden dieses Bild.';
+ }catch(e){$('free-texture-message').textContent=e.message;}
+ finally{s.editing=false;updateFreeUI();}
+};
+$('free-texture-delete').onclick=async()=>{
+ const s=freeState,id=freeTexture;if(!s||s.editing||!id)return;
+ s.editing=true;updateFreeUI();
+ try{if(s.pending)await s.pending;const j=await freeRequest({action:'texture_delete',lease:s.lease,revision:s.revision,id});applyFreeSnapshot(s,j);$('free-texture-message').textContent='Textur gelöscht.';}
+ catch(e){$('free-texture-message').textContent=e.message;}
+ finally{s.editing=false;updateFreeUI();}
+};
+setInterval(freePoll,FREE_LAYOUT.pollMilliseconds);
+window.addEventListener('pagehide',()=>{if(freeState)freeRequest({action:'abandon',lease:freeState.lease},true).catch(()=>{});});
 
 /* User-owned GLB furnishings: upload, select, place and persist during gameplay. */
 // Imported objects participate in the normal room rigid-body system.
@@ -795,7 +990,7 @@ const ROOM_MODEL_MAX=16*1024*1024;
 let roomModelRows=[],roomModelBusy=false,roomModelRevision=0,roomModelRefreshing=false,roomModelLimits={max_models:8,max_owner:64*1024*1024},roomModelListKey='';
 const modelSelection=()=>$('room-model-select').value;
 const selectedRoomModel=()=>roomModelRows.find(r=>r.id===modelSelection());
-const roomModelAllowed=()=>!!(started&&accountProfile&&!lobbyState&&!lobbyTransition);
+const roomModelAllowed=()=>!!(started&&accountProfile&&!lobbyState&&!freeState&&!lobbyTransition);
 const modelHeaders=()=>protectedGame?{'X-SecondLive-Token':token}:{};
 async function roomModelBytes(id,signal){
  const r=await fetch('/api/room-models/'+encodeURIComponent(id),{headers:modelHeaders(),signal});
@@ -924,21 +1119,21 @@ $('phone-sound').onchange=()=>{audio.configure($('phone-sound').checked,Number($
 setInterval(()=>{if(!$('phone').hidden)updatePhone();},15000);
 window.addEventListener('keydown',e=>{if(e.code==='Escape'&&!$('phone').hidden&&$('updater').hidden){$('closephone').onclick();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)audio.stopAll();});
-$('restore-hotel').onclick=async()=>{if(lobbyState||lobbyTransition){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}if(busy||!confirm('Möbel auf Hotel-Standardpositionen zurücksetzen? Schäden und Fortschritt bleiben erhalten.'))return;if(posture&&!leavePosture())return;if(held){bodies[held]=savedBody(state,held);held=null;}if(await action('reset_hotel_layout',null,null,{confirm:true})){for(const id of Object.keys(spec))if(id!=='window'&&!spec[id].imported)bodies[id]=savedBody(state,id);const p=HOTEL_LAYOUT.spawn.p;player.x=p[0];player.y=0;player.z=p[2];player.vy=0;player.yaw=HOTEL_LAYOUT.spawn.yaw;player.pitch=0;updatePhone();}};
+$('restore-hotel').onclick=async()=>{if(lobbyState||freeState||lobbyTransition){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}if(busy||!confirm('Möbel auf Hotel-Standardpositionen zurücksetzen? Schäden und Fortschritt bleiben erhalten.'))return;if(posture&&!leavePosture())return;if(held){bodies[held]=savedBody(state,held);held=null;}if(await action('reset_hotel_layout',null,null,{confirm:true})){for(const id of Object.keys(spec))if(id!=='window'&&!spec[id].imported)bodies[id]=savedBody(state,id);const p=HOTEL_LAYOUT.spawn.p;player.x=p[0];player.y=0;player.z=p[2];player.vy=0;player.yaw=HOTEL_LAYOUT.spawn.yaw;player.pitch=0;updatePhone();}};
 $('closephone').onclick=()=>{if(!started||studioOpen||!$('updater').hidden)return;showPhonePage('home');$('phone').hidden=true;clearControls();active=true;};$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';updatePhone();}catch(e){$('notice').textContent=e.message;}};
 canvas.onclick=()=>{if(mobile||!canPlay())return;void audio.unlock();if(document.pointerLockElement!==canvas){canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;}};
-canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.pointerLockElement===canvas&&canPlay())pressTrigger();});
+canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.pointerLockElement===canvas&&canPlay()){if(freeState)freePrimary();else pressTrigger();}});
 canvas.addEventListener('contextmenu',e=>{if(canPlay()&&!mobile)e.preventDefault();});
-window.addEventListener('mousedown',e=>{if(e.button===2&&!mobile&&document.pointerLockElement===canvas&&canPlay()){e.preventDefault();toggleScope();}});
+window.addEventListener('mousedown',e=>{if(e.button===2&&!mobile&&document.pointerLockElement===canvas&&canPlay()){e.preventDefault();if(freeState){if(freeTool==='build')void freeEdit('place');}else toggleScope();}});
 window.addEventListener('wheel',e=>{
- if(!canPlay()||lobbyState||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
+ if(!canPlay()||lobbyState||freeState||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
  e.preventDefault();
  const now=performance.now();if(now-lastWheel<140)return;lastWheel=now;
  chooseWeapon(nextWeapon(equipped,e.deltaY));
 },{passive:false});
 window.addEventListener('pointerup',e=>{if(triggerPointer===null||triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('pointercancel',releaseTrigger);
-window.addEventListener('keydown',e=>{if(!canPlay())return;if(canPlay()&&held&&spec[held]?.imported&&(e.key==='+'||e.key==='-'||e.code==='NumpadAdd'||e.code==='NumpadSubtract')){e.preventDefault();if(!e.repeat)resizeHeld(e.key==='-'||e.code==='NumpadSubtract'?-1:1);return;}if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyC'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyB')void mountHeld();if(e.code==='KeyQ')turnHeld(-90);if(e.code==='KeyF'){if(posture?.kind==='lie')secondaryInteraction();else turnHeld(90);}if(e.code==='KeyG'&&!posture)secondaryInteraction();if(e.code==='KeyV'&&!posture){setScopeZoom(false);first=!first;}if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit3')chooseWeapon('m16');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR')repair();});
+window.addEventListener('keydown',e=>{if(!canPlay())return;if(canPlay()&&held&&spec[held]?.imported&&(e.key==='+'||e.key==='-'||e.code==='NumpadAdd'||e.code==='NumpadSubtract')){e.preventDefault();if(!e.repeat)resizeHeld(e.key==='-'||e.code==='NumpadSubtract'?-1:1);return;}if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyC'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(freeState&&freeKey(e.code))return;if(e.code==='KeyE')interact();if(e.code==='KeyB')void mountHeld();if(e.code==='KeyQ')turnHeld(-90);if(e.code==='KeyF'){if(posture?.kind==='lie')secondaryInteraction();else turnHeld(90);}if(e.code==='KeyG'&&!posture)secondaryInteraction();if(e.code==='KeyV'&&!posture){setScopeZoom(false);first=!first;}if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit3')chooseWeapon('m16');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR')repair();});
 for(const [id,delta] of [['held-size-minus',-1],['held-size-plus',1]])$(id).addEventListener('click',e=>{e.stopPropagation();resizeHeld(delta);});
 $('held-mount').addEventListener('click',e=>{e.stopPropagation();void mountHeld();});
 window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>keys.clear());document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==canvas)clearControls();});document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas&&canPlay()&&!posture?.sleeping){const sensitivity=scopeZoom ? .0012 : .003;player.yaw-=e.movementX*sensitivity;player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch+e.movementY*sensitivity));}});
@@ -977,14 +1172,14 @@ function repairTarget(ray=null,surface=null){
   return null;
 }
 function repair(ray=null){
-  if(!canPlay()||lobbyState||lobbyTransition||busy||held||posture)return;
+  if(!canPlay()||freeState||lobbyState||lobbyTransition||busy||held||posture)return;
   const target=repairTarget(ray);
   if(target&&damaged(target.id))action(target.op,target.id);
 }
 $('mode').onclick=()=>setMode(!mobile);setMode(mobile);
 const stick=$('stick');let stickId=null;function moveStick(e){let r=stick.getBoundingClientRect(),x=(e.clientX-r.left-r.width/2)/(r.width*.36),y=(e.clientY-r.top-r.height/2)/(r.height*.36),l=Math.max(1,Math.hypot(x,y));touchMove=[x/l,-y/l];stick.style.setProperty('--jx',`${x/l*33}px`);stick.style.setProperty('--jy',`${y/l*33}px`);}stick.addEventListener('pointerdown',e=>{if(!canPlay()||stickId!==null)return;e.preventDefault();stickId=e.pointerId;stick.setPointerCapture(e.pointerId);moveStick(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId&&canPlay())moveStick(e);});for(const n of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(n,e=>{if(e.pointerId===stickId){stickId=null;touchMove=[0,0];stick.style.setProperty('--jx','0px');stick.style.setProperty('--jy','0px');}});
 canvas.addEventListener('pointerdown',e=>{if(!canPlay()||posture?.sleeping||(!mobile&&document.pointerLockElement===canvas))return;if(look)return;look={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!look||look.id!==e.pointerId||!canPlay()||posture?.sleeping)return;const sensitivity=scopeZoom ? .002 : .005;player.yaw-=(e.clientX-look.x)*sensitivity;player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch+(e.clientY-look.y)*sensitivity));look.x=e.clientX;look.y=e.clientY;});for(const n of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(n,e=>{if(look?.id===e.pointerId)look=null;});
-for(const [id,fn] of [['touchInteract',interact],['touchSecondary',secondaryInteraction],['touchZoom',toggleScope],['touchRotateLeft',()=>turnHeld(-90)],['touchRotateRight',()=>turnHeld(90)],['touchReload',startReload],['touchRepair',()=>repair()],['touchView',()=>{if(!posture){setScopeZoom(false);first=!first;}}],['touchPhone',phone],['touchArsenal',arsenal],['touchSprint',()=>{if(!posture&&!held&&!scopeZoom){touchSprint=!touchSprint;if(touchSprint)touchCrouch=false;}}],['touchCrouch',()=>{if(!posture){touchCrouch=!touchCrouch;if(touchCrouch)touchSprint=false;}}],['touchJump',()=>{if(!posture&&player.stance!=='crouch'&&!wantsCrouch()&&Math.abs(player.y-groundAt(player.x,player.z))<1e-5)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});const fireButton=$('touchFire');fireButton.addEventListener('pointerdown',e=>{e.preventDefault();if(!canPlay()||triggerPointer!==null)return;void audio.unlock();pressTrigger();if(triggerHeld){triggerPointer=e.pointerId;fireButton.setPointerCapture?.(e.pointerId);}});
+for(const [id,fn] of [['touchFreeMode',()=>setFreeTool(freeTool==='build'?'pvp':'build')],['touchInteract',interact],['touchSecondary',secondaryInteraction],['touchZoom',toggleScope],['touchRotateLeft',()=>turnHeld(-90)],['touchRotateRight',()=>turnHeld(90)],['touchReload',startReload],['touchRepair',()=>repair()],['touchView',()=>{if(!posture){setScopeZoom(false);first=!first;}}],['touchPhone',phone],['touchArsenal',arsenal],['touchSprint',()=>{if(!posture&&!held&&!scopeZoom){touchSprint=!touchSprint;if(touchSprint)touchCrouch=false;}}],['touchCrouch',()=>{if(!posture){touchCrouch=!touchCrouch;if(touchCrouch)touchSprint=false;}}],['touchJump',()=>{if(!posture&&player.stance!=='crouch'&&!wantsCrouch()&&Math.abs(player.y-groundAt(player.x,player.z))<1e-5)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});const fireButton=$('touchFire');fireButton.addEventListener('pointerdown',e=>{e.preventDefault();if(!canPlay()||triggerPointer!==null)return;void audio.unlock();if(freeState){freePrimary();return;}pressTrigger();if(triggerHeld){triggerPointer=e.pointerId;fireButton.setPointerCapture?.(e.pointerId);}});
 for(const event of ['pointerup','pointercancel','lostpointercapture'])fireButton.addEventListener(event,e=>{if(triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('blur',()=>{clearControls();audio.stopAll();});document.addEventListener('visibilitychange',()=>{if(document.hidden)clearControls();});
 
@@ -1024,14 +1219,20 @@ function updateMinimap(now,vr=false){
  ctx.setTransform(res/192,0,0,res/192,0,0);ctx.clearRect(0,0,192,192);
  ctx.save();ctx.beginPath();ctx.arc(96,96,91,0,Math.PI*2);ctx.clip();
  ctx.fillStyle='#101923';ctx.fillRect(0,0,192,192);
- const scale=lobbyState?8:13;
+ const scale=freeState?5:lobbyState?8:13;
  const box=(p,s,color)=>{ctx.fillStyle=color;ctx.fillRect(p[0]-s[0]/2,p[2]-s[2]/2,s[0],s[2]);};
  ctx.save();ctx.translate(96,96);ctx.scale(scale,scale);ctx.rotate(player.yaw);ctx.translate(-player.x,-player.z);
- if(lobbyState){
+ if(freeState){
+  const half=FREE_LAYOUT.half;box([0,0,0],[half*2,0,half*2],'#46535d');
+  for(const b of freeState.blocks){const {p,s}=freeBounds(b);box(p,s,b.texture?'#9bbeb8':'#a9b5bc');}
+  for(const x of [-half,half])box([x,0,0],[.2,0,2*half],'#abb8bf');
+  for(const z of [-half,half])box([0,0,z],[2*half,0,.2],'#abb8bf');box([0,0,half],[2,0,.3],'#68e3b7');
+ }else if(lobbyState){
   const L=LOBBY_LAYOUT;box([0,0,0],[L.halfWidth*2,0,L.halfLength*2],'#394854');
   for(const x of [-L.halfWidth,L.halfWidth])box([x,0,0],[.15,0,L.halfLength*2],'#82929e');
   for(const z of [-L.halfLength,L.halfLength])box([0,0,z],[L.halfWidth*2,0,.15],'#82929e');
   for(let i=0;i<L.roomsPerSide*2;i++){const d=lobbyDoor(i);if(d)box([d.x,0,d.z],[.23,0,L.doorWidth],i===lobbyState.slot?'#68e3b7':'#a6b2bd');}
+  if(freeEnabled)box([0,0,-L.halfLength],[2,0,.25],'#7bddd8');
  }else{
   box([0,0,0],[9.8,0,9.8],'#34434e');
   for(const a of minimapRoomShapes(state.walls||{},state.objects,WALLS,bodies,held))box(a.p,a.s,a.color);
@@ -1041,9 +1242,13 @@ function updateMinimap(now,vr=false){
  ctx.restore();
  function dot(p,color,r=3){if(Math.hypot(p[0]-96,p[1]-96)>87)return;ctx.beginPath();ctx.arc(...p,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();ctx.lineWidth=1;ctx.strokeStyle='#16232e';ctx.stroke();}
  const project=(x,z)=>minimapProject(x,z,player,scale);
- if(lobbyState){
+ if(freeState){
+  for(const peer of freeView.peers.values()){const v=peer.g.position;dot(project(v.x,v.z),'#8db8f5',3.5);}
+  const p=minimapEdge(project(0,FREE_LAYOUT.half),78);ctx.fillStyle='#71edc0';ctx.fillRect(p[0]-3.5,p[1]-3.5,7,7);
+ }else if(lobbyState){
   for(const peer of renderer.lobby.peers.values()){const v=peer.g.position;dot(project(v.x,v.z),'#8db8f5',3.5);}
   const npc=renderer.lobby.npc;if(npc?.visible)dot(project(npc.position.x,npc.position.z),'#e9bc74',3.5);
+  if(freeEnabled){const p=minimapEdge(project(0,-LOBBY_LAYOUT.halfLength),78);ctx.fillStyle='#7bddd8';ctx.beginPath();ctx.arc(...p,4,0,Math.PI*2);ctx.fill();}
   const own=lobbyDoor(lobbyState.slot);
   if(own){const p=minimapEdge(project(own.x,own.z),78);ctx.fillStyle='#71edc0';ctx.fillRect(p[0]-3.5,p[1]-3.5,7,7);ctx.strokeStyle='#17252f';ctx.strokeRect(p[0]-3.5,p[1]-3.5,7,7);}
  }
@@ -1052,7 +1257,7 @@ function updateMinimap(now,vr=false){
  ctx.beginPath();ctx.moveTo(96,86);ctx.lineTo(89,104);ctx.lineTo(96,100);ctx.lineTo(103,104);ctx.closePath();ctx.fillStyle='#f6fafc';ctx.fill();ctx.strokeStyle='#17252f';ctx.lineWidth=1.5;ctx.stroke();
  ctx.restore();ctx.beginPath();ctx.arc(96,96,91,0,Math.PI*2);ctx.strokeStyle='#a2b5c5b0';ctx.lineWidth=2;ctx.stroke();
  const own=accountProfile?lobbyDoor(accountProfile.slot)?.number:null;
- const label=lobbyState?'Hotelflur · '+(own?'Zimmer '+own:'Hotel'):own?'Zimmer '+own:'Hotelzimmer';
+ const label=freeState?'Free World':lobbyState?'Hotelflur · '+(own?'Zimmer '+own:'Hotel'):own?'Zimmer '+own:'Hotelzimmer';
  if($('minimap-location').textContent!==label)$('minimap-location').textContent=label;
 }
 
@@ -1062,7 +1267,7 @@ function frame(now,xrFrame){
   if(studioOpen){$('minimap').hidden=true;updateAvatarModelStatus();renderer.renderStudio(canvas,dt,$('character-preview'));return;}
   const vr=!!renderer.xrMode?.active;const xrInput=vr?renderer.xrMode.inputs(xrFrame):null;
   if(canPlay()&&!posture&&!lobbyTransition){
-    stepReload(dt);stepTrigger(dt);
+    if(!freeState){stepReload(dt);stepTrigger(dt);}
     if(vr)player.yaw+=xrInput.turn;
     let f=vr?xrInput.move[1]:Number(keys.has('KeyW'))-Number(keys.has('KeyS'))+touchMove[1],s=vr?xrInput.move[0]:Number(keys.has('KeyD'))-Number(keys.has('KeyA'))+touchMove[0],a=player.yaw+(vr?xrInput.headYaw:0);
     const canStand=player.stance!=='crouch'||!coll(player.x,player.z,1.6);
@@ -1072,13 +1277,15 @@ function frame(now,xrFrame){
     if(!coll(player.x,player.z+dz))player.z+=dz;
     const ground=groundAt(player.x,player.z);
     if(!vr&&player.stance!=='crouch'&&keys.has('Space')&&Math.abs(player.y-ground)<1e-5)player.vy=4.2;
-    player.vy-=9.81*dt;player.y=Math.max(ground,player.y+player.vy*dt);if(player.y===ground)player.vy=0;
+    player.vy-=9.81*dt;const nextY=Math.max(ground,player.y+player.vy*dt);
+    if(freeState&&player.vy>0&&freeBlocked(freeState.blocks,player.x,nextY,player.z,player.stance==='crouch'?1.12:1.6))player.vy=0;
+    else{player.y=nextY;if(player.y===ground)player.vy=0;}
   }
   if(!canPlay()||posture||lobbyTransition){if(player.stance==='sprint')player.stance='walk';}
   const eyeTarget=player.stance==='crouch'?1.10:1.65;
   player.eyeHeight+=(eyeTarget-player.eyeHeight)*Math.min(1,dt*13);
   if(debris.length>80)debris.splice(0,debris.length-80);
-  if(started&&!lobbyState){
+  if(started&&!lobbyState&&!freeState){
     syncRoomModelBodies();
     const holdPoint=held?heldPosition(held):[0,0,0];
     physicsWorld.step(dt,bodies,lobbyEnabled?{...state,unlocked:false}:state,held,holdPoint,debris,yawQuat(heldAngle));
@@ -1092,6 +1299,14 @@ function frame(now,xrFrame){
   let d=dir(),eye=playerEye(),target=eye.map((v,i)=>v+d[i]);
   if(!first&&!vr&&!posture){let t=eye.map((v,i)=>v-d[i]*2.1);if(!coll(t[0],t[2])){eye=t;target=eye.map((v,i)=>v+d[i]);}}
   renderer.begin();
+  if(freeState){
+    $('npc-greeting').hidden=true;renderer.equip(null,false);
+    freeView.step(dt,player,accountProfile,!first&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5);
+    if(canPlay()&&freeTool==='build')freeView.showPreview(freeCandidate());else freeView.showPreview(null);
+    audio.listener(eye,d);renderer.render(canvas,eye,target,mobile,dt,player,false,false,freeView.scene);
+    updateMinimap(now,vr);
+    if(now-lastInteractionHint>=100){lastInteractionHint=now;updateInteractionHint(vr);}return;
+  }
   if(lobbyState){
     renderer.setHotelOpenings(lobbyState.slot,{},true);
     renderer.lobby.step(dt,player,!first&&!vr&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5);
@@ -1121,7 +1336,7 @@ function frame(now,xrFrame){
   updateMinimap(now,vr);
   if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}
 }
-setInterval(()=>{if(started&&!busy)refresh().catch(()=>{});},3000);
+setInterval(()=>{if(started&&!busy&&!freeState)refresh().catch(()=>{});},3000);
 
 // WebXR is optional, detected at runtime. Login and desktop/mobile controls remain independent.
 async function setupXR(){
@@ -1134,7 +1349,7 @@ async function setupXR(){
   mode.onEnd=()=>{xrEntering=false;first=xrReturnFirst;player.y=0;player.vy=0;clearControls();document.body.classList.remove('xr-playing');button.textContent='VR starten';button.disabled=false;active=$('phone').hidden&&$('arsenal').hidden;};
   mode.onAction=(type,ray)=>{if(!canPlay())return;if(lobbyState){if(type==='select')interact(ray);return;}if(type==='repair'){repair(ray);return;}if(!equipped&&lobbyEnabled&&doorInView(interactionTarget(ray),ray)){interact(ray);return;}if(!equipped&&!busy){const primary=primaryInteraction(interactionTarget(ray),ray);if(primary?.op==='toggle_curtains'||primary?.op==='toggle_light'){action(primary.op,primary.id);return;}}if(!lobbyEnabled&&!state.unlocked&&Math.abs(player.x)<1.5&&player.z<-3.25){$('notice').textContent='Weitere Welt noch nicht verfügbar.';return;}fire(ray);};
   button.onclick=async()=>{
-    if(xrEntering||!started||!canPlay())return;
+    if(xrEntering||!started||!canPlay())return;if(freeState){$('notice').textContent='Free World zunächst im Desktop- oder Touch-Modus verwenden.';return;}
     if(mode.active){await mode.end();return;}
     if(posture&&!leavePosture())return;
     xrEntering=true;button.disabled=true;xrReturnFirst=first;clearControls();if(held){bodies[held]=savedBody(state,held);held=null;}document.exitPointerLock?.();first=true;player.y=0;player.vy=0;
@@ -1152,7 +1367,7 @@ function changeProfile(){sessionStorage.setItem('sl_quality',qualityChoice.value
 qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListener('change',changeProfile);
 (async()=>{
   try{
-    const health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());protectedGame=health.requires_game_token===true; personalWorld=health.personal_world===true;lobbyEnabled=health.hotel_lobby===true;accountsEnabled=health.accounts===true; $('game-auth').hidden=!protectedGame;$('account-access').hidden=!accountsEnabled;$('start').hidden=accountsEnabled;setAuthMode('login');authButtons();
+    const health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());protectedGame=health.requires_game_token===true; personalWorld=health.personal_world===true;lobbyEnabled=health.hotel_lobby===true;freeEnabled=health.free_world===true;$('phone-app-free').hidden=!freeEnabled;accountsEnabled=health.accounts===true; $('game-auth').hidden=!protectedGame;$('account-access').hidden=!accountsEnabled;$('start').hidden=accountsEnabled;setAuthMode('login');authButtons();
     const q=qualityChoice.value==='auto'?(matchMedia('(pointer:coarse)').matches||innerWidth<800?'1k':'2k'):qualityChoice.value;
     renderer=new RoomRenderer(canvas,q,lightChoice.value,t=>status.textContent=t);
     await renderer.load(spec,objects);

@@ -339,3 +339,30 @@ import {stabilizePatrolClip} from './realistic_character.js';
  assert.ok(Math.abs(fixed[1]-fixed[7])<1e-6);assert.ok(fixed[4]>fixed[1]);assert.ok(track.values[8]>.8);
 }
 console.log('Hotel patrol: steady route clock, stationary turns and horizontal root-motion removal verified');
+
+import {freeBounds,freeRay,freePlacement,freeBlocked,freeGround,freeExitAt,validFreeGrid} from './free_world.js';
+import {freeWorldDoorAt} from './lobby_layout.js';
+{
+ const hit=freeRay([0,1.5,0],[0,-1,0],[]);
+ assert.equal(hit.normal[1],1);
+ const floor=freePlacement(hit,[2,2,2],[]);
+ assert.equal(floor.cell[1],0);
+ const blocks=[{...floor,id:1}];
+ assert.equal(freePlacement(hit,[2,2,2],blocks),null);
+ const top=freeRay([0,2,0],[0,-1,0],blocks);
+ assert.equal(top.id,1);
+ const stacked=freePlacement(top,[2,1,2],blocks);
+ assert.equal(stacked.cell[1],2);
+ assert.equal(freeGround(blocks,0,1.2,0),1);
+ assert.ok(freeBlocked(blocks,0,.1,0));
+ assert.ok(!freeBlocked(blocks,0,1,0));
+ assert.equal(freeBounds(stacked).s[1],.5);
+ assert.ok(!validFreeGrid([0,0,70],[2,2,2]));
+ assert.ok(freeExitAt([0,1.5,38],[0,0,1]));
+ assert.ok(freeWorldDoorAt([0,1.5,-64],[0,0,-1]));
+ assert.ok(!freeWorldDoorAt([0,1.5,-64],[0,0,1]));
+ const wall=freeRay([38,1.5,0],[1,0,0],[]);
+ assert.equal(wall.normal[0],-1);
+ assert.equal(freePlacement(wall,[1,4,4],[]).cell[0],79);
+}
+console.log('Free World raster, wall/floor placement, stacking, collision and portal tests passed');

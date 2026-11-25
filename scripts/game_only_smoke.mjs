@@ -272,3 +272,14 @@ mp=mapMath.minimapProject(-1,0,{x:0,z:0,yaw:Math.PI/2},10);assert.ok(Math.abs(mp
 mp=mapMath.minimapEdge([96,996]);assert.equal(mp[0],96);assert.equal(mp[1],173);
 assert.ok(game.includes('updateMinimap(now,vr)')&&game.includes("renderer.renderStudio(canvas,dt,$('character-preview'))"));
 console.log('Unified phone navigation and heading-up minimap projection passed');
+
+assert.ok(ids.includes('phone-app-free')&&ids.includes('phone-page-free')&&ids.includes('free-texture-upload')&&ids.includes('free-hud'));
+assert.ok(game.includes("freeEnabled=health.free_world===true"));
+assert.ok(game.includes("freeState=null")&&game.includes("freeView.scene"));
+assert.equal(nav('free',false,false),'welcome');assert.equal(nav('free',true,false),'free');
+const blockDims=new Function(getPart('function freeDims(','function freeShapeLabel(')+'return freeDims;')();
+assert.equal(JSON.stringify(blockDims(8,'cube')),'[8,8,8]');
+assert.equal(JSON.stringify(blockDims(4,'wall-z')),'[4,4,1]');
+assert.equal(JSON.stringify(blockDims(4,'wall-x')),'[1,4,4]');
+assert.equal(JSON.stringify(blockDims(2,'floor')),'[2,1,2]');
+console.log('Free World UI, separate scene, block presets and phone access checks passed');

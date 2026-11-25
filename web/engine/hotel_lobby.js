@@ -65,8 +65,15 @@ export class HotelLobbyView{
   }
   for(const z of [-L.halfLength,L.halfLength]){
    box(root,[0,L.height/2,z],[L.halfWidth*2,L.height,.16],wall);
-   box(root,[0,1.35,z-Math.sign(z)*.10],[2.8,1.95,.08],wood);
-   this.plaques.push(plaque(root,'HOTEL',[0,1.65,z-Math.sign(z)*.15],z<0?0:Math.PI,1.05,.39));
+   if(z<0){
+    box(root,[0,1.2,z+.10],[1.95,2.4,.14],trim);
+    box(root,[0,1.15,z+.19],[1.72,2.26,.09],mat(0x52767d,.62));
+    box(root,[.66,1.05,z+.26],[.11,.12,.09],brass);
+    this.plaques.push(plaque(root,'FREE WORLD',[0,2.66,z+.15],0,2.25,.48));
+   }else{
+    box(root,[0,1.35,z-Math.sign(z)*.10],[2.8,1.95,.08],wood);
+    this.plaques.push(plaque(root,'HOTEL',[0,1.65,z-Math.sign(z)*.15],Math.PI,1.05,.39));
+   }
   }
   this.signs=[];this.nameplates=[];this.roomNames=new Map();
   for(let slot=0;slot<LOBBY_CAPACITY;slot++){

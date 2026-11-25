@@ -99,6 +99,24 @@ class HotelLobby:
         peers=[{'slot':r['slot'],'position':list(r['position']),'yaw':r['yaw'],'nickname':r['nickname'],'avatar':r['avatar'],'stance':r.get('stance','walk')}
                for key,r in self.players.items() if key!=player]
         return {'slot':row['slot'],'peers':peers,'online':len(self.players),'capacity':CAPACITY,'rooms':directory,'npc':npc_patrol(self.clock()-self.started)}
+    def take_free(self,player,lease):
+        with self.lock:
+            self.prune(self.clock());row=self.players.get(player)
+            if not row or not isinstance(lease,str) or len(lease)>64 or not secrets.compare_digest(row['lease'],lease):
+                raise CaptureError('Flursitzung abgelaufen',409)
+            x,y,z=row['position']
+            if abs(x)>1.4 or z>-LAYOUT['halfLength']+3.5:
+                raise CaptureError('Bitte zur Free-World-Tuer gehen',400)
+            del self.players[player]
+
+    def return_free(self,player,profile,directory):
+        result=self.request(player,{'action':'enter'},profile,directory)
+        with self.lock:
+            row=self.players[player];p=[0,0,-LAYOUT['halfLength']+1.5]
+            row['position']=p;row['yaw']=math.pi
+            result.update(position=p,yaw=math.pi)
+        return result
+
     def disconnect(self,player):
         with self.lock:self.players.pop(player,None)
     def request(self,player,data,profile,directory):

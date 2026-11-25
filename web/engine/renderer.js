@@ -22,6 +22,7 @@ import { HOTEL_LAYOUT, hotelMaterials, applyPhotoMaterials, createHotelModel } f
 export { HOTEL_LAYOUT };
 import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
 import { HotelLobbyView } from './hotel_lobby.js';
+export { FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeBlocked, freeGround, freeExitAt } from './free_world.js';
 import { NeighborRoomView, HallFacadeViews, hotelOpenings } from './hotel_connections.js';
 export { hotelOpenings } from './hotel_connections.js';
 import { CharacterStudio, createCharacter, animateCharacter, disposeCharacter } from './character.js';
@@ -29,7 +30,7 @@ import { RoomModels, buildRoomMirror } from './room_customization.js';
 import { resetRoomAvatarPose, applyRoomAvatarPose, updateRoomAvatarProp, clearRoomAvatarProps } from './avatar_room_pose.js';
 export { resetRoomAvatarPose, applyRoomAvatarPose, updateRoomAvatarProp, clearRoomAvatarProps } from './avatar_room_pose.js';
 export { CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, CharacterStudio, createHotelNpc, animateCharacter, disposeCharacter } from './character.js';
-export { LOBBY_LAYOUT, LOBBY_CAPACITY, lobbyDoor, lobbyWalkable, lobbyDoorAt } from './lobby_layout.js';
+export { LOBBY_LAYOUT, LOBBY_CAPACITY, lobbyDoor, lobbyWalkable, lobbyDoorAt, freeWorldDoorAt } from './lobby_layout.js';
 export { PORTAL_SIDES };
 export { DECOR } from './room_decor.js';
 
@@ -579,8 +580,8 @@ export class RoomRenderer {
       preview.getContext('2d')?.drawImage(canvas,0,0);
     }
   }
-  render(canvas,eye,target,mobile,dt=1/60,player=null,scopeZoom=false,inLobby=false){
-    const scene=inLobby?this.lobby.scene:this.scene;
+  render(canvas,eye,target,mobile,dt=1/60,player=null,scopeZoom=false,inLobby=false,worldScene=null){
+    const scene=worldScene||(inLobby?this.lobby.scene:this.scene);
     if(this.roomMirror)this.roomMirror.reflector.visible=!this.xrMode.active;
     this.swayTime+=dt;
     const idle=Math.sin(this.swayTime*1.4)*.004;

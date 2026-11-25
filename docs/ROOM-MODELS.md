@@ -35,3 +35,5 @@ Hold an imported model, aim at a clear inner vertical wall within 3 m, and press
 
 ### Genesis phone and minimap (0.13.0)
 The same virtual smartphone contains login, account creation, character editing, inventory, settings, models and the authorized system updater. The character preview is rendered locally with the existing WebGL renderer. During gameplay a local heading-up radar shows current room footprints and shared corridor navigation, including the own-room entrance and visible shared guests. It never requests a real-world map or another private room. The radar is hidden while using the phone, sleeping, scoped in or in immersive XR.
+
+See [Free World](FREE-WORLD.md) for shared block construction and image textures, which are independent of private GLB imports.

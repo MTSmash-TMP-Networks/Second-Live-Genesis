@@ -10,6 +10,12 @@ export function lobbyDoor(slot){
 export function lobbyWalkable(x,z){
  return Number.isFinite(x)&&Number.isFinite(z)&&Math.abs(x)<=layout.halfWidth-layout.playerMargin&&Math.abs(z)<=layout.halfLength-layout.playerMargin;
 }
+export function freeWorldDoorAt(origin,direction){
+ if(direction[2]>=-1e-8)return false;
+ const t=(-layout.halfLength-origin[2])/direction[2];
+ const x=origin[0]+direction[0]*t,y=origin[1]+direction[1]*t;
+ return t>=0&&t<=3.2&&Math.abs(x)<1&&y>=0&&y<=2.4;
+}
 export function lobbyDoorAt(origin,direction){
  // Side-wall intersection, then test the exact door aperture. No selection
  // through the end wall, floor or ceiling. Only reachable from inside the hall.

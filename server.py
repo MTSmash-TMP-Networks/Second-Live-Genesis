@@ -27,6 +27,7 @@ from world_capture import CaptureStore, CaptureError
 from hotel_lobby import HotelLobby, FacadeDirectory
 from game_accounts import AccountStore, SESSION_TTL
 from room_models import RoomModelStore, MAX_FILE as MAX_MODEL_FILE
+from free_world import FreeWorld, L as FREE_LAYOUT
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -388,13 +389,15 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     lobby = HotelLobby() if accounts else None
     facades = FacadeDirectory(accounts) if accounts else None
     room_models = RoomModelStore(store.path) if accounts else None
+    free_world = FreeWorld(store.path) if accounts else None
+    world_transition = threading.RLock()
     # Keep the original player/cookie/home database, independent of image capture.
     panorama = None
     if legacy_capture and capture:
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.13.0"
+        server_version = "SecondLive/0.14.0"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -601,9 +604,19 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.13.0", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.14.0", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "free_world": bool(free_world), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
+            elif path.startswith("/api/free-world/texture/"):
+                if not free_world:
+                    self.send_json(404,{'error':'Free World nicht verfuegbar'});return
+                if not self.require_game():return
+                try:
+                    identifier=path.removeprefix('/api/free-world/texture/')
+                    if not ID_RE.fullmatch(identifier):raise CaptureError('Textur nicht gefunden',404)
+                    self.send_data(200,free_world.texture(self.player(),identifier),'image/jpeg')
+                except CaptureError as e:self.send_json(e.status,capture_error_body(e))
+                except (OSError,sqlite3.Error):self.send_json(503,{'error':'Texturspeicher nicht verfuegbar'})
             elif path == "/api/room-models" or path.startswith("/api/room-models/"):
                 if not room_models:
                     self.send_json(404,{"error":"Modellimport nur mit Benutzerkonto"});return
@@ -644,6 +657,41 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             path=urlsplit(self.path).path
             if not legacy_capture and (path in ('/api/scans','/api/world','/api/session/pair','/api/capture') or path.startswith(('/api/capture/','/api/scans/','/media/'))):
                 self.send_json(404,{'error':'Aufnahmefunktion eingestellt'});return
+            if path in ("/api/free-world","/api/free-world/texture"):
+                self.close_connection=True
+                if not free_world:
+                    self.send_json(404,{'error':'Free World nicht verfuegbar'});return
+                if not self.require_game():return
+                def free_action():
+                    player=self.player()
+                    if path=='/api/free-world/texture':
+                        if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Type','').split(';')[0].strip()!='image/jpeg':
+                            raise CaptureError('JPEG erwartet',415)
+                        try:n=int(self.headers.get('Content-Length','0'))
+                        except ValueError:n=0
+                        if not 0<n<=FREE_LAYOUT['textureBytes']:raise CaptureError('Textur maximal 256 KiB',413)
+                        if not free_world.upload_slots.acquire(blocking=False):raise CaptureError('Texturimport ausgelastet',503)
+                        try:
+                            self.connection.settimeout(15)
+                            blob=self.rfile.read(n)
+                            if len(blob)!=n:raise CaptureError('Unvollstaendiges Bild',400)
+                            name=parse_qs(urlsplit(self.path).query).get('name',['Bild'])[0]
+                            return free_world.add_texture(player,self.headers.get('X-SecondLive-World-Lease'),name,blob)
+                        finally:free_world.upload_slots.release()
+                    data=self.read_capture_body()
+                    op=data.get('action')
+                    if op in ('enter','leave'):
+                        with world_transition:
+                            profile=accounts.profile(player)
+                            if op=='enter':
+                                lobby.take_free(player,data.get('lease'))
+                                return free_world.enter(player,profile)
+                            free_world.request(player,data)
+                            result=lobby.return_free(player,profile,accounts.directory())
+                            result['facades']=facades.snapshot()
+                            return result
+                    return free_world.request(player,data)
+                self.capture_reply(free_action);return
             if path in ("/api/room-models","/api/room-models/upload"):
                 # Uploads and model mutations are authenticated, same-origin and private.
                 self.close_connection=True
@@ -682,7 +730,9 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                         self.account_session_cookie(key);return profile
                     if op=='logout':
                         player=accounts.identify(self.account_cookie())
-                        if player:lobby.disconnect(player)
+                        if player:
+                            with world_transition:
+                                lobby.disconnect(player);free_world.disconnect(player)
                         accounts.logout(self.account_cookie());self.account_session_cookie(None);return {'ok':True}
                     player=self.player()
                     if op=='profile':return accounts.profile(player)
@@ -727,7 +777,9 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                 if self.require_game():
                     def lobby_action():
                         player=self.player();data=self.read_capture_body()
-                        result=lobby.request(player,data,accounts.profile(player),accounts.directory())
+                        with world_transition:
+                            if data.get('action')=='enter':free_world.disconnect(player)
+                            result=lobby.request(player,data,accounts.profile(player),accounts.directory())
                         if data.get('action') in ('enter','update'):result['facades']=facades.snapshot()
                         return result
                     self.capture_reply(lobby_action)
