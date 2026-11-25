@@ -124,7 +124,7 @@ function lamp(r,g,baseY){
 }
 function rug(r,g){
  const m=hotelMaterials(r).carpet.clone();m.color.set(0x9fa8ac);
- const {p,s}=HOTEL_LAYOUT.rug;const o=rounded(g,[s[0],.018,s[2]],p,m,.008);
+ const {p,s}=HOTEL_LAYOUT.surface_rug;const o=rounded(g,s,p,m,.008);
  o.castShadow=false;r.impacts?.register('surface_rug',o,'fabric');
 }
 function shadow(r,g,p,w,d){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({map:r.shadowTexture,transparent:true,opacity:.66,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1}));m.rotation.x=-Math.PI/2;m.position.set(p[0],.004,p[2]);m.userData.noImpact=true;m.userData.floorShadow=true;g.add(m);}
