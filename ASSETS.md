@@ -52,3 +52,12 @@ Die ausgewählten Poly-Haven-IDs `residential_garden`, `service_pistol` und `bol
 - Die in v0.6.6 verwendeten Poly-Haven-Originalspielmodelle bleiben erhalten. Inventarbilder werden jetzt lokal aus ihnen bzw. dem Ersatzmodell gerendert.
 - Geprüfte Kandidaten für spätere echte Avatar-Rigs: [FPS arms, rigged only (para, CC0)](https://opengameart.org/content/fps-arms-rigged-only), FBX/Blend, keine fertige Produktionsanimation; [Posable anatomical right hand (CC0)](https://www.innerscene.com/tools/library/3d-parts/posable-anatomical-right-hand-f6098b4f), GLB. Die Dateien und Posen konnten hier nicht geladen und geprüft werden und werden deshalb noch nicht eingebunden.
 - Technikreferenz (keine übernommenen Spielassets): [EA über teilbasierte Frostbite-Zerstörung](https://www.ea.com/news/how-battlefield-6-redefined-destruction), [Rapier World API](https://www.rapier.rs/javascript3d/classes/World.html). Eigenständige abstrakte Spielzell-Implementierung, kein Frostbite-Code.
+
+## WebXR-Originalhandmodelle (v0.6.8)
+
+- Quelle: https://github.com/immersive-web/webxr-input-profiles/tree/f4992299601614adbfefd398dc8e281556bb7444/packages/assets/profiles/generic-hand
+- MIT-Lizenz des Assets-Pakets, Copyright (c) 2019 Amazon; Lizenztext in `optional-hands/LICENSE.txt`. Die standardisierten Handmodelle wurden laut Meta-WebXR-Dokumentation von Meta zur Bibliothek beigetragen: https://developers.meta.com/vr/documentation/web/webxr-hands/
+- Linkes GLB: Git-Blob SHA `670ec9bed67d3e509859641d2194a9cab7d9fc29` (94572 Bytes).
+- Rechtes GLB: Git-Blob SHA `215f50d70fb7a5a884025b508cf5c58230913371` (94004 Bytes).
+- Die Originaldateien enthalten je 25 Skelettgelenke und ein Material ohne Bildtexturen. Die Spielpose und Hautmaterialien werden im Renderer angepasst. Die Dateien werden beim Build lokal übernommen oder von der festgelegten Revision geladen und verifiziert.
+- Recherchierte Alternative für fototexturierte Arme: https://opengameart.org/content/fps-arms-rigged-only (para / MakeHuman, CC0, FBX/Blend). Nicht integriert, da Konvertierung und Posen noch nicht geprüft sind.

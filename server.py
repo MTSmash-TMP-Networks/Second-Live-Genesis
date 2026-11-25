@@ -139,7 +139,8 @@ class ScanStore:
 
 
 class GameStore:
-    SURFACES = frozenset(f"surface_{i}" for i in range(11)) | {"surface_bed", "surface_nightstand", "surface_lamp", "surface_rug", "surface_wardrobe"}
+    SURFACES = frozenset(f"surface_{i}" for i in range(11)) | {"surface_bed", "surface_nightstand", "surface_lamp", "surface_rug", "surface_wardrobe", "surface_trim_w", "surface_trim_e", "surface_trim_s", "surface_trim_nw", "surface_trim_ne", "surface_crown_w", "surface_crown_e", "surface_crown_n", "surface_crown_s", "surface_outlet", "surface_switch", "surface_doortrim", "surface_radiator", "surface_picture", "surface_windowframe", "surface_curtain_l", "surface_curtain_r", "surface_curtainrod", "surface_ceilinglamp"}
+    DECOR = SURFACES - frozenset(wall_damage.WALLS)
     MARK_LIMIT = 64
     TOTAL_MARK_LIMIT = 384
     CLUSTER_DISTANCE = 0.28
@@ -217,12 +218,13 @@ class GameStore:
     def state(self):
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("BEGIN")
-            return {"objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0]), "walls": wall_damage.state(db), "marks": [{"id":i,"target":t,"point":json.loads(p),"normal":json.loads(n),"severity":max(1,int(s or 1))} for i,t,p,n,s in db.execute("SELECT id,target,point,normal,severity FROM impact_marks ORDER BY id")]}
+            return {"objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0]), "walls": wall_damage.state(db), "decor": dict(db.execute("SELECT target,stage FROM decor_damage")), "marks": [{"id":i,"target":t,"point":json.loads(p),"normal":json.loads(n),"severity":max(1,int(s or 1))} for i,t,p,n,s in db.execute("SELECT id,target,point,normal,severity FROM impact_marks ORDER BY id")]}
     def action(self, data, scans):
         if not isinstance(data, dict): raise ValueError("JSON object required")
         op = data.get("action")
         mark_saved = None
         wall_result = None
+        decor_result = None
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
             if op == "unlock":
@@ -247,6 +249,17 @@ class GameStore:
                 wall_result=wall_damage.damage(db,oid,point,normal)
                 if wall_result["changed"]:
                     mark_saved=self.add_mark(db,oid,data["mark"])
+            elif op == "damage_decor":
+                oid = data.get("id")
+                if not isinstance(oid,str) or oid not in self.DECOR: raise ValueError("Unbekannte Einrichtung")
+                self.clean_mark(data.get("mark"))
+                row=db.execute("SELECT stage FROM decor_damage WHERE target=?",(oid,)).fetchone()
+                old=row[0] if row else 0
+                stage=min(wall_damage.REMOVED,old+1)
+                if stage!=old:
+                    db.execute("INSERT INTO decor_damage VALUES (?,?) ON CONFLICT(target) DO UPDATE SET stage=excluded.stage",(oid,stage))
+                    mark_saved=self.add_mark(db,oid,data["mark"])
+                decor_result={"target":oid,"stage":stage,"changed":stage!=old}
             elif op in ("mark_surface", "repair_surface"):
                 oid = data.get("id")
                 if not isinstance(oid,str) or oid not in self.SURFACES: raise ValueError("Unbekannte Raumoberflaeche")
@@ -254,9 +267,11 @@ class GameStore:
                 else:
                     db.execute("DELETE FROM impact_marks WHERE target=?", (oid,))
                     db.execute("DELETE FROM wall_cells WHERE target=?", (oid,))
+                    db.execute("DELETE FROM decor_damage WHERE target=?", (oid,))
             else: raise ValueError("Unbekannte Aktion")
         result = self.state()
         if wall_result is not None: result["wall_result"] = wall_result
+        if decor_result is not None: result["decor_result"] = decor_result
         if mark_saved is not None: result["mark_saved"] = mark_saved
         return result
 
@@ -265,7 +280,7 @@ def make_handler(store: ScanStore, token: str, updater=None):
     updater = updater or UpdateBridge(None, "")
     game = GameStore(store.path)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.6.7"
+        server_version = "SecondLive/0.6.8"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -324,14 +339,14 @@ def make_handler(store: ScanStore, token: str, updater=None):
                     self.send_json(404, {"error": "Nicht gefunden"})
                     return
                 filepath = (root / rel).resolve()
-                types = {".gltf": "model/gltf+json", ".bin": "application/octet-stream", ".hdr": "application/octet-stream", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
-                typ = "application/json" if rel == "manifest.json" else types.get(filepath.suffix.lower())
+                types = {".glb": "model/gltf-binary", ".gltf": "model/gltf+json", ".bin": "application/octet-stream", ".hdr": "application/octet-stream", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+                typ = "application/json" if rel == "manifest.json" else "text/plain; charset=utf-8" if rel == "hands/LICENSE.txt" else types.get(filepath.suffix.lower())
                 if not typ or not filepath.is_relative_to(root) or not filepath.is_file():
                     self.send_json(404, {"error": "Asset nicht gefunden"})
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.6.7", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "requires_token": bool(token), "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.6.8", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "requires_token": bool(token), "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":

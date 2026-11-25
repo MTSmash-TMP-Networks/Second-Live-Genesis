@@ -7,6 +7,7 @@
 | 0.6–0.6.1 | Startraum, Fenster/Stoff, realistischere Props, erste WebXR-Integration | Code vorhanden; visuelle und Headset-Abnahme offen |
 | 0.6.2 | GitHub-Update im Spiel, separate Admin-Rechte, transaktionaler Docker-Wechsel | Host-/API-Regressionstests; Docker-End-to-End offen |
 | 0.6.7 | Persistente Wandöffnungen, Zellen und Collider; Inventarvorschau und Handmesh | Backend/Client geprüft; echter Renderer-/Docker-/VR-Test offen |
+| 0.6.8 | Unregelmäßige Bruchzellen an Boden/Decke/Wänden, persistente Einrichtung, importierte WebXR-Hände | Backend/JS geprüft; Docker-/WebGL-/VR-Abnahme offen |
 | 0.7 | Hochwertiger Startraum, physikalisch plausible Interaktionen, echte Rekonstruktionspipeline mit begehbaren Testscans | Offen |
 | 0.8 | Geografische Chunk-Welt, Asset-Versionierung, Datenschutz und Moderation | Offen |
 | 0.9 | Autoritativer Multiplayer, Konten, Rechte, Persistenz auch für Bewegungen und Bruchstücke | Offen |

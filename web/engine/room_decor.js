@@ -69,7 +69,7 @@ function lamp(r,g,baseY){
 function rug(r,g){const m=surface(r,0xa5a095,[7,6]);const o=rounded(g,[3.2,.018,2.22],[-.65,.012,1.4],m,.008);o.castShadow=false;r.impacts?.register('surface_rug',o,'fabric');
   const border=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([[-2.19,.023,.36],[.89,.023,.36],[.89,.023,2.44],[-2.19,.023,2.44]].map(p=>new THREE.Vector3(...p))),new THREE.LineBasicMaterial({color:0x77756b}));g.add(border);
 }
-function shadow(r,g,p,w,d){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({map:r.shadowTexture,transparent:true,opacity:.66,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1}));m.rotation.x=-Math.PI/2;m.position.set(p[0],.004,p[2]);m.userData.noImpact=true;g.add(m);}
+function shadow(r,g,p,w,d){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({map:r.shadowTexture,transparent:true,opacity:.66,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1}));m.rotation.x=-Math.PI/2;m.position.set(p[0],.004,p[2]);m.userData.noImpact=true;m.userData.floorShadow=true;g.add(m);}
 
 // Optional original furniture replaces, rather than overlays, the local fallback.
 export function fitDecor(model,slot){
@@ -89,8 +89,8 @@ export async function buildRoomDecor(r,manifest,path,loader){
     if(!imported){if(id==='bed')bed(r,group);else nightstand(r,group);}
     r.impacts?.register('surface_'+id,group,id==='bed'?'fabric':'wood');
     if(id==='nightstand'){const lightGroup=new THREE.Group();group.add(lightGroup);lamp(r,lightGroup,imported?height:.64);r.impacts?.register('surface_lamp',lightGroup,'wall');}
-    shadow(r,g,slot.p,slot.s[0]*1.35,slot.s[2]*1.30);
+    shadow(r,group,[0,0,0],slot.s[0]*1.35,slot.s[2]*1.30);
   }
   // Soft ceiling fixture with an actual curved diffuser.
-  const diffuser=new THREE.Mesh(new THREE.SphereGeometry(.37,24,12),new THREE.MeshStandardMaterial({color:0xf6f2e8,roughness:.48,emissive:0xffeac9,emissiveIntensity:.16}));diffuser.scale.y=.28;diffuser.position.set(0,2.86,0);g.add(diffuser);
+  const diffuser=new THREE.Mesh(new THREE.SphereGeometry(.37,24,12),new THREE.MeshStandardMaterial({color:0xf6f2e8,roughness:.48,emissive:0xffeac9,emissiveIntensity:.16}));diffuser.scale.y=.28;diffuser.position.set(0,2.86,0);g.add(diffuser);r.impacts?.register('surface_ceilinglamp',diffuser,'glass');
 }

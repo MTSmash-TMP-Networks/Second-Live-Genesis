@@ -14,7 +14,7 @@ physics.step(1/60,bodies,state,null,null,[]);assert.equal(physics.entries.get('b
 console.log('Rapier WASM: gravity, contact, impulse, destroy, repair, grab/release passed');
 
 import RAPIER from '@dimforge/rapier3d-compat';
-import { WALLS, REMOVED, cellBox } from './wall_layout.js';
+import { WALLS, REMOVED, cellBox, site, planeAxes } from './wall_layout.js';
 const w=WALLS.surface_6,wp=await RoomPhysics.create([{p:w.p,s:w.s,surfaceId:'surface_6'}],{}),cell=cellBox(w,4,3);
 const ray=new RAPIER.Ray({x:cell.p[0]-1,y:cell.p[1],z:cell.p[2]},{x:1,y:0,z:0});
 // Step after structural changes to update the physics query pipeline.
@@ -23,3 +23,12 @@ wp.syncWalls({surface_6:[[4,3,REMOVED]]});wp.world.step();assert.equal(wp.world.
 const adj=cellBox(w,5,3);assert.ok(wp.world.castRay(new RAPIER.Ray({x:adj.p[0]-1,y:adj.p[1],z:adj.p[2]},{x:1,y:0,z:0}),2,true));
 wp.syncWalls({});wp.world.step();assert.ok(wp.world.castRay(ray,2,true));
 console.log('Rapier WASM: wall collider opening, adjacent contact and repair');
+
+for(const id of ['surface_0','surface_1']){
+  const w=WALLS[id],p=await RoomPhysics.create([{p:w.p,s:w.s,surfaceId:id}],{}),[u,v,b]=planeAxes(w),q=site(w,10,10),origin=[...w.p],d=[0,0,0];origin[u]+=q[0];origin[v]+=q[1];origin[b]-=1;d[b]=1;
+  const ray=new RAPIER.Ray({x:origin[0],y:origin[1],z:origin[2]},{x:d[0],y:d[1],z:d[2]});
+  p.world.step();assert.ok(p.world.castRay(ray,2,true));p.syncWalls({[id]:[[10,10,REMOVED]]});p.world.step();assert.equal(p.world.castRay(ray,2,true),null);p.syncWalls({});p.world.step();assert.ok(p.world.castRay(ray,2,true));
+}
+const furniture=await RoomPhysics.create([{p:[0,1,0],s:[.5,.5,.5],surfaceId:'surface_nightstand'}],{});
+const furnitureRay=new RAPIER.Ray({x:0,y:1,z:1},{x:0,y:0,z:-1});furniture.world.step();assert.ok(furniture.world.castRay(furnitureRay,2,true));furniture.syncDecor({surface_nightstand:4});furniture.world.step();assert.equal(furniture.world.castRay(furnitureRay,2,true),null);furniture.syncDecor({});furniture.world.step();assert.ok(furniture.world.castRay(furnitureRay,2,true));
+console.log('Rapier: irregular floor/ceiling collision and destructible decor repair');

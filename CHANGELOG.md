@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.8 – Advanced Destruction
+- Deterministische unregelmäßige Voronoi-Bruchzellen für alle elf Hauptflächen, gemeinsam genutzte Mesh-/Collider-Geometrie und sichtbarer Materialkern.
+- Boden und Decke zerstörbar, tiefer sichtbarer Sicherheitsuntergrund, erhaltene Zell-IDs und additive SQLite-Migration.
+- Persistente Schadensstufen, Entfernung und Reparatur zusätzlicher Einrichtung, Vorhänge, Fensterrahmen, Leisten und kleiner Details.
+- Zwei originale MIT-WebXR-GLBs mit Skelett, adaptierter Avatar-Pose und Textilärmeln; keine fehlerhaften prozeduralen Hände bei Ladefehlern.
+- Zusätzliche Cross-Language-, Persistenz-, Asset- und Docker-Smoke-Tests. Host-Updater und Update-Protokoll bleiben unverändert.
+
 ## 0.6.7 – Destruction Pass
 - Fortschreitende lokale Spielwand-Zellen, echte Öffnungen mit sichtbaren Kanten und synchronen Rapier-Collidern, additive SQLite-Migration und gezielte Reparatur. Scanner-Grenze bleibt bestehen.
 - Schadensmarkierungen wachsen auch bei gleicher ID; lokale, begrenzte Rapier-Trümmer.

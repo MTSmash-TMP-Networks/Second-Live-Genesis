@@ -1,4 +1,38 @@
 {
+  "surface_0": {
+    "p": [
+      0,
+      -0.15,
+      0
+    ],
+    "s": [
+      10,
+      0.3,
+      10
+    ],
+    "axis": 0,
+    "verticalAxis": 2,
+    "cols": 20,
+    "rows": 20,
+    "kind": "floor"
+  },
+  "surface_1": {
+    "p": [
+      0,
+      3.15,
+      0
+    ],
+    "s": [
+      10,
+      0.3,
+      10
+    ],
+    "axis": 0,
+    "verticalAxis": 2,
+    "cols": 20,
+    "rows": 20,
+    "kind": "ceiling"
+  },
   "surface_2": {
     "p": [
       -5,

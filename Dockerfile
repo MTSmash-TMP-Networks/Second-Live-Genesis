@@ -2,7 +2,7 @@
 FROM node:22-bookworm-slim AS renderer
 WORKDIR /build
 RUN npm install --no-audit --no-fund --save-exact three@0.170.0 esbuild@0.25.10 @dimforge/rapier3d-compat@0.17.3
-COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js ./
+COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js ./
 COPY web/engine/wall_layout.json /build/wall_layout.json
 COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs ./
 # Rapier 0.17.3 advertises a CJS entry that esbuild may interpret as ESM.
@@ -32,13 +32,23 @@ ARG SECOND_LIVE_PHOTO_REFRESH=0
 ARG SECOND_LIVE_WIKIMEDIA_CONTACT=""
 RUN echo "Photo refresh: ${SECOND_LIVE_PHOTO_REFRESH}" && SECOND_LIVE_WIKIMEDIA_CONTACT="${SECOND_LIVE_WIKIMEDIA_CONTACT}" python -u download_assets.py --output /build/polyhaven --photos-only --local-photos /build/optional-photos
 
+FROM photos AS hands
+COPY scripts/download_hands.py ./download_hands.py
+COPY optional-hands/ /build/optional-hands/
+RUN python -u download_hands.py --output /build/polyhaven --local /build/optional-hands
+
+FROM renderer AS avatar-check
+COPY --from=hands /build/polyhaven/hands /build/hands
+COPY scripts/avatar_smoke.mjs ./avatar_smoke.mjs
+RUN ./node_modules/.bin/esbuild avatar_smoke.mjs --bundle --platform=node --format=esm --outfile=/build/avatar_smoke.bundle.mjs && node /build/avatar_smoke.bundle.mjs
+
 FROM python:3.13-slim
 WORKDIR /app
 COPY server.py updater_api.py wall_damage.py /app/
 COPY web/ /app/web/
-COPY --from=renderer /build/renderer.bundle.js /app/web/engine/renderer.bundle.js
+COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bundle.js
 COPY --from=renderer /build/THREE-LICENSE.txt /app/web/engine/THREE-LICENSE.txt
-COPY --from=photos /build/polyhaven /app/web/assets/polyhaven/
+COPY --from=hands /build/polyhaven /app/web/assets/polyhaven/
 ARG SECOND_LIVE_REVISION=local
 LABEL org.opencontainers.image.revision=${SECOND_LIVE_REVISION}
 ENV SECOND_LIVE_REVISION=${SECOND_LIVE_REVISION}

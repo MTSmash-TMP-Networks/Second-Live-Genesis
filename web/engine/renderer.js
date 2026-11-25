@@ -9,8 +9,9 @@ import { XRMode } from './xr.js';
 import { ShotEffects } from './shotfx.js';
 import { ImpactMarks } from './impact_marks.js';
 import { WallMeshes } from './wall_mesh.js';
-import { skinMeshData } from './hand_mesh.js';
-export { WALLS, REMOVED, cellBox, solidRuns } from './wall_layout.js';
+import { WALLS, floorSupported } from './wall_layout.js';
+import { inspectHand, poseHand } from './avatar_hands.js';
+export { WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported } from './wall_layout.js';
 import { isolateDisplayProp } from './display_prop.js';
 import { buildRoomDecor } from './room_decor.js';
 export { DECOR } from './room_decor.js';
@@ -170,58 +171,19 @@ export class RoomRenderer {
     return g;
   }
 
-  // Procedural first-person hands. They are still generated locally,
-  // but use articulated palms, thumbs and fingers instead of placeholder blobs.
+  // Imported skinned avatar meshes, with local sleeve geometry. The old
+  // disconnected procedural hand is not drawn if the asset is unavailable.
   buildGloves(kind){
-    const g=new THREE.Group();
-    const sleeve=new THREE.MeshStandardMaterial({color:0x2f343b,roughness:.95,metalness:0,normalMap:this.textured?.rough_linen?.normalMap||null,normalScale:new THREE.Vector2(.28,.28)});
-    const cuff=new THREE.MeshStandardMaterial({color:0x1f2328,roughness:.86,metalness:.04});
-    const skin=new THREE.MeshPhysicalMaterial({color:0xc59a7b,roughness:.78,metalness:0,envMapIntensity:.18,sheen:.12,sheenColor:0xf2c9b1,sheenRoughness:.95,vertexColors:true});
-    const capsule=(a,b,r,mat,radial=18,cap=10)=>{const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),dir=end.clone().sub(start);const mesh=new THREE.Mesh(new THREE.CapsuleGeometry(r,Math.max(.006,dir.length()-2*r),cap,radial),mat);mesh.position.copy(start).add(end).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.clone().normalize());mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);return mesh;};
-    const forearm=(wrist,elbow,r=.036)=>{capsule(wrist,elbow,r,sleeve,20,10);capsule(new THREE.Vector3(...wrist).lerp(new THREE.Vector3(...elbow),.08).toArray(),new THREE.Vector3(...wrist).lerp(new THREE.Vector3(...elbow),.18).toArray(),r*1.025,cuff,18,8);};
-    const hand=cfg=>{
-      forearm(cfg.wrist,cfg.elbow,cfg.armRadius||.036);
-      const shapes=[{kind:'capsule',a:cfg.wrist,b:cfg.palm,r:.025},{kind:'ellipsoid',p:cfg.palm,s:[.043,.027,.052]},{kind:'ellipsoid',p:cfg.back||cfg.palm,s:[.036,.022,.041]},{kind:'ellipsoid',p:cfg.knuckles||cfg.palm,s:[.041,.019,.032]}];
-      for(const f of [cfg.thumb,...cfg.fingers])for(const [i,[a,b]] of f.entries())shapes.push({kind:'capsule',a,b,r:Math.max(.006,.011-i*.0018)});
-      const data=skinMeshData(shapes,this.quality==='1k'?.0038:.0028),geo=new THREE.BufferGeometry();
-      geo.setAttribute('position',new THREE.Float32BufferAttribute(data.positions,3));geo.setAttribute('normal',new THREE.Float32BufferAttribute(data.normals,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(data.colors,3));geo.setIndex(data.indices);
-      geo.computeBoundingSphere();const mesh=new THREE.Mesh(geo,skin);mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);
-    };
-    if(kind==='pistol')hand({
-      wrist:[.078,-.134,.166], elbow:[.182,-.265,.342], armRadius:.034,
-      palm:[.029,-.073,.071], back:[.022,-.052,.085], knuckles:[.020,-.037,.030],
-      thumb:[[[.024,-.062,.040],[.048,-.032,.012]],[[.048,-.032,.012],[.050,.004,-.010]]],
-      fingers:[
-        [[[.015,-.042,.030],[.004,-.004,-.008]],[[.004,-.004,-.008],[-.003,.025,-.034]]],
-        [[[.006,-.046,.043],[-.003,-.016,.008]],[[-.003,-.016,.008],[-.008,.012,-.024]]],
-        [[[-.003,-.050,.055],[-.010,-.025,.026]],[[-.010,-.025,.026],[-.014,-.002,-.005]]],
-        [[[-.011,-.054,.065],[-.017,-.034,.040]],[[-.017,-.034,.040],[-.020,-.013,.016]]],
-      ],
-    });
-    else{
-      hand({
-        wrist:[.084,-.132,.186], elbow:[.190,-.272,.358], armRadius:.035,
-        palm:[.036,-.080,.103], back:[.031,-.060,.119], knuckles:[.026,-.042,.063],
-        thumb:[[[.031,-.070,.073],[.058,-.038,.050]],[[.058,-.038,.050],[.066,-.006,.031]]],
-        fingers:[
-          [[[.020,-.047,.070],[.010,-.014,.025]],[[.010,-.014,.025],[.004,.015,-.018]]],
-          [[[.010,-.051,.087],[.002,-.020,.043]],[[.002,-.020,.043],[-.004,.009,.000]]],
-          [[[-.001,-.054,.101],[-.008,-.028,.062]],[[-.008,-.028,.062],[-.014,-.002,.025]]],
-          [[[-.011,-.056,.113],[-.017,-.036,.082]],[[-.017,-.036,.082],[-.022,-.015,.052]]],
-        ],
-      });
-      hand({
-        wrist:[-.076,-.095,-.252], elbow:[-.224,-.248,.176], armRadius:.034,
-        palm:[-.034,-.040,-.332], back:[-.027,-.020,-.304], knuckles:[-.018,-.008,-.375],
-        thumb:[[[-.038,-.047,-.304],[-.067,-.022,-.278]],[[-.067,-.022,-.278],[-.074,.008,-.257]]],
-        fingers:[
-          [[[-.012,-.016,-.363],[-.003,.005,-.428]],[[-.003,.005,-.428],[.001,.020,-.486]]],
-          [[[-.026,-.019,-.372],[-.021,.003,-.438]],[[-.021,.003,-.438],[-.018,.017,-.495]]],
-          [[[-.040,-.021,-.374],[-.041,.001,-.438]],[[-.041,.001,-.438],[-.043,.013,-.491]]],
-          [[[-.053,-.020,-.368],[-.060,-.002,-.426]],[[-.060,-.002,-.426],[-.067,.011,-.470]]],
-        ],
-      });
-    }
+    const g=new THREE.Group();g.userData.importedHands=0;
+    const sleeve=new THREE.MeshStandardMaterial({color:0x343b42,roughness:.93,normalMap:this.textured?.rough_linen?.normalMap||null,normalScale:new THREE.Vector2(.28,.28)});
+    const cuff=new THREE.MeshStandardMaterial({color:0x25292e,roughness:.88});
+    const capsule=(a,b,r,mat)=>{const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),d=end.clone().sub(start);const mesh=new THREE.Mesh(new THREE.CapsuleGeometry(r,Math.max(.006,d.length()-2*r),8,18),mat);mesh.position.copy(start).add(end).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());g.add(mesh);};
+    const hand=(side,wrist,palm,elbow)=>{if(!this.handModels?.[side])return;try{
+      const model=poseHand(this.handModels[side],side,wrist,palm);const a=new THREE.Vector3(...wrist),b=new THREE.Vector3(...elbow);
+      capsule(a.toArray(),b.toArray(),.034,sleeve);capsule(a.toArray(),a.clone().lerp(b,.16).toArray(),.035,cuff);g.add(model);g.userData.importedHands++;
+    }catch(e){console.warn('Handpose nicht verfuegbar',side,e);}};
+    if(kind==='pistol')hand('right',[.078,-.134,.166],[.029,-.073,.071],[.182,-.265,.342]);
+    else {hand('right',[.084,-.132,.186],[.036,-.080,.103],[.190,-.272,.358]);hand('left',[-.076,-.095,-.252],[-.034,-.040,-.332],[-.224,-.248,.176]);}
     return g;
   }
 
@@ -337,8 +299,12 @@ export class RoomRenderer {
     const loader=new GLTFLoader(manager);
     await this.loadRealism(manifest,path,loader,manager);
     this.ensureInventoryPreviews();
-    this.status('Handmodelle werden aufgebaut');
+    this.status('Originale WebXR-Handmodelle werden geladen');
+    this.handModels={};
+    for(const side of ['left','right']){const url=manifest.hands?.[side];if(!url)continue;try{const gltf=await loader.loadAsync(path(url));inspectHand(gltf.scene);this.handModels[side]=gltf.scene;}catch(e){console.warn('Originalhand nicht verfuegbar',side,e);}}
+    this.realismStatus.hands='partial';
     for(const id of ['pistol','rifle']){try{this.viewHands[id]=this.buildGloves(id);this.viewHands[id].visible=false;this.weaponRoot.add(this.viewHands[id]);}catch(e){console.warn('Optionales Handmesh nicht verfügbar',id,e);}}
+    if(this.viewHands.pistol?.userData.importedHands===1&&this.viewHands.rifle?.userData.importedHands===2)this.realismStatus.hands='ready';
     for(const [id,asset] of Object.entries(MODEL_IDS)){
       this.status('Möbelmodell: '+asset);
       const gltf=await loader.loadAsync(path(profile.models[asset]));
@@ -361,10 +327,13 @@ export class RoomRenderer {
       this.models[id]={root,materials,damage:null};this.dynamicGroup.add(root);
     }
 
+    const surfaceGroups=new Map();
     for(const o of objects){
       const m=new THREE.Mesh(this.geometry(o),this.material(o));
       this.place(m,o);m.castShadow=o.m!=='glass';m.receiveShadow=true;this.staticGroup.add(m);
-      if(o.surfaceId){this.impacts.register(o.surfaceId,m,o.m==='wooden_floor_01'?'wood':'wall');this.walls.register(o.surfaceId,m);}
+      if(o.surfaceId){this.impacts.register(o.surfaceId,m,o.m==='wooden_floor_01'||o.surfaceId==='surface_wardrobe'?'wood':'wall');this.walls.register(o.surfaceId,m);}
+      if(o.groupSurface){let g=surfaceGroups.get(o.groupSurface);if(!g){g=new THREE.Group();g.name=o.groupSurface;this.staticGroup.add(g);surfaceGroups.set(o.groupSurface,g);this.impacts.register(o.groupSurface,g,'wood');}g.add(m);}
+      if(o.parentSurface){const parent=this.impacts.targets.get(o.parentSurface)?.root;if(parent){parent.updateWorldMatrix(true,false);m.updateWorldMatrix(true,false);parent.attach(m);}}
     }
     buildArchitecture(this,spec);
     await buildRoomDecor(this,manifest,path,loader);
@@ -433,7 +402,7 @@ export class RoomRenderer {
     mesh.geometry=geometry;mesh.scale.set(...(chip?o.s:[1,1,1]));mesh.material=this.material(o);mesh.castShadow=o.m!=='glass'&&o.s[0]<5&&o.s[2]<5;mesh.visible=true;this.place(mesh,o);
   }
   drawModel(id,p,s,hp,max,q){
-    const sh=this.contactShadows[id];if(sh){sh.visible=true;sh.position.set(p[0],.006,p[2]);sh.material.opacity=Math.max(0,.82-(p[1]-s[1]/2)*.68);}
+    const sh=this.contactShadows[id];if(sh){sh.visible=floorSupported(WALLS.surface_0,this.wallState?.surface_0||[],p[0],p[2]);sh.position.set(p[0],.006,p[2]);sh.material.opacity=Math.max(0,.82-(p[1]-s[1]/2)*.68);}
     const m=this.models[id];if(!m)return false;
     m.root.visible=true;
     if(m.centered){m.root.position.set(...p);m.root.quaternion.identity();m.glass.opacity=.13+.08*(1-hp/max);return true;}
@@ -445,7 +414,10 @@ export class RoomRenderer {
     return true;
   }
   surfaceHit(origin,direction,held){this.scene.updateMatrixWorld(true);return this.impacts.cast(origin,direction,[this.staticGroup,this.dynamicGroup],held);}
-  syncWalls(walls){this.walls.sync(walls);}
+  syncWalls(walls){this.walls.sync(walls);this.wallState=walls||{};this.staticGroup.updateMatrixWorld(true);this.staticGroup.traverse(o=>{if(o.userData.floorShadow){const p=o.getWorldPosition(new THREE.Vector3());o.visible=floorSupported(WALLS.surface_0,this.wallState.surface_0||[],p.x,p.z);}});}
+  syncDecor(decor={}){
+    for(const [id,target] of this.impacts.targets){if(!id.startsWith('surface_')||this.walls.entries.has(id))continue;const visible=(decor[id]||0)<4;if(target.root.visible!==visible){target.root.visible=visible;this.impacts.invalidateTarget(id);}}
+  }
   syncMarks(marks){this.impacts.sync(marks);}
   equip(id,first){this.currentWeapon=id||null;this.weaponRoot.visible=!!id&&first&&!this.xrMode.active;for(const [key,g] of Object.entries(this.weaponModels))g.visible=key===id;for(const [key,g] of Object.entries(this.viewHands))g.visible=key===id;this.xrMode.equip(this.xrMode.active?id:null);}
   setLoop(fn){this.renderer.setAnimationLoop(fn);}

@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import { WALLS, solidRuns, wallSignature } from './wall_layout.js';
+import { WALLS, collisionMesh, wallSignature } from './wall_layout.js';
 const vector = p => ({x:p[0],y:p[1],z:p[2]});
 const array = v => [v.x,v.y,v.z];
 const rotation = q => [q.x,q.y,q.z,q.w];
@@ -8,8 +8,8 @@ export class RoomPhysics {
   constructor(room,spec){
     this.world=new RAPIER.World({x:0,y:-9.81,z:0});this.spec=spec;this.entries=new Map();this.fragments=new Map();this.acc=0;
     this.world.timestep=1/60;
-    this.wallColliders=new Map();
-    for(const o of room){const collider=this.fixed(o.p,o.s);if(o.surfaceId&&WALLS[o.surfaceId])this.wallColliders.set(o.surfaceId,{signature:'',colliders:[collider]});}
+    this.wallColliders=new Map();this.decorColliders=new Map();
+    for(const o of room){const collider=this.fixed(o.p,o.s);if(o.surfaceId&&WALLS[o.surfaceId])this.wallColliders.set(o.surfaceId,{signature:'',colliders:[collider]});else if(o.surfaceId)this.decorColliders.set(o.surfaceId,collider);}
     this.door=this.fixed([0,1.1,-4.95],[1.85,2.2,.18]);
     this.extension=[this.fixed([0,-.12,-10],[10,.24,10]),this.fixed([-4.8,1.4,-10],[.2,2.8,10]),this.fixed([4.8,1.4,-10],[.2,2.8,10]),this.fixed([0,1.4,-15],[10,2.8,.2])];
     this.unlocked=false;for(const c of this.extension)c.setEnabled(false);
@@ -26,12 +26,15 @@ export class RoomPhysics {
   read(e,b){b.p=array(e.body.translation());b.v=array(e.body.linvel());b.q=rotation(e.body.rotation());}
   syncWalls(walls={}){
     for(const [id,e] of this.wallColliders){const cells=walls[id]||[],signature=wallSignature(cells);if(signature===e.signature)continue;
-      for(const c of e.colliders)this.world.removeCollider(c,true);
-      e.colliders=solidRuns(WALLS[id],cells).map(o=>this.fixed(o.p,o.s));e.signature=signature;
+      const w=WALLS[id];let next;
+      if(!signature)next=[this.fixed(w.p,w.s)];
+      else {const {vertices,indices}=collisionMesh(w,cells);next=indices.length?[this.world.createCollider(RAPIER.ColliderDesc.trimesh(vertices,indices).setTranslation(...w.p).setFriction(.8))]:[];}
+      for(const c of e.colliders)this.world.removeCollider(c,true);e.colliders=next;e.signature=signature;
     }
   }
+  syncDecor(decor={}){for(const [id,c] of this.decorColliders)c.setEnabled((decor[id]||0)<4);}
   step(dt,bodies,state,held,holdPoint,debris){
-    this.syncWalls(state.walls||{});
+    this.syncWalls(state.walls||{});this.syncDecor(state.decor||{});
     if(this.unlocked!==state.unlocked){this.unlocked=state.unlocked;this.door.setEnabled(!this.unlocked);for(const c of this.extension)c.setEnabled(this.unlocked);}
     for(const [id,b] of Object.entries(bodies)){
       let e=this.entries.get(id);const spec=this.spec[id];

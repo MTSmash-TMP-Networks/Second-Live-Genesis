@@ -1,43 +1,53 @@
-"""Abstract persistent game-wall cells. No engineering or ballistics model."""
+"""Deterministic abstract game-surface partition, not a structural simulation."""
 import json
+import math
 from pathlib import Path
+from functools import lru_cache
 
 WALLS = json.loads((Path(__file__).parent / 'web' / 'engine' / 'wall_layout.json').read_text())
 REMOVED = 4
+MASK = 0xffffffff
 
+def axes(w):
+    u,v=w['axis'],w.get('verticalAxis',1)
+    return u,v,3-u-v
+
+def random(c,r,k):
+    h=((c+1)*73856093 ^ (r+1)*19349663 ^ (k+1)*83492791)&MASK
+    for _ in range(2): h=((h^(h>>16))*0x45d9f3b)&MASK
+    return (h^(h>>16))/4294967296
+
+def site(w,c,r):
+    u,v,_=axes(w)
+    return (-w['s'][u]/2+(c+.5+(random(c,r,0)-.5)*.64)*w['s'][u]/w['cols'], -w['s'][v]/2+(r+.5+(random(c,r,1)-.5)*.64)*w['s'][v]/w['rows'])
+
+def nearest(w,u,v):
+    return min(((c,r) for r in range(w['rows']) for c in range(w['cols'])),key=lambda a:sum((x-y)**2 for x,y in zip(site(w,*a),(u,v))))
 
 def hit_cell(wall, point, normal):
-    """Resolve a rendered surface point in the original wall-local frame.
-
-    A tiny inward offset selects the surviving cell when hitting a cut edge.
-    The server bounds-checks the reported point; the client is not authoritative
-    for multiplayer spatial validation in this prototype.
-    """
-    s, a = wall['s'], wall['axis']
+    s=wall['s'];u,v,b=axes(wall)
     if any(abs(point[i]) > s[i]/2 + .015 for i in range(3)):
-        raise ValueError('Treffer ausserhalb der Spielwand')
-    p = [point[i] - normal[i]*.0003 for i in range(3)]
-    c = min(wall['cols']-1, max(0, int((p[a]/s[a]+.5)*wall['cols'])))
-    r = min(wall['rows']-1, max(0, int((p[1]/s[1]+.5)*wall['rows'])))
-    # Broad faces are always valid. An interior cut edge must lie on a cell line.
-    b=2 if a==0 else 0
-    if abs(abs(point[b])-s[b]/2) > .015:
-        axis=max(range(3),key=lambda i:abs(normal[i]))
-        if axis not in (a,1) or abs(normal[axis]) < .98:
-            raise ValueError('Treffer liegt nicht auf einer Spielwandflaeche')
-        count=wall['cols'] if axis==a else wall['rows']
-        coord=(point[axis]/s[axis]+.5)*count
-        if abs(coord-round(coord))*s[axis]/count>.015:
-            raise ValueError('Treffer liegt nicht auf einer Segmentkante')
-        return c,r,axis,1 if normal[axis]>0 else -1
-    if abs(normal[b])<.98 or normal[b]*point[b]<=0:
-        raise ValueError('Ungueltige Normalenrichtung fuer die Spielwand')
-    return c,r,None,0
-
+        raise ValueError('Treffer ausserhalb der Spielflaeche')
+    # On a broad face, find its Voronoi cell. On a fracture edge, look a
+    # tiny distance to either side of the reported virtual surface.
+    if abs(abs(point[b])-s[b]/2)<=.015 and abs(normal[b])>.98 and normal[b]*point[b]>0:
+        c,r=nearest(wall,point[u],point[v]);return c,r,None
+    if abs(normal[b])>.05:
+        raise ValueError('Treffer liegt nicht auf einer Spielflaeche')
+    eps=.0015
+    inside=(point[u]-normal[u]*eps,point[v]-normal[v]*eps)
+    outside=(point[u]+normal[u]*eps,point[v]+normal[v]*eps)
+    c,r=nearest(wall,*inside)
+    if abs(outside[0])>s[u]/2 or abs(outside[1])>s[v]/2: return c,r,(-1,-1)
+    other=nearest(wall,*outside)
+    if other==(c,r): raise ValueError('Treffer liegt nicht auf einer Bruchkante')
+    a,q=site(wall,c,r),site(wall,*other);d=(q[0]-a[0],q[1]-a[1]);length=math.hypot(*d)
+    if (d[0]*normal[u]+d[1]*normal[v])/length<.95: raise ValueError('Ungueltige Bruchkantennormale')
+    return c,r,other
 
 def create_schema(db):
     db.execute('CREATE TABLE IF NOT EXISTS wall_cells (target TEXT NOT NULL, col INTEGER NOT NULL, row INTEGER NOT NULL, stage INTEGER NOT NULL CHECK(stage BETWEEN 1 AND 4), PRIMARY KEY(target,col,row))')
-
+    db.execute('CREATE TABLE IF NOT EXISTS decor_damage (target TEXT PRIMARY KEY, stage INTEGER NOT NULL CHECK(stage BETWEEN 1 AND 4))')
 
 def state(db):
     out={}
@@ -45,20 +55,15 @@ def state(db):
         out.setdefault(t,[]).append([c,r,stage])
     return out
 
-
 def damage(db,target,point,normal):
-    wall=WALLS[target]
-    c,r,edge,side=hit_cell(wall,point,normal)
+    wall=WALLS[target];c,r,other=hit_cell(wall,point,normal)
     def get(x,y):
         v=db.execute('SELECT stage FROM wall_cells WHERE target=? AND col=? AND row=?',(target,x,y)).fetchone()
         return v[0] if v else 0
     old=get(c,r)
-    if edge is not None:
-        nc,nr=(c+side,r) if edge==wall['axis'] else (c,r+side)
-        if 0<=nc<wall['cols'] and 0<=nr<wall['rows'] and get(nc,nr)<REMOVED:
-            raise ValueError('Segmentkante ist noch verdeckt')
-    if old>=REMOVED:
-        return {'target':target,'col':c,'row':r,'stage':REMOVED,'changed':False}
+    if other is not None and other!=(-1,-1) and get(*other)<REMOVED:
+        raise ValueError('Bruchkante ist noch verdeckt')
+    if old>=REMOVED: return {'target':target,'col':c,'row':r,'stage':REMOVED,'changed':False}
     new=old+1
     db.execute('INSERT INTO wall_cells VALUES (?,?,?,?) ON CONFLICT(target,col,row) DO UPDATE SET stage=excluded.stage',(target,c,r,new))
     return {'target':target,'col':c,'row':r,'stage':new,'changed':True}

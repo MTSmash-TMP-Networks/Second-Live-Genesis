@@ -38,7 +38,7 @@ console.log('Single visual assembly, surface raycast, object-local decal, occlus
 
 // The actual visual geometry must have a genuine through-opening, not a decal.
 import { WallMeshes } from './wall_mesh.js';
-import { WALLS, REMOVED, cellBox } from './wall_layout.js';
+import { WALLS, REMOVED, cellBox, site, planeAxes } from './wall_layout.js';
 const w=WALLS.surface_6,wallScene=new THREE.Group(),wallImpacts=new ImpactMarks(),walls=new WallMeshes(wallImpacts);
 const wall=new THREE.Mesh(new THREE.BoxGeometry(...w.s),material);wall.position.set(...w.p);wallScene.add(wall);wallScene.updateMatrixWorld(true);wallImpacts.register('surface_6',wall,'wall');walls.register('surface_6',wall);
 const cell=cellBox(w,4,3),origin=[cell.p[0]-1,cell.p[1],cell.p[2]],direction=[1,0,0];
@@ -50,3 +50,10 @@ const adjacent=cellBox(w,5,3);assert.equal(wallImpacts.cast([adjacent.p[0]-1,adj
 assert.equal(wall.geometry.groups.length,2);assert.ok(wall.geometry.groups[1].count>0);
 walls.sync({});wallScene.updateMatrixWorld(true);assert.equal(wallImpacts.cast(origin,direction,[wallScene]).id,'surface_6');
 console.log('Three.js: progressive decal rebuild, real wall opening, cut faces and repair');
+
+for(const id of ['surface_0','surface_1']){
+  const w=WALLS[id],root=new THREE.Group(),im=new ImpactMarks(),wm=new WallMeshes(im),mesh=new THREE.Mesh(new THREE.BoxGeometry(...w.s),material);mesh.position.set(...w.p);root.add(mesh);root.updateMatrixWorld(true);im.register(id,mesh,'wall');wm.register(id,mesh);
+  const [u,v,b]=planeAxes(w),q=site(w,10,10),o=[...w.p],d=[0,0,0];o[u]+=q[0];o[v]+=q[1];o[b]-=1;d[b]=1;
+  assert.equal(im.cast(o,d,[root]).id,id);wm.sync({[id]:[[10,10,REMOVED]]});root.updateMatrixWorld(true);assert.equal(im.cast(o,d,[root]).id,null);assert.equal(mesh.geometry.groups.length,2);wm.sync({});root.updateMatrixWorld(true);assert.equal(im.cast(o,d,[root]).id,id);
+}
+console.log('Three.js: irregular slab openings and repair');

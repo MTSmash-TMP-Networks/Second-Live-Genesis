@@ -1,16 +1,21 @@
-Second Live v0.6.7 - Destruction Pass
+Second Live v0.6.8 - Advanced Destruction
 
-Lokal ausgefuehrt: 65 Python-Tests plus 9 Subtests; persistente Wandzellen,
-Reparatur, benachbarte Zellen, Kantenvalidierung, Markierungslimit, Migration,
-Updater-Preflight mit echtem lokalen Python-Server.
-Node: Desktop/Mobile-Simulation, Inventarbildpfade, freigelegte Wandzellen,
-Reparatur, gemeinsame Zellgeometrie/Kollisionslayout und zusammenhaengendes
-prozedurales Handmesh (synthetischer Test), JavaScript-Syntax.
+Lokal: 70 Python-Tests plus 9 Subtests bestanden. Neu: Floor/Ceiling-
+Persistenz, selektive Einrichtungsreparatur, JS/Python-Site-Konsistenz und
+optionaler GLB-Download mit Integritaetspruefung/Fehlerbehandlung.
+Node: 11 polygonale Hauptflaechen mit Flaechenabdeckung, Oeffnungen,
+Bruchkanten, Bodensupport und Reparatur; Desktop-/Mobile-Client mit
+simuliertem Renderer, Vorschaupfade, synthetischer Legacy-Handmesh-Test.
+Originale WebXR-GLBs aus gepinnter Upstream-Revision via GitHub-API
+inspiziert (25 Skelettgelenke, flache Hierarchie, Material ohne Bilder).
 
-Zusaetzlich im Docker-Build: echte Three.js-Raycasts vor/nach Wandbruch,
-Decal-Neuerzeugung, Schnittflaechen und Rapier-Raycasts vor/nach Reparatur.
-Hier nicht ausgefuehrt: Docker und npm-Registry nicht erreichbar, kein
-WebGL- oder VR-Lauf. Originalmodelle und Handpose visuell abnehmen.
-Wandbruch ist rasterbasiertes Spielverhalten ohne Gebaeudestatik. Truemmer
-sind lokal, nicht persistent; Raumgrenze und Scanner-Freischaltung bleiben.
-Host-Updater 0.6.5 und UPDATE_PROTOCOL 1 unveraendert.
+Docker-Build: verpflichtende Three.js- und Rapier-Raycasts fuer Wand,
+Boden, Decke und Reparatur; Collider der Einrichtung; Original-GLB-Parser
+und Skelett-/Handgelenk-Tests, soweit die optionalen Assets vorhanden sind.
+Hier nicht ausgefuehrt: kein Docker und keine npm-Netzwerkaufloesung.
+Keine echte WebGL- oder Headset-Abnahme. Handpose und Bruchoptik im Spiel
+visuell pruefen. Keine Gebaeudestatik, keine reale Ballistik. Die
+Spielgrenze, Scanner-Tuer und sichtbares Sicherheitsfundament bleiben.
+Einrichtung wird gruppenweise entfernt, nicht in feinste Teile zerlegt.
+Truemmerpositionen bleiben lokal. Host-Updater und UPDATE_PROTOCOL 1
+unveraendert.
