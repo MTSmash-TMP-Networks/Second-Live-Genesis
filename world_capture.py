@@ -8,6 +8,9 @@ HEX = re.compile(r'^[0-9a-f]{32}$')
 TOKEN = re.compile(r'^[A-Za-z0-9_-]{43}$')
 MAX_FRAMES = 60
 MIN_FRAMES = 8
+LIVE_MIN_FRAMES = 4
+LIVE_BATCH_FRAMES = 3
+LIVE_IDLE_SECONDS = 10
 LEASE = 3600
 MAX_PLAYERS = 200
 MAX_SESSIONS = 200
@@ -64,6 +67,12 @@ class CaptureStore:
             CREATE INDEX IF NOT EXISTS frames_scan ON frames(scan,created);
             CREATE INDEX IF NOT EXISTS scans_owner ON scans(owner,created);
             CREATE TABLE IF NOT EXISTS worker(id INTEGER PRIMARY KEY CHECK(id=1), heartbeat REAL, device TEXT);
+            CREATE TABLE IF NOT EXISTS live_previews(
+                scan TEXT PRIMARY KEY REFERENCES scans(id), token TEXT NOT NULL, state TEXT NOT NULL,
+                attempted INTEGER NOT NULL DEFAULT 0, updated REAL NOT NULL, revision TEXT,
+                registered INTEGER NOT NULL DEFAULT 0, source_count INTEGER NOT NULL DEFAULT 0,
+                point_count INTEGER NOT NULL DEFAULT 0, result TEXT, message TEXT NOT NULL DEFAULT ''
+            );
             ''')
             if 'scan_region' not in {row[1] for row in db.execute('PRAGMA table_info(players)')}:
                 db.execute('ALTER TABLE players ADD COLUMN scan_region TEXT')
@@ -121,6 +130,7 @@ class CaptureStore:
         now=time.time()
         expired=[row['id'] for row in db.execute("SELECT id FROM scans WHERE status='capturing' AND expires<?",(now,))]
         for sid in expired:
+            db.execute('DELETE FROM live_previews WHERE scan=?',(sid,))
             shutil.rmtree(self.files/sid,ignore_errors=True);db.execute('DELETE FROM frames WHERE scan=?',(sid,))
         db.execute("UPDATE scans SET status='expired', message='Reservierung abgelaufen',updated=? WHERE status='capturing' AND expires<?",(now,now))
         db.execute("DELETE FROM targets WHERE scan IN (SELECT id FROM scans WHERE status IN ('expired','cancelled'))")
@@ -141,6 +151,9 @@ class CaptureStore:
         if mine:
             result['id']=row['id']; result['evaluation']=bool(row['evaluation'])
             result['frames']=[{'id':f['id'],'status':f['status'],'analysis':json.loads(f['result']) if f['result'] else None} for f in db.execute('SELECT id,status,result FROM frames WHERE scan=? ORDER BY created',(row['id'],))]
+            if row['status']=='capturing':
+                live=db.execute('SELECT state,attempted,revision,registered,source_count,point_count,message FROM live_previews WHERE scan=?',(row['id'],)).fetchone()
+                result['live']=dict(live) if live else {'state':'waiting','attempted':0,'revision':None,'registered':0,'source_count':0,'point_count':0,'message':''}
         elif row['status']=='published': result['id']=row['id']
         result['preview']=row['status'] in ('review','published') and (mine or row['status']=='published')
         return result
@@ -202,6 +215,7 @@ class CaptureStore:
             self.expire(db);row=self._owned(db,player,scan)
             if row['status']!='capturing':raise CaptureError('Fotos nur waehrend Aufnahme bearbeiten')
             if not db.execute('DELETE FROM frames WHERE scan=? AND id=?',(scan,frame)).rowcount:raise CaptureError('Foto nicht gefunden',404)
+            db.execute('DELETE FROM live_previews WHERE scan=?',(scan,)) # invalidate any in-flight snapshot
             (self.files/scan/'frames'/(frame+'.jpg')).unlink(missing_ok=True)
             return {'deleted':True}
     def transition(self,player,scan,action):
@@ -210,6 +224,7 @@ class CaptureStore:
             if action=='submit' and old=='capturing':
                 if db.execute('SELECT count(*) FROM frames WHERE scan=?',(scan,)).fetchone()[0]<MIN_FRAMES: raise CaptureError('Mindestens 8 unterschiedliche Aufnahmen erforderlich (keine Qualitaetsgarantie)',400)
                 state='queued'; msg='CPU-Auftrag in Warteschlange'
+                db.execute('DELETE FROM live_previews WHERE scan=?',(scan,))
             elif action=='retry' and old=='failed': state='capturing'; msg='Weitere Perspektiven aufnehmen'; db.execute('UPDATE scans SET expires=? WHERE id=?',(now+LEASE,scan))
             elif action=='publish' and old=='review':
                 # Never expose photos or RGB preview to other users. Geometry only.
@@ -217,6 +232,7 @@ class CaptureStore:
                 state='published'; msg='Rekonstruktionsvorschau bestaetigt (keine begehbare Welt)'
             elif action=='cancel' and old in ('capturing','failed','review','expired','queued','published'):
                 state='cancelled'; msg='Auftrag verworfen'; db.execute('DELETE FROM targets WHERE scan=?',(scan,))
+                db.execute('DELETE FROM live_previews WHERE scan=?',(scan,))
                 db.execute('DELETE FROM frames WHERE scan=?',(scan,))
                 shutil.rmtree(self.files/scan,ignore_errors=True)
             else: raise CaptureError('Aktion in diesem Zustand nicht moeglich')
@@ -233,12 +249,74 @@ class CaptureStore:
         data=json.loads(path.read_text());
         if not mine: data.pop('colors',None); data.pop('mesh_colors',None); data.pop('semantics',None); data.pop('warnings',None)
         return data
+    def live_preview(self,player,scan):
+        """Live geometry is private even for a reserved shared region."""
+        with self.tx(False) as db:
+            row=self._owned(db,player,scan)
+            if row['status']!='capturing' or row['expires']<time.time():raise CaptureError('Live-Vorschau nicht verfuegbar',404)
+            live=db.execute('SELECT result,revision FROM live_previews WHERE scan=?',(scan,)).fetchone()
+            if not live or not live['result']:raise CaptureError('Noch keine Live-Rekonstruktion vorhanden',404)
+            result=json.loads(live['result']);result['revision']=live['revision'];return result
+
+    def claim_live(self):
+        """Coalesce new images; only one live worker, final jobs have priority."""
+        with self.tx() as db:
+            self.expire(db)
+            if db.execute("SELECT 1 FROM scans WHERE status IN ('queued','processing') LIMIT 1").fetchone():return None
+            now=time.time()
+            for row in db.execute("""SELECT s.id,l.state,l.attempted,l.updated,count(f.id) AS n
+                FROM scans s JOIN frames f ON f.scan=s.id LEFT JOIN live_previews l ON l.scan=s.id
+                WHERE s.status='capturing' GROUP BY s.id HAVING count(f.id)>=?
+                ORDER BY COALESCE(l.updated,0),s.created""",(LIVE_MIN_FRAMES,)):
+                if row['state']=='running':continue
+                attempted=row['attempted'] or 0
+                if row['n']<=attempted:continue
+                if attempted and row['n']-attempted<LIVE_BATCH_FRAMES and now-(row['updated'] or 0)<LIVE_IDLE_SECONDS:continue
+                sid=row['id'];token=uuid.uuid4().hex
+                frames=[f['id'] for f in db.execute('SELECT id FROM frames WHERE scan=? ORDER BY created,id',(sid,))]
+                db.execute("""INSERT INTO live_previews(scan,token,state,attempted,updated,message) VALUES (?,?,'running',?,?,'Fotos werden raeumlich verbunden')
+                    ON CONFLICT(scan) DO UPDATE SET token=excluded.token,state=excluded.state,attempted=excluded.attempted,updated=excluded.updated,message=excluded.message""",(sid,token,len(frames),now))
+                return {'scan':sid,'token':token,'frames':frames}
+        return None
+
+    def _live_valid(self,db,job):
+        return bool(db.execute("""SELECT 1 FROM live_previews l JOIN scans s ON s.id=l.scan
+            WHERE l.scan=? AND l.token=? AND l.state='running' AND s.status='capturing' AND s.expires>=?
+            AND NOT EXISTS(SELECT 1 FROM scans WHERE status IN ('queued','processing'))""",(job['scan'],job['token'],time.time())).fetchone())
+
+    def live_allowed(self,job):
+        with self.tx(False) as db:return self._live_valid(db,job)
+
+    def snapshot_live(self,job,dest):
+        """Hardlink an immutable, ordered snapshot while frame deletion is locked."""
+        with self.tx() as db:
+            if not self._live_valid(db,job):return False
+            source=self.files/job['scan']/'frames'
+            for i,fid in enumerate(job['frames']):
+                os.link(source/(fid+'.jpg'),dest/(f'{i:04d}_{fid}.jpg'))
+            return True
+
+    def finish_live(self,job,result=None,message='',interrupted=False):
+        with self.tx() as db:
+            row=db.execute("SELECT l.token,s.status FROM live_previews l JOIN scans s ON s.id=l.scan WHERE l.scan=?",(job['scan'],)).fetchone()
+            if not row or row['token']!=job['token'] or row['status']!='capturing':return False
+            if interrupted or not self._live_valid(db,job):
+                db.execute("UPDATE live_previews SET state='waiting',attempted=0,updated=?,message='Live-Berechnung pausiert' WHERE scan=?",(time.time(),job['scan']))
+                return False
+            if result is None:
+                db.execute("UPDATE live_previews SET state='insufficient',updated=?,message=? WHERE scan=?",(time.time(),message[:250],job['scan']))
+            else:
+                db.execute("""UPDATE live_previews SET state='ready',updated=?,revision=?,registered=?,source_count=?,point_count=?,result=?,message=? WHERE scan=?""",
+                    (time.time(),job['token'],result['registered'],result['total_frames'],len(result['points']),json.dumps(result,allow_nan=False,separators=(',',':')),message[:250],job['scan']))
+            return True
+
     def heartbeat(self,device):
         with self.tx() as db: db.execute('INSERT INTO worker VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET heartbeat=excluded.heartbeat,device=excluded.device',(time.time(),device))
     def recover_worker(self):
         with self.tx() as db:
             db.execute("UPDATE frames SET status='pending' WHERE status='processing'")
             db.execute("UPDATE scans SET status='queued',message='Nach Neustart erneut eingereiht' WHERE status='processing'")
+            db.execute("UPDATE live_previews SET state='waiting',attempted=0 WHERE state='running'")
     def claim(self):
         with self.tx() as db:
             self.expire(db)
