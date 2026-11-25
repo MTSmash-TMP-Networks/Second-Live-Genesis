@@ -174,6 +174,84 @@ def build_preview(points,views,images,inference,semantic_summary=None):
     if not out['triangles']:out['warnings'].append('Nur verifizierte SfM-Punktwolke; keine ausreichend konsistente KI-Oberflaeche')
     return out
 
+class LiveInterrupted(Exception):
+    pass
+
+def run_live_colmap(args,log,threads,allowed,deadline):
+    """A separate, bounded CPU preview. Stop promptly on cancel, removal or final submit."""
+    env={**os.environ,'QT_QPA_PLATFORM':'offscreen','OMP_NUM_THREADS':str(threads),'OPENBLAS_NUM_THREADS':str(threads)}
+    if not allowed():raise LiveInterrupted()
+    if time.monotonic()>=deadline:raise TimeoutError('Live-Vorschau braucht mehr Rechenzeit')
+    with open(log,'a',encoding='utf8') as out:
+        with subprocess.Popen(['colmap',*args],stdout=out,stderr=subprocess.STDOUT,env=env) as proc:
+            try:
+                while True:
+                    if not allowed():raise LiveInterrupted()
+                    remaining=deadline-time.monotonic()
+                    if remaining<=0:raise TimeoutError('Live-Vorschau braucht mehr Rechenzeit')
+                    try:code=proc.wait(timeout=min(1,remaining));break
+                    except subprocess.TimeoutExpired:continue
+                if code:raise RuntimeError('Live-COLMAP '+args[0]+' fehlgeschlagen')
+            finally:
+                if proc.poll() is None:
+                    proc.terminate()
+                    try:proc.wait(timeout=3)
+                    except subprocess.TimeoutExpired:proc.kill();proc.wait()
+
+def build_live_preview(points,views,frame_ids):
+    """Only triangulated, measured SfM points, never a fabricated mesh."""
+    import numpy as np
+    frames=list(frame_ids);known=set(frames)
+    matched=[v for v in views if Path(v['name']).stem.split('_',1)[-1] in known]
+    registered=list(dict.fromkeys(Path(v['name']).stem.split('_',1)[-1] for v in matched))
+    if len(registered)<3 or len(points)<60:raise ValueError('Zu wenige Fotos räumlich verbunden. Seitlich weitergehen und dieselben Details erneut aufnehmen.')
+    xyz=np.array([v[0] for v in points.values()])
+    center=np.median(xyz,axis=0);scale=1/max(float(np.percentile(np.linalg.norm(xyz-center,axis=1),95)),1e-6)
+    clean=[v for v in points.values() if np.linalg.norm((v[0]-center)*scale)<2.5]
+    stride=max(1,math.ceil(len(clean)/8000));clean=clean[::stride]
+    if len(clean)<60:raise ValueError('Noch zu wenige zuverlässige 3D-Punkte.')
+    poses=[]
+    for v in matched:
+        position=(-v['R'].T@v['t']-center)*scale
+        if np.isfinite(position).all() and np.linalg.norm(position)<5:
+            poses.append({'id':Path(v['name']).stem.split('_',1)[-1],'position':position.round(5).tolist()})
+    return {'kind':'live_sfm','units':'relative; not metric','registered':len(registered),'registered_ids':registered,
+            'frame_ids':frames,'total_frames':len(frames),'points':[((v[0]-center)*scale).round(5).tolist() for v in clean],
+            'colors':[v[1] for v in clean],'camera_positions':poses,'vertices':[],'triangles':[]}
+
+def reconstruct_live(store,job,threads):
+    if not shutil.which('colmap'):raise RuntimeError('COLMAP fehlt')
+    deadline=time.monotonic()+100
+    # Temporary workspaces live outside the scan directory and never become public assets.
+    with tempfile.TemporaryDirectory(prefix='live-sfm-') as tmp:
+        t=Path(tmp);images=t/'images';images.mkdir();models=t/'sparse';models.mkdir()
+        if not store.snapshot_live(job,images):raise LiveInterrupted()
+        db=t/'database.db';log=t/'colmap.log'
+        def run(args):run_live_colmap(args,log,threads,lambda:store.live_allowed(job),deadline)
+        run(['feature_extractor','--database_path',str(db),'--image_path',str(images),'--ImageReader.camera_model','SIMPLE_PINHOLE','--SiftExtraction.use_gpu','0','--SiftExtraction.max_image_size','900','--SiftExtraction.max_num_features','2048','--SiftExtraction.num_threads',str(threads)])
+        run(['exhaustive_matcher','--database_path',str(db),'--SiftMatching.use_gpu','0','--SiftMatching.num_threads',str(threads)])
+        run(['mapper','--database_path',str(db),'--image_path',str(images),'--output_path',str(models),'--Mapper.num_threads',str(threads)])
+        best=None
+        for m in sorted(models.iterdir()):
+            if not (m/'images.bin').is_file():continue
+            txt=t/('text-'+m.name);txt.mkdir()
+            run(['model_converter','--input_path',str(m),'--output_path',str(txt),'--output_type','TXT'])
+            points,views=read_model(txt)
+            if best is None or (len(views),len(points))>(len(best[1]),len(best[0])):best=(points,views)
+        if best is None:raise ValueError('Noch keine zusammenhängende 3D-Struktur. Überlappende Ansichten aus neuen Positionen aufnehmen.')
+        return build_live_preview(*best,job['frames'])
+
+def live_worker(store,threads):
+    while True:
+        try:job=store.claim_live()
+        except Exception:time.sleep(2);continue
+        if not job:time.sleep(.8);continue
+        try:
+            result=reconstruct_live(store,job,threads)
+            store.finish_live(job,result,'Räumliche Vorschau aktualisiert')
+        except LiveInterrupted:store.finish_live(job,interrupted=True)
+        except Exception as e:store.finish_live(job,message=str(e)[:250])
+
 def reconstruct(store,scan,inference):
     import numpy as np
     sid=scan['id'];root=store.files/sid;images=root/'frames';frames=store.frames_for(sid)
@@ -207,6 +285,7 @@ def main(root):
             except Exception:pass
             time.sleep(8)
     threading.Thread(target=beat,daemon=True).start()
+    threading.Thread(target=live_worker,args=(store,max(1,min(2,engine.threads//2))),daemon=True,name='live-sfm').start()
     while True:
         task=store.claim()
         if not task:time.sleep(.7);continue
