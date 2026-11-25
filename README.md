@@ -1,8 +1,14 @@
 # Second Live – World Genesis
 
-**v0.7.1 · Immersive Phone & Audio / World Capture CPU-Testversion**
+**v0.7.2 · Linux Permission Hotfix / World Capture CPU-Testversion**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spieler sollen ihre gemeinsame Welt aus realen Aufnahmen erschaffen, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.7.2
+
+- Docker normalisiert die Rechte der Programmdateien und Grafikassets innerhalb des Images (auch bei `sudo` und `umask 077`). Der Server bleibt `appuser`; Programmdateien sind fuer ihn nicht beschreibbar.
+- Ein Build-Test prueft Lesbarkeit, Schreibschutz und Datenverzeichnis mit dem tatsaechlichen Runtime-Benutzer und importiert Server und Worker. Der isolierte Starttest bleibt aktiv.
+- Update normal ueber das Smartphone ausloesen. Bestehende Daten-Volumes, lokale Schluessel und Host-Updater bleiben unveraendert. Die komprimierte Originaltuer nutzt weiterhin den lokalen Ersatz.
 
 ## Neu in 0.7.1
 

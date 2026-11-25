@@ -70,8 +70,14 @@ ARG SECOND_LIVE_REVISION=local
 LABEL org.opencontainers.image.revision=${SECOND_LIVE_REVISION}
 ENV SECOND_LIVE_REVISION=${SECOND_LIVE_REVISION}
 ENV PYTHONUNBUFFERED=1 SECOND_LIVE_BIND=0.0.0.0 SECOND_LIVE_PORT=8765 SECOND_LIVE_DATA_DIR=/app/data
-RUN useradd -m appuser && mkdir -p /app/data && chown -R appuser:appuser /app/data
+# Local Git checkouts can inherit umask 077 from sudo/start.sh. Docker COPY
+# preserves source modes, so normalize only code and static assets in the image.
+COPY scripts/runtime_permissions.py /app/runtime_permissions.py
+RUN useradd -m appuser && mkdir -p /app/data && chown -R appuser:appuser /app/data \
+    && python /app/runtime_permissions.py --normalize /app
 USER appuser
+# Fail the image build if the actual runtime UID cannot read code and assets.
+RUN python /app/runtime_permissions.py --check /app && python -c "import server, capture_compute"
 VOLUME ["/app/data"]
 EXPOSE 8765
 CMD ["python", "server.py"]

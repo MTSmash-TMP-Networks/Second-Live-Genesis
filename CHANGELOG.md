@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2 – Linux Permission Hotfix
+- Root-eigene Programmdateien und Web-Assets im Image erhalten definierte Leserechte, unabhaengig von sudo und umask 077. Laufzeitbenutzer bleibt nicht privilegiert.
+- Build prueft Berechtigungen und Python-Imports als appuser; isolierter Starttest und Rollback bleiben aktiv. Keine Migration von Spielerdaten.
+
 ## 0.7.1 – Immersive Phone & Audio
 - Web Audio mit lokal erzeugten Spieleffekten, Hall, räumlichen Treffern, Lautstärke und Stummschaltung.
 - Interaktiver iPhone-inspirierter Smartphone-Startbildschirm, Einstellungen und bestehende Scan-/Update-Apps.

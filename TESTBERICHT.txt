@@ -1,3 +1,9 @@
+Second Live v0.7.2 - Linux Permission Hotfix
+97 Python-Tests und 13 Subtests erfolgreich (pytest).
+Berechtigungs-Regression: echter Linux-Prozess mit UID/GID 65534, root-eigene Dateien mit 0600 und Verzeichnisse mit 0700. Permission denied vor der Korrektur reproduziert; danach Lesbarkeit, Schreibschutz, Datenverzeichnis und Python-Imports erfolgreich. Vorhandene Weltdaten und deren Rechte unveraendert.
+Docker-Build prueft dies zusaetzlich als appuser. Docker ist hier nicht verfuegbar; der echte Image-Build und der isolierte Containerstart erfolgen beim Update vor dem Wechsel.
+
+Vorheriger Teststand (v0.7.1):
 Second Live v0.7.1 - Immersive Phone & Audio
 Basis v0.7.0. 95 Python-Tests und 13 Subtests erfolgreich (pytest).
 Desktop-/Touch-Client-Simulation inklusive Audio-Aufrufen, Reload und Smartphone-Einstellungen erfolgreich.
