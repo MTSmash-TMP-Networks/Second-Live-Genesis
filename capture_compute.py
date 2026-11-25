@@ -4,6 +4,7 @@ No photographs leave the server. Model files alone are fetched on demand.
 from __future__ import annotations
 import hashlib, json, math, os, shutil, subprocess, tempfile, threading, time
 from pathlib import Path
+import da3_client
 from urllib.request import Request, urlopen
 
 MODELS = {
@@ -247,7 +248,20 @@ def live_worker(store,threads):
         except Exception:time.sleep(2);continue
         if not job:time.sleep(.8);continue
         try:
-            result=reconstruct_live(store,job,threads)
+            if da3_client.health()['status']=='ready':
+                # Snapshot protects the inputs against simultaneous removal/cancellation.
+                with tempfile.TemporaryDirectory(prefix='.live-sfm-',dir=store.files) as tmp:
+                    folder=Path(tmp)
+                    if not store.snapshot_live(job,folder):raise LiveInterrupted()
+                    paths=[(fid,folder/(f'{i:04d}_{fid}.jpg')) for i,fid in enumerate(job['frames'])]
+                    try:result=da3_client.reconstruct(paths,allowed=lambda:store.live_allowed(job))
+                    except da3_client.DA3Insufficient:raise
+                    except da3_client.DA3Unavailable as exc:
+                        if not store.live_allowed(job):raise LiveInterrupted()
+                        result=reconstruct_live(store,job,threads)
+                        result['warning']='DA3 nicht verfügbar, COLMAP-Rückfall: '+str(exc)[:150]
+            else:
+                result=reconstruct_live(store,job,threads)
             store.finish_live(job,result,'Räumliche Vorschau aktualisiert')
         except LiveInterrupted:store.finish_live(job,interrupted=True)
         except ValueError as e:store.finish_live(job,message=str(e)[:250])
@@ -257,6 +271,16 @@ def reconstruct(store,scan,inference):
     import numpy as np
     sid=scan['id'];root=store.files/sid;images=root/'frames';frames=store.frames_for(sid)
     if not shutil.which('colmap'):raise RuntimeError('COLMAP fehlt; Docker-Image fuer 0.7.0 erforderlich')
+    if da3_client.health()['status']=='ready':
+        try:
+            result=da3_client.reconstruct([(row['id'],images/(row['id']+'.jpg')) for row in frames],final=True)
+            temp=root/'preview.tmp';temp.write_text(json.dumps(result,allow_nan=False,separators=(',',':')),encoding='utf8');temp.replace(root/'preview.json')
+            return f"DA3-Small: {result['registered']}/{result['total_frames']} Schlüsselbilder mit Tiefenübereinstimmung, {len(result['points'])} 3D-Punkte. Vorschau prüfen."
+        except (da3_client.DA3Unavailable,da3_client.DA3Insufficient) as exc:
+            if len(frames)<8:raise RuntimeError('DA3: '+str(exc)+'; weitere Perspektiven aufnehmen.') from exc
+            print('DA3 final fallback:',str(exc)[:200],flush=True)
+    elif len(frames)<8:
+        raise RuntimeError('DA3 ist nicht bereit; für COLMAP mindestens acht Fotos aufnehmen.')
     summary={}
     for row in frames:
         if row['result']:
@@ -285,7 +309,7 @@ def main(root):
         if p.is_dir() and not p.is_symlink():shutil.rmtree(p,ignore_errors=True)
     def beat():
         while True:
-            try:store.heartbeat(engine.device+' (angefordert: '+engine.requested+')')
+            try:store.heartbeat(engine.device+' (angefordert: '+engine.requested+')',da3_client.health())
             except Exception:pass
             time.sleep(8)
     threading.Thread(target=beat,daemon=True).start()
