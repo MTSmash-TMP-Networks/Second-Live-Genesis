@@ -24,7 +24,7 @@ from updater_api import UpdateBridge
 import wall_damage
 from http.cookies import SimpleCookie, CookieError
 from world_capture import CaptureStore, CaptureError
-from hotel_lobby import HotelLobby
+from hotel_lobby import HotelLobby, FacadeDirectory
 from game_accounts import AccountStore, SESSION_TTL
 
 ROOT = Path(__file__).resolve().parent
@@ -365,13 +365,14 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     capture = CaptureStore(store.path) if world_capture else None
     accounts = AccountStore(capture,os.getenv('SECOND_LIVE_UPDATE_ADMIN_EMAIL','')) if capture and not legacy_capture else None
     lobby = HotelLobby() if accounts else None
+    facades = FacadeDirectory(accounts) if accounts else None
     # Keep the original player/cookie/home database, independent of image capture.
     panorama = None
     if legacy_capture and capture:
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.11.2"
+        server_version = "SecondLive/0.11.3"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -563,7 +564,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.11.2", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.11.3", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
@@ -622,7 +623,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     op=data.get('action')
                     if op=='hall':
                         # The public corridor contains only existing lobby presence.
-                        return lobby.observe(player,accounts.profile(player),accounts.directory())
+                        return {**lobby.observe(player,accounts.profile(player),accounts.directory()),'facades':facades.snapshot()}
                     if op!='neighbor':raise CaptureError('Unbekannte Hotelansicht',400)
                     # The only readable room is the fixed, directly adjacent one.
                     # A client-supplied slot, account or path is never accepted.
@@ -642,7 +643,9 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                 if self.require_game():
                     def lobby_action():
                         player=self.player();data=self.read_capture_body()
-                        return lobby.request(player,data,accounts.profile(player),accounts.directory())
+                        result=lobby.request(player,data,accounts.profile(player),accounts.directory())
+                        if data.get('action') in ('enter','update'):result['facades']=facades.snapshot()
+                        return result
                     self.capture_reply(lobby_action)
                 return
             if capture and path in ("/api/session","/api/session/pair","/api/capture/locate","/api/capture"):
