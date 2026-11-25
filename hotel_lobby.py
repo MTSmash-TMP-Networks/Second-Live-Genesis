@@ -10,6 +10,9 @@ from world_capture import CaptureError
 LAYOUT=json.loads((Path(__file__).resolve().parent/'web/engine/lobby_layout.json').read_text('utf8'))
 CAPACITY=LAYOUT['roomsPerSide']*2
 LEASE=LAYOUT['leaseSeconds']
+STANCES=('walk','sprint','crouch')
+SPRINT_SPEED=5.8
+NPC_SPEED=1.65
 
 def door(slot):
     side=-1 if slot<LAYOUT['roomsPerSide'] else 1
@@ -30,6 +33,16 @@ def pose(data):
     if abs(x)>LAYOUT['halfWidth']-m+.001 or abs(z)>LAYOUT['halfLength']-m+.001 or not 0<=y<=1.2:
         raise CaptureError('Position ausserhalb des Hotelflurs',400)
     return [round(v,3) for v in p],round(math.remainder(yaw,2*math.pi),4)
+
+def npc_patrol(elapsed):
+    """One server-clock-driven hotel attendant, independent of visiting clients."""
+    edge=LAYOUT['halfLength']-2.0
+    span=2*edge
+    travel=(max(0,elapsed)*NPC_SPEED+4.0)%(2*span)
+    forward=travel<span
+    z=-edge+travel if forward else edge-(travel-span)
+    # Move on a dedicated side of the corridor rather than occupying its centre.
+    return {'position':[.62,0,round(z,3)],'yaw':round(math.pi if forward else 0.0,4),'walking':True}
 
 ENTRANCE_WALLS=('surface_8','surface_9','surface_10')
 
@@ -64,7 +77,7 @@ class FacadeDirectory:
 
 class HotelLobby:
     def __init__(self,clock=time.monotonic):
-        self.clock=clock;self.lock=threading.Lock();self.players={}
+        self.clock=clock;self.started=clock();self.lock=threading.Lock();self.players={}
     def prune(self,now):
         for player,row in list(self.players.items()):
             if now-row['seen']>=LEASE:del self.players[player]
@@ -73,9 +86,9 @@ class HotelLobby:
             self.prune(self.clock())
             return self.snapshot(player,{'slot':profile['slot']},directory)
     def snapshot(self,player,row,directory):
-        peers=[{'slot':r['slot'],'position':list(r['position']),'yaw':r['yaw'],'nickname':r['nickname'],'avatar':r['avatar']}
+        peers=[{'slot':r['slot'],'position':list(r['position']),'yaw':r['yaw'],'nickname':r['nickname'],'avatar':r['avatar'],'stance':r.get('stance','walk')}
                for key,r in self.players.items() if key!=player]
-        return {'slot':row['slot'],'peers':peers,'online':len(self.players),'capacity':CAPACITY,'rooms':directory}
+        return {'slot':row['slot'],'peers':peers,'online':len(self.players),'capacity':CAPACITY,'rooms':directory,'npc':npc_patrol(self.clock()-self.started)}
     def disconnect(self,player):
         with self.lock:self.players.pop(player,None)
     def request(self,player,data,profile,directory):
@@ -89,7 +102,7 @@ class HotelLobby:
                 slot=profile['slot']
                 if type(slot) is not int or not 0<=slot<CAPACITY:raise CaptureError('Zimmer nicht verfuegbar',409)
                 if any(r['slot']==slot for key,r in self.players.items() if key!=player):raise CaptureError('Zimmer bereits belegt',409)
-                p,yaw=spawn(slot);row={'slot':slot,'lease':secrets.token_urlsafe(24),'seen':now,'position':p,'yaw':yaw,'nickname':profile['nickname'],'avatar':profile['avatar']}
+                p,yaw=spawn(slot);row={'slot':slot,'lease':secrets.token_urlsafe(24),'seen':now,'position':p,'yaw':yaw,'nickname':profile['nickname'],'avatar':profile['avatar'],'stance':'walk'}
                 self.players[player]=row
                 return {**self.snapshot(player,row,directory),'lease':row['lease'],'position':p,'yaw':yaw}
             supplied=data.get('lease')
@@ -98,9 +111,12 @@ class HotelLobby:
             if op=='leave':
                 del self.players[player];return {'left':True}
             p,yaw=pose(data)
+            stance=data.get('stance','walk')
+            if not isinstance(stance,str) or stance not in STANCES:
+                raise CaptureError('Ungueltige Bewegungsart',400)
             # Positions are client-driven, but bound impossible jumps and floods.
             elapsed=now-row['seen']
-            if math.hypot(p[0]-row['position'][0],p[2]-row['position'][2])>max(.65,elapsed*6+.35):
+            if math.hypot(p[0]-row['position'][0],p[2]-row['position'][2])>max(.65,elapsed*(SPRINT_SPEED+.6)+.35):
                 raise CaptureError('Positionssprung im Flur nicht erlaubt',400)
-            row.update(position=p,yaw=yaw,seen=now,nickname=profile['nickname'],avatar=profile['avatar'])
+            row.update(position=p,yaw=yaw,seen=now,nickname=profile['nickname'],avatar=profile['avatar'],stance=stance)
             return self.snapshot(player,row,directory)
