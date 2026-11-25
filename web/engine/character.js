@@ -168,9 +168,9 @@ export class CharacterStudio{
  render(renderer,aspect,dt){
   if(!this.root)this.set(DEFAULT_CHARACTER);
   this.root.rotation.y=this.angle;animateCharacter(this.root,dt,false);
-  const mobile=aspect<1.15,hh=mobile?1.75:1.27,hw=hh*aspect;
+  const mobile=aspect<1.15,hh=mobile?2.65:1.27,hw=hh*aspect;
   this.camera.left=-hw;this.camera.right=hw;this.camera.top=hh;this.camera.bottom=-hh;
-  const x=mobile?0:-hw*.45,y=mobile?.44:.98;
+  const x=mobile?0:-hw*.45,y=mobile?-.48:.98;
   this.camera.position.set(x,y+.1,-4);this.camera.lookAt(x,y,0);this.camera.updateProjectionMatrix();renderer.render(this.scene,this.camera);
  }
 }
