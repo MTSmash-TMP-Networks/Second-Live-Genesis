@@ -18,7 +18,7 @@ MAX_TRIANGLES = 200_000
 MAX_PIXELS = 12 * 1024 * 1024
 SAFE_EXT = frozenset(('KHR_texture_transform', 'KHR_materials_unlit', 'KHR_materials_clearcoat',
                       'KHR_materials_specular', 'KHR_materials_ior', 'KHR_materials_emissive_strength',
-                      'KHR_materials_sheen'))
+                      'KHR_materials_sheen', 'EXT_texture_webp'))
 COMPONENTS = {5120: ('b',1), 5121: ('B',1), 5122: ('h',2), 5123: ('H',2), 5125: ('I',4), 5126: ('f',4)}
 WIDTH = {'SCALAR':1, 'VEC2':2, 'VEC3':3, 'VEC4':4}
 
@@ -34,7 +34,40 @@ def number(v, low, high):
     need(type(v) in (int,float) and low <= v <= high and math.isfinite(v), 'Ungueltige Modellposition oder Groesse')
     return float(v)
 
+def webp_size(data):
+    """Read dimensions from static WebP headers without decoding pixel data."""
+    need(len(data)>=20 and data[:4]==b'RIFF' and data[8:12]==b'WEBP','Ungueltiger WebP-Container')
+    # Some GLB exporters include alignment padding in an image bufferView.
+    limit=8+struct.unpack_from('<I',data,4)[0]
+    need(20<=limit<=len(data) and len(data)-limit<=3 and not any(data[limit:]),'Ungueltige WebP-Containerlaenge')
+    data=data[:limit]
+    i=12;canvas=None;frame=None;chunks=0
+    while i<len(data):
+        need(i+8<=len(data),'Ungueltiger WebP-Block')
+        tag=data[i:i+4];n=struct.unpack_from('<I',data,i+4)[0];start=i+8;end=start+n
+        chunks+=1
+        need(chunks<=128 and end+(n%2)<=len(data),'Ungueltiger WebP-Block')
+        if tag==b'VP8X':
+            need(i==12 and n==10 and not(data[start]&0xc1) and data[start+1:start+4]==b'\0\0\0','Ungueltiger WebP-Header')
+            need(not(data[start]&2),'Animierte WebP-Texturen sind nicht erlaubt')
+            canvas=(1+int.from_bytes(data[start+4:start+7],'little'),1+int.from_bytes(data[start+7:start+10],'little'))
+        elif tag==b'VP8 ':
+            need(frame is None and n>=10 and not(data[start]&1) and data[start+3:start+6]==b'\x9d\x01\x2a','Ungueltiger WebP-Bildheader')
+            w,h=struct.unpack_from('<HH',data,start+6);frame=(w&0x3fff,h&0x3fff)
+        elif tag==b'VP8L':
+            need(frame is None and n>=5 and data[start]==0x2f,'Ungueltiger WebP-Lossless-Header')
+            bits=struct.unpack_from('<I',data,start+1)[0]
+            need(bits>>29==0,'Ungueltige WebP-Version')
+            frame=(1+(bits&0x3fff),1+((bits>>14)&0x3fff))
+        else:
+            need(tag not in (b'ANIM',b'ANMF'),'Animierte WebP-Texturen sind nicht erlaubt')
+        i=end+(n%2)
+    need(frame is not None and min(frame)>0 and (canvas is None or canvas==frame),'Ungueltige WebP-Abmessungen')
+    return frame
+
 def image_size(data, mime):
+    if mime == 'image/webp':
+        return webp_size(data)
     if mime == 'image/png':
         need(len(data)>=33 and data[:8]==b'\x89PNG\r\n\x1a\n' and data[8:16]==b'\0\0\0\rIHDR', 'Ungueltige PNG-Textur')
         return struct.unpack_from('>II',data,16)
@@ -55,7 +88,7 @@ def image_size(data, mime):
                 return w,h
             i+=n
         raise ValueError('JPEG-Groesse fehlt')
-    raise ValueError('Nur eingebettete PNG- oder JPEG-Texturen werden unterstuetzt')
+    raise ValueError('Nur eingebettete PNG-, JPEG- oder statische WebP-Texturen werden unterstuetzt')
 
 def validate_glb(blob):
     """Check the binary envelope, graph, buffer bounds, complexity and image dimensions."""
@@ -76,12 +109,16 @@ def validate_glb(blob):
         if isinstance(v,dict):
             need('uri' not in v, 'Externe oder eingebettete URI-Dateien sind nicht erlaubt')
             if 'extensions' in v:
-                ext=v['extensions'];need(isinstance(ext,dict) and set(ext)<=SAFE_EXT,'Nicht unterstuetzte GLB-Erweiterung; ohne Kompression exportieren')
+                ext=v['extensions'];need(isinstance(ext,dict),'Ungueltige GLB-Erweiterung')
+                unsupported=set(ext)-SAFE_EXT
+                need(not unsupported,'Nicht unterstuetzte GLB-Erweiterung: '+', '.join(sorted(unsupported))[:150]+'; ohne Mesh-Kompression exportieren')
             stack.extend((x,depth+1) for x in v.values())
         elif isinstance(v,list):stack.extend((x,depth+1) for x in v)
         elif type(v) in (int,float):need(-1e12<=v<=1e12 and math.isfinite(v),'Ungueltiger GLB-Zahlenwert')
     for key in ('extensionsUsed','extensionsRequired'):
-        ext=g.get(key,[]);need(isinstance(ext,list) and all(isinstance(x,str) and x in SAFE_EXT for x in ext),'Nicht unterstuetzte GLB-Erweiterung; ohne Kompression exportieren')
+        ext=g.get(key,[]);need(isinstance(ext,list) and all(isinstance(x,str) for x in ext),'Ungueltige GLB-Erweiterungsliste')
+        unsupported=set(ext)-SAFE_EXT
+        need(not unsupported,'Nicht unterstuetzte GLB-Erweiterung: '+', '.join(sorted(unsupported))[:150]+'; ohne Mesh-Kompression exportieren')
     for key in ('animations','skins','cameras'):
         need(not g.get(key),'Nur statische Einrichtungsmodelle, keine Animationen oder Kameras')
     def arr(key,limit,minimum=0):
@@ -175,7 +212,19 @@ def validate_glb(blob):
         pixels+=w*h
     need(pixels<=MAX_PIXELS,'Texturen insgesamt zu gross')
     for t in textures:
-        integer(t.get('source'),0,len(images)-1)
+        # EXT_texture_webp uses its own source index, not texture.source.
+        # A core fallback, if present, must still be an ordinary PNG/JPEG.
+        ext=t.get('extensions',{}).get('EXT_texture_webp')
+        if 'source' in t:
+            src=integer(t['source'],0,len(images)-1)
+            need(images[src].get('mimeType') in ('image/png','image/jpeg'),'GLB-Basistextur muss PNG oder JPEG sein')
+        if 'EXT_texture_webp' in t.get('extensions',{}):
+            need(isinstance(ext,dict) and 'EXT_texture_webp' in g.get('extensionsUsed',[]),'Ungueltige WebP-Texturerweiterung')
+            src=integer(ext.get('source'),0,len(images)-1)
+            need(images[src].get('mimeType')=='image/webp','WebP-Texturquelle hat falschen Dateityp')
+            need('source' in t or 'EXT_texture_webp' in g.get('extensionsRequired',[]),'WebP ohne Ersatztextur muss als erforderlich markiert sein')
+        else:
+            need('source' in t,'GLB-Texturquelle fehlt')
         if 'sampler' in t:integer(t['sampler'],0,len(samplers)-1)
     return {'triangles':total,'pixels':pixels}
 

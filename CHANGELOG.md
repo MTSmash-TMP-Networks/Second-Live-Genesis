@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.5 – TRELLIS GLB / WebP Import
+- Eingebettete statische WebP-Texturen mit EXT_texture_webp werden unterstützt, einschließlich der von TRELLIS 2 verwendeten eigenen Texturquellen und GLB-Nullbyte-Ausrichtung. Three.js 0.170.0 lädt WebP bereits nativ.
+- Geprüfte RIFF-/VP8-/VP8L-/VP8X-Abmessungen, keine animierten WebP-Texturen, keine externen Ressourcen. Dateigröße, Geometriegrenzen, Texturgrenzen und kontogetrennte Speicherung bleiben unverändert.
+- Nicht unterstützte Erweiterungen werden namentlich in der Fehlermeldung genannt. Hilfe im Smartphone und Dokumentation aktualisiert; neue Regressionstests für WebP, ungültige Texturquellen und Speicherisolation.
+
 ## 0.12.4 – Personal Session Recovery
 - Charakterstudio und Spieleinstieg prüfen die aktuelle Konto-Sitzung ohne Cache. Nach der Anmeldung wird geprüft, ob der Browser das neue HttpOnly-Cookie tatsächlich zurücksendet.
 - Fehlende, abgelaufene oder gewechselte Kontositzungen führen zurück zur Anmeldung statt zu einer blockierenden Studio-Fehlermeldung. Der ungespeicherte Charakterentwurf bleibt bis zur erneuten Anmeldung im gleichen Browserdokument für dasselbe Konto erhalten.

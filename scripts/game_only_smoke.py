@@ -96,6 +96,59 @@ class GameOnlyTest(unittest.TestCase):
                 self.assertNotIn('code',json.load(err.exception))
             finally:stop(srv,thread)
 
+    def test_webp_room_models_including_trellis_texture_sources(self):
+        import base64, struct
+        from room_models import validate_glb, image_size, RoomModelStore
+        # Real 17x19 static fixtures, no Pillow or network required at runtime.
+        rgb=base64.b64decode('UklGRjYAAABXRUJQVlA4ICoAAADwAgCdASoRABMAPm0ylkekIqIhKAgAgA2JaQAAQnjkAAD++1XfDyAAAAA=')
+        rgba=base64.b64decode('UklGRloAAABXRUJQVlA4WAoAAAAQAAAAEAAAEgAAQUxQSAoAAAABB9C9iAhERP8DVlA4ICoAAADwAgCdASoRABMAPm0ylkekIqIhKAgAgA2JaQAAQnjkAAD++1XfDyAAAAA=')
+        lossless=base64.b64decode('UklGRiIAAABXRUJQVlA4TBUAAAAvEIAEEAdAIGmLt/0VKEL34oiI/gcA')
+        def fixture(image, change=None):
+            old=room_model_fixture()
+            n=struct.unpack_from('<I',old,12)[0];g=json.loads(old[20:20+n])
+            binary=old[28+n:]
+            # TRELLIS may count alignment padding as part of the image view.
+            image+=b'\0'*(-len(image)%4)
+            g['bufferViews'].append({'buffer':0,'byteOffset':len(binary),'byteLength':len(image)})
+            binary+=image;g['buffers'][0]['byteLength']=len(binary)
+            g['images']=[{'bufferView':1,'mimeType':'image/webp'}]
+            g['textures']=[{'extensions':{'EXT_texture_webp':{'source':0}}}]
+            g['materials']=[{'pbrMetallicRoughness':{'baseColorTexture':{'index':0}}}]
+            g['meshes'][0]['primitives'][0]['material']=0
+            g['extensionsUsed']=['EXT_texture_webp'];g['extensionsRequired']=['EXT_texture_webp']
+            if change:change(g)
+            js=json.dumps(g,separators=(',',':')).encode();js+=b' '*(-len(js)%4)
+            return struct.pack('<IIIII',0x46546c67,2,28+len(js)+len(binary),len(js),0x4e4f534a)+js+struct.pack('<II',len(binary),0x004e4942)+binary
+        for image in (rgb,rgba,lossless):
+            self.assertEqual(image_size(image,'image/webp'),(17,19))
+            self.assertEqual(validate_glb(fixture(image)),{'triangles':1,'pixels':323})
+            for extra in (b'',b'\0',b'\0\0',b'\0\0\0'):
+                self.assertEqual(image_size(image+extra,'image/webp'),(17,19))
+        for invalid in (rgb[:-1],rgb+b'\x01',rgb+b'\0'*4,b'not-webp'):
+            with self.assertRaises(ValueError):image_size(invalid,'image/webp')
+        # Reject an oversized frame, animated extended container and
+        # an extended canvas whose dimensions disagree with the frame.
+        too_big=bytearray(rgb);struct.pack_into('<H',too_big,26,2049)
+        animated=bytearray(rgba);animated[20]|=2
+        mismatch=bytearray(rgba);mismatch[24]=40
+        for image in (bytes(too_big),bytes(animated),bytes(mismatch)):
+            with self.assertRaises(ValueError):validate_glb(fixture(image))
+        for change in (
+            lambda g:g['textures'][0]['extensions']['EXT_texture_webp'].update(source=99),
+            lambda g:g['textures'][0]['extensions']['EXT_texture_webp'].update(source=True),
+            lambda g:g['textures'][0].update(source=0),
+            lambda g:g['textures'][0].update(extensions={'EXT_texture_webp':None}),
+            lambda g:g.update(extensionsRequired=[]),
+            lambda g:g.update(extensionsUsed=['KHR_draco_mesh_compression']),
+            lambda g:g['images'][0].update(uri='https://example.invalid/texture.webp'),
+        ):
+            with self.assertRaises(ValueError):validate_glb(fixture(rgb,change))
+        with tempfile.TemporaryDirectory() as tmp:
+            store=RoomModelStore(tmp);blob=fixture(rgba)
+            item=store.add('a','trellis.glb',blob)
+            self.assertEqual(store.get('a',item['added']),blob)
+            with self.assertRaises(CaptureError):store.get('b',item['added'])
+
     def test_private_room_model_validation_and_persistence(self):
         from room_models import RoomModelStore, validate_glb, MAX_MODELS
         blob=room_model_fixture()
