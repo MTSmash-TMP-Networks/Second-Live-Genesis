@@ -174,7 +174,7 @@ async function enterLobby(){
   const result=await lobbyRequest({action:'enter'});
   if(!lobbyDoor(result.slot)||!Array.isArray(result.position)||!lobbyWalkable(result.position[0],result.position[2])||typeof result.lease!=='string')throw Error('Ungültige Flursitzung');
   lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
-  resetHotelViews();renderer.lobby.restoreProjection();renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);
+  resetHotelViews();renderer.lobby.restoreProjection();renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);renderer.syncHallFacades(result.facades||[],result.slot,state);
   Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0});
   audio.play('door');updateWorldStatus();$('notice').textContent='Willkommen im Hotelflur. Dein Zimmer: '+lobbyDoor(result.slot).number;
  }catch(e){$('notice').textContent=e.message||'Hotelflur nicht erreichbar';}
@@ -196,7 +196,7 @@ async function updateLobby(){
  try{
   const result=await lobbyRequest({action:'update',lease:visit.lease,position:[player.x,player.y,player.z],yaw:player.yaw});
   if(lobbyState!==visit)return;
-  if(visit.offline)$('notice').textContent='Flurverbindung wiederhergestellt';visit.offline=false;visit.lastOK=performance.now();visit.online=result.online;visit.capacity=result.capacity;renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);updateWorldStatus();
+  if(visit.offline)$('notice').textContent='Flurverbindung wiederhergestellt';visit.offline=false;visit.lastOK=performance.now();visit.online=result.online;visit.capacity=result.capacity;renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);renderer.syncHallFacades(result.facades||[],visit.slot,state);updateWorldStatus();
  }catch(e){
   if(lobbyState!==visit)return;
   if(e.status===401){location.reload();return;}if(e.status===409||performance.now()-visit.lastOK>LOBBY_LAYOUT.leaseSeconds*1000){returnToRoom('Flurverbindung beendet. Du bist wieder in deinem Zimmer.',false);}
@@ -219,7 +219,7 @@ async function hotelViews(){
  const current=()=>epoch===hotelViewEpoch&&profile===accountProfile&&!lobbyState&&!lobbyTransition;
  if(opening.hall&&!hotelHallPending){
   hotelHallPending=true;
-  api('/api/hotel/view',{action:'hall'}).then(data=>{if(current()&&hotelOpenings(state.walls||{}).hall){renderer.lobby.setRooms(data.rooms||[]);renderer.lobby.sync(data.peers||[]);}}).catch(()=>{}).finally(()=>hotelHallPending=false);
+  api('/api/hotel/view',{action:'hall'}).then(data=>{if(current()&&hotelOpenings(state.walls||{}).hall){renderer.lobby.setRooms(data.rooms||[]);renderer.lobby.sync(data.peers||[]);renderer.syncHallFacades(data.facades||[],profile.slot,state);}}).catch(()=>{}).finally(()=>hotelHallPending=false);
  }
  if(opening.neighbor&&!hotelNeighborPending&&performance.now()>=hotelNeighborAt){
   hotelNeighborPending=true;hotelNeighborAt=performance.now()+2000;
