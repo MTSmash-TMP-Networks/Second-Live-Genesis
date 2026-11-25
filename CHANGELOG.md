@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.6 – Room Life
+- E am Sofa: Hinsetzen; E am Bett: Hinlegen; F: Schlafen/Wachwerden; E: Aufstehen bzw. Aufwachen. G nimmt Sitz-/Liegemöbel weiterhin auf. Möbelrelative Kameraposition und sichere Aufstehposition.
+- Separater Teppich mit E bewegbar und Q/F drehbar, persistent gespeichert; flache Platzierung unter Möbeln ohne blockierenden Kollisionskörper.
+- Mausrad wechselt zyklisch das Spielinventar; Rechtsklick schaltet beim Gewehr den virtuellen Zielfernrohrzoom um. Rückkehr zur normalen Ansicht bei Inventar-/Ansichtwechsel.
+- Kontextanzeige und Touch-Aktionen erweitert; keine neue AR-/Scan-Funktion, keine Änderung am Weltimport-Konzept.
+
 ## 0.9.5 – Hotel Interactions
 - Vorhänge animiert per E oder Touch-Aktion öffnen/schließen, vom Fenster und beiden Stoffbahnen aus bedienbar. Gespeicherter Zustand pro Zimmer, angepasste Fensterausleuchtung und Berücksichtigung zerstörter Vorhänge/Stange.
 - Kontextanzeige unter dem Fadenkreuz mit Objektname und tatsächlich verfügbaren Aktionen; Touch-Aktionstaste passt sich an. Reparaturhinweise nur bei Schäden, keine falsche Türfreigabe.
