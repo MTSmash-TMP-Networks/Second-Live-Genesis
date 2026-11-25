@@ -67,6 +67,7 @@ class CaptureStore:
             CREATE INDEX IF NOT EXISTS frames_scan ON frames(scan,created);
             CREATE INDEX IF NOT EXISTS scans_owner ON scans(owner,created);
             CREATE TABLE IF NOT EXISTS worker(id INTEGER PRIMARY KEY CHECK(id=1), heartbeat REAL, device TEXT);
+            CREATE TABLE IF NOT EXISTS worker_da3(id INTEGER PRIMARY KEY CHECK(id=1), heartbeat REAL NOT NULL, state TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS live_previews(
                 scan TEXT PRIMARY KEY REFERENCES scans(id), token TEXT NOT NULL, state TEXT NOT NULL,
                 attempted INTEGER NOT NULL DEFAULT 0, updated REAL NOT NULL, revision TEXT,
@@ -76,8 +77,6 @@ class CaptureStore:
             ''')
             if 'attempt_engine' not in {row[1] for row in db.execute('PRAGMA table_info(live_previews)')}:
                 db.execute("ALTER TABLE live_previews ADD COLUMN attempt_engine TEXT NOT NULL DEFAULT 'colmap'")
-            if 'da3' not in {row[1] for row in db.execute('PRAGMA table_info(worker)')}:
-                db.execute("ALTER TABLE worker ADD COLUMN da3 TEXT NOT NULL DEFAULT '{}'")
             if 'scan_region' not in {row[1] for row in db.execute('PRAGMA table_info(players)')}:
                 db.execute('ALTER TABLE players ADD COLUMN scan_region TEXT')
                 db.execute('UPDATE players SET scan_region=region')
@@ -168,7 +167,8 @@ class CaptureStore:
             row=db.execute('SELECT s.* FROM targets t JOIN scans s ON s.id=t.scan WHERE t.id=?',(target,)).fetchone()
             worker=db.execute('SELECT * FROM worker WHERE id=1').fetchone()
             out=self._view(db,row,player) if row else {'scope':scope,'status':'unexplored','mine':False,'frames':[],'preview':False}
-            out['worker']={'online':bool(worker and time.time()-worker['heartbeat']<90),'device':worker['device'] if worker else 'nicht gestartet','da3':json.loads(worker['da3']) if worker and time.time()-worker['heartbeat']<90 else {'status':'offline'}}
+            da3=db.execute('SELECT * FROM worker_da3 WHERE id=1').fetchone()
+            out['worker']={'online':bool(worker and time.time()-worker['heartbeat']<90),'device':worker['device'] if worker else 'nicht gestartet','da3':json.loads(da3['state']) if da3 and time.time()-da3['heartbeat']<25 else {'status':'offline'}}
             return out
     def reserve(self,player,scope,location=None,evaluation=False):
         now=time.time()
@@ -320,7 +320,10 @@ class CaptureStore:
             return True
 
     def heartbeat(self,device,da3=None):
-        with self.tx() as db: db.execute('INSERT INTO worker(id,heartbeat,device,da3) VALUES(1,?,?,?) ON CONFLICT(id) DO UPDATE SET heartbeat=excluded.heartbeat,device=excluded.device,da3=excluded.da3',(time.time(),device,json.dumps(da3 or {})))
+        with self.tx() as db:
+            now=time.time()
+            db.execute('INSERT INTO worker(id,heartbeat,device) VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET heartbeat=excluded.heartbeat,device=excluded.device',(now,device))
+            db.execute('INSERT INTO worker_da3(id,heartbeat,state) VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET heartbeat=excluded.heartbeat,state=excluded.state',(now,json.dumps(da3 or {})))
     def recover_worker(self):
         with self.tx() as db:
             db.execute("UPDATE frames SET status='pending' WHERE status='processing'")
