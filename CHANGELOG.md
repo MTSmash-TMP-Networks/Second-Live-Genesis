@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.1 – Connected Hotel
+- Tatsächliche Flurgeometrie samt animierten Gästen durch Öffnungen in der Eingangswand sichtbar; gleiche Geometrie in beiden Szenen.
+- Flurlänge 132 m, maßstäbliche Türpositionen für 10 m breite Zimmer. Spiegelbildlich gepaarte Zimmer mit Lichtzwischenräumen für Außenfenster.
+- Durch die gemeinsame massive Trennwand erscheint das zugeordnete Nachbarzimmer mit gespeicherten Möbelpositionen, Dekorzuständen, Licht und Vorhängen; ohne Bewohner leerer Raum.
+- Servervalidierte, ausschließlich lesende Nachbaransicht nur bei entfernter Wandzelle; kein Zugriff auf fremde Spielstände, Spielerpositionen oder Konten. Konten, Zimmernummern und Wandreparaturen bleiben erhalten.
+
 ## 0.11.0 – Accounts & Character Studio
 - Registrierung mit Spitzname, E-Mail und Passwort; Login, Logout und separate Konto-Sitzung. Passwörter gesalzen und mit PBKDF2 gehasht, begrenzte Anmeldeversuche.
 - Additive Migration: gültige bisherige Gast-Sitzung kann einmalig das persönliche Zimmer übernehmen. Konten erhalten feste Zimmernummern 101–124; maximal 24 Konten im aktuellen Hotel.
