@@ -16,7 +16,7 @@ def door(slot):
 
 def spawn(slot):
     side,z=door(slot)
-    return [side*(LAYOUT['halfWidth']-.65),0,z],-side*math.pi/2
+    return [side*(LAYOUT['halfWidth']-.65),0,z],side*math.pi/2
 
 def pose(data):
     p=data.get('position');yaw=data.get('yaw')
