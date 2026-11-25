@@ -227,15 +227,15 @@ export class CharacterStudio{
    finally{hdr.dispose();pmrem.dispose();}
   }).catch(e=>console.warn('Studio HDR:',e.message));
  }
- render(renderer,aspect,dt){
+ render(renderer,aspect,dt,compact=false){
   this.loadLighting(renderer);
   if(!this.root)this.set(DEFAULT_CHARACTER);
   if(this.root.userData.realisticStatus==='ready'&&this.previous){disposeCharacter(this.previous);this.previous=null;}
   this.root.rotation.y=this.angle;animateCharacter(this.root,dt,false);
   if(this.previous){this.previous.rotation.y=this.angle;animateCharacter(this.previous,dt,false);}
-  const mobile=aspect<1.15,hh=mobile?2.65:1.27,hw=hh*aspect;
+  const mobile=aspect<1.15,hh=compact?1.18:mobile?2.65:1.27,hw=hh*aspect;
   this.camera.left=-hw;this.camera.right=hw;this.camera.top=hh;this.camera.bottom=-hh;
-  const x=mobile?0:-hw*.45,y=mobile?-.48:.98;
+  const x=compact?0:mobile?0:-hw*.45,y=compact?.95:mobile?-.48:.98;
   this.camera.position.set(x,y+.1,-4);this.camera.lookAt(x,y,0);this.camera.updateProjectionMatrix();
   if(!renderer.isWebGLRenderer){renderer.render(this.scene,this.camera);return;}
   const tone=renderer.toneMapping,exposure=renderer.toneMappingExposure;

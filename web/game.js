@@ -203,11 +203,11 @@ function setScopeZoom(on){
 }
 function toggleScope(){if(equipped!=='rifle'||held||posture||reloadId||!canPlay()||renderer?.xrMode?.active)return;if(!first)first=true;setScopeZoom(!scopeZoom);}
 function chooseWeapon(id){if((held||posture||lobbyState||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Einzelfeuer':equipped==='rifle'?'Scharfschützengewehr · Einzelschuss · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer':'Unbewaffnet';}
-function arsenal(){if(lobbyState||lobbyTransition){$('notice').textContent='Der Hotelflur ist ein gemeinsamer, unbewaffneter Bereich.';return;}document.exitPointerLock?.();clearControls();active=false;$('arsenal').hidden=false;}
-$('closearsenal').onclick=()=>{$('arsenal').hidden=true;active=true;clearControls();};
-for(const id of [...weaponIds,'none'])$('equip-'+id).onclick=()=>{chooseWeapon(id);$('closearsenal').onclick();};
+function arsenal(){if(!started||studioOpen||lobbyState||lobbyTransition){$('notice').textContent='Das Inventar ist in deinem Hotelzimmer verfügbar.';return;}phone('inventory');}
+$('closearsenal').onclick=()=>showPhonePage('home');
+for(const id of [...weaponIds,'none'])$('equip-'+id).onclick=()=>{if(!started||studioOpen||lobbyState||lobbyTransition)return;chooseWeapon(id);$('closephone').onclick();};
 chooseWeapon('none');
-function phone(){if(renderer?.xrMode?.active){renderer.xrMode.end().then(()=>phone()).catch(e=>$('notice').textContent=e.message);return;}document.exitPointerLock?.();clearControls();$('phone').hidden=false;active=false;audio.stopAll();audio.play('phone');showPhonePage('home');updatePhone();}
+function phone(page='home'){if(!started||studioOpen)return;if(renderer?.xrMode?.active){renderer.xrMode.end().then(()=>phone(page)).catch(e=>$('notice').textContent=e.message);return;}document.exitPointerLock?.();clearControls();$('phone').hidden=false;active=false;audio.stopAll();audio.play('phone');showPhonePage(page);updatePhone();}
 const movable=id=>id&&id!=='window'&&Object.hasOwn(spec,id)&&state.objects[id]>0;
 function updateWorldStatus(){
  const message=lobbyState?'Hotelflur · '+lobbyState.online+' / '+lobbyState.capacity+' Gäste · Zimmer '+lobbyDoor(lobbyState.slot).number:accountProfile?'Zimmer '+lobbyDoor(accountProfile.slot).number+' · '+accountProfile.nickname:personalWorld?'Privater Startraum':state.unlocked?'Testbereich freigeschaltet':'Startraum';
@@ -531,8 +531,8 @@ function recoverAccountSession(e){
  studioOpen=false;editingFromGame=false;characterDraft=null;accountProfile=null;active=false;
  renderer?.studio?.clear();renderer?.roomModels?.clear();
  clearControls();document.exitPointerLock?.();
- $('character-editor').hidden=true;$('phone').hidden=true;$('account-phone').hidden=true;
- $('welcome').hidden=false;document.body.classList.remove('character-editing');
+ $('account-phone').hidden=true;document.body.classList.remove('character-editing');
+ showPhonePage('welcome');
  setAuthMode('login');
  $('account-password').value='';
  $('loginerror').textContent='Deine persönliche Sitzung ist nicht mehr gültig. Melde dich erneut mit deinem bestehenden Konto an. '+(pendingAvatar?'Deine aktuelle Charakterauswahl bleibt für dieses Konto erhalten.':'Dein Zimmer und Charakter bleiben gespeichert.');
@@ -561,7 +561,7 @@ function openStudio(fromGame=false){
  if(!accountProfile||!graphicsReady||lobbyState||lobbyTransition)return;
  if(fromGame&&posture&&!leavePosture())return;
  editingFromGame=fromGame;studioOpen=true;characterDraft={...accountProfile.avatar};clearControls();active=false;document.exitPointerLock?.();
- $('welcome').hidden=true;$('phone').hidden=true;$('character-editor').hidden=false;document.body.classList.add('character-editing');
+ document.body.classList.add('character-editing');showPhonePage('character');
  $('character-player').textContent=accountProfile.nickname+' · Zimmer '+lobbyDoor(accountProfile.slot).number;
  $('character-save').textContent=fromGame?'Charakter speichern':'Speichern und spielen';$('character-error').textContent='';
  renderCharacterFields();renderer.studio.set(characterDraft);
@@ -595,7 +595,7 @@ function renderCharacterFields(){
 }
 function closeStudio(){
  studioOpen=false;renderer?.studio?.clear();$('character-editor').hidden=true;document.body.classList.remove('character-editing');clearControls();
- if(editingFromGame){active=true;}else{$('welcome').hidden=false;showAccountResume();}
+ if(editingFromGame){active=false;showPhonePage('settings');}else{showPhonePage('welcome');showAccountResume();}
 }
 function showAccountResume(){
  if(!accountProfile)return;
@@ -633,8 +633,8 @@ async function enterGame(){
   if(accountsEnabled){if(!accountProfile)throw Error('Bitte zuerst anmelden');await verifyAccountSession(accountProfile);}
   if(personalWorld&&!accountsEnabled)await api('/api/session',{});
   await refresh();if(protectedGame)sessionStorage.setItem('second_live_token',token);
-  $('welcome').hidden=true;$('character-editor').hidden=true;studioOpen=false;renderer?.studio?.clear();document.body.classList.remove('character-editing');
-  started=true;active=true;document.body.classList.add('playing');
+  studioOpen=false;editingFromGame=false;renderer?.studio?.clear();document.body.classList.remove('character-editing');
+  started=true;document.body.classList.add('playing');showPhonePage('home');$('phone').hidden=true;active=true;
   void refreshRoomModels().catch(e=>{$('room-model-message').textContent=e.message;});
   if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});
  }catch(e){if(!recoverAccountSession(e)){if(studioOpen)$('character-error').textContent=e.message;else $('loginerror').textContent=e.message;}}
@@ -671,11 +671,23 @@ $('character-save').onclick=async()=>{if(accountBusy||!studioOpen)return;account
 $('edit-character').onclick=()=>{if(lobbyState){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}openStudio(true);};
 $('account-logout').onclick=async()=>{if(accountBusy||!confirm('Vom Spiel abmelden? Dein Zimmer und Charakter bleiben gespeichert.'))return;accountBusy=true;try{await api('/api/account',{action:'logout'});location.reload();}catch(e){$('notice').textContent=e.message;accountBusy=false;}};
 $('start').onclick=()=>enterGame();
-const phonePages=['home','world','settings','models'];
-function showPhonePage(page){for(const key of phonePages)$('phone-page-'+key).hidden=page!==key;}
+const phonePages={welcome:'welcome',character:'character-editor',home:'phone-page-home',world:'phone-page-world',settings:'phone-page-settings',models:'phone-page-models',inventory:'arsenal'};
+function allowedPhonePage(page,playing,editing){
+ if(editing)return 'character';
+ if(!playing)return 'welcome';
+ return ['home','world','settings','models','inventory'].includes(page)?page:'home';
+}
+function showPhonePage(page){
+ page=allowedPhonePage(page,started,studioOpen);
+ for(const [key,id] of Object.entries(phonePages))$(id).hidden=key!==page;
+ $('phone').hidden=false;
+ $('closephone').hidden=!started||studioOpen;$('phone-home').hidden=!started||studioOpen;
+ if(page==='settings'||page==='welcome')$(page==='settings'?'settings-graphics':'login-graphics').append($('phone-graphics'));
+ $('phone').querySelector('.sl-phone-content').scrollTop=0;
+}
 function updatePhone(){const now=new Date();$('phone-clock').textContent=now.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});$('phone-date').textContent=now.toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'});$('phone-worldstate').textContent=$('worldstate').textContent;$('phone-volume').value=String(Math.round(audio.volume*100));$('phone-sound').checked=audio.enabled;$('phone-volume-label').textContent=Math.round(audio.volume*100)+' %';}
-$('phone-home').onclick=()=>showPhonePage('home');
-$('phone-app-models').onclick=$('world-open-models').onclick=()=>{showPhonePage('models');updateRoomModelUI();void refreshRoomModels(true).catch(e=>{$('room-model-message').textContent=e.message;});};$('phone-app-world').onclick=()=>{showPhonePage('world');updatePhone();};$('phone-app-settings').onclick=()=>{showPhonePage('settings');updatePhone();};$('phone-app-inventory').onclick=()=>{$('closephone').onclick();arsenal();};
+$('phone-home').onclick=()=>{if(started&&!studioOpen&&$('updater').hidden)showPhonePage('home');};
+$('phone-app-models').onclick=$('world-open-models').onclick=()=>{showPhonePage('models');updateRoomModelUI();void refreshRoomModels(true).catch(e=>{$('room-model-message').textContent=e.message;});};$('phone-app-world').onclick=()=>{showPhonePage('world');updatePhone();};$('phone-app-settings').onclick=()=>{showPhonePage('settings');updatePhone();};$('phone-app-inventory').onclick=()=>arsenal();
 
 /* User-owned GLB furnishings: upload, select, place and persist during gameplay. */
 // Imported objects participate in the normal room rigid-body system.
@@ -913,7 +925,7 @@ setInterval(()=>{if(!$('phone').hidden)updatePhone();},15000);
 window.addEventListener('keydown',e=>{if(e.code==='Escape'&&!$('phone').hidden&&$('updater').hidden){$('closephone').onclick();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)audio.stopAll();});
 $('restore-hotel').onclick=async()=>{if(lobbyState||lobbyTransition){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}if(busy||!confirm('Möbel auf Hotel-Standardpositionen zurücksetzen? Schäden und Fortschritt bleiben erhalten.'))return;if(posture&&!leavePosture())return;if(held){bodies[held]=savedBody(state,held);held=null;}if(await action('reset_hotel_layout',null,null,{confirm:true})){for(const id of Object.keys(spec))if(id!=='window'&&!spec[id].imported)bodies[id]=savedBody(state,id);const p=HOTEL_LAYOUT.spawn.p;player.x=p[0];player.y=0;player.z=p[2];player.vy=0;player.yaw=HOTEL_LAYOUT.spawn.yaw;player.pitch=0;updatePhone();}};
-$('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';updatePhone();}catch(e){$('notice').textContent=e.message;}};
+$('closephone').onclick=()=>{if(!started||studioOpen||!$('updater').hidden)return;showPhonePage('home');$('phone').hidden=true;clearControls();active=true;};$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';updatePhone();}catch(e){$('notice').textContent=e.message;}};
 canvas.onclick=()=>{if(mobile||!canPlay())return;void audio.unlock();if(document.pointerLockElement!==canvas){canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;}};
 canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.pointerLockElement===canvas&&canPlay())pressTrigger();});
 canvas.addEventListener('contextmenu',e=>{if(canPlay()&&!mobile)e.preventDefault();});
@@ -926,7 +938,7 @@ window.addEventListener('wheel',e=>{
 },{passive:false});
 window.addEventListener('pointerup',e=>{if(triggerPointer===null||triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('pointercancel',releaseTrigger);
-window.addEventListener('keydown',e=>{if(!active||!started||!$('updater').hidden)return;if(canPlay()&&held&&spec[held]?.imported&&(e.key==='+'||e.key==='-'||e.code==='NumpadAdd'||e.code==='NumpadSubtract')){e.preventDefault();if(!e.repeat)resizeHeld(e.key==='-'||e.code==='NumpadSubtract'?-1:1);return;}if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyC'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyB')void mountHeld();if(e.code==='KeyQ')turnHeld(-90);if(e.code==='KeyF'){if(posture?.kind==='lie')secondaryInteraction();else turnHeld(90);}if(e.code==='KeyG'&&!posture)secondaryInteraction();if(e.code==='KeyV'&&!posture){setScopeZoom(false);first=!first;}if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit3')chooseWeapon('m16');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR')repair();});
+window.addEventListener('keydown',e=>{if(!canPlay())return;if(canPlay()&&held&&spec[held]?.imported&&(e.key==='+'||e.key==='-'||e.code==='NumpadAdd'||e.code==='NumpadSubtract')){e.preventDefault();if(!e.repeat)resizeHeld(e.key==='-'||e.code==='NumpadSubtract'?-1:1);return;}if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyC'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.repeat)return;if(e.code==='KeyE')interact();if(e.code==='KeyB')void mountHeld();if(e.code==='KeyQ')turnHeld(-90);if(e.code==='KeyF'){if(posture?.kind==='lie')secondaryInteraction();else turnHeld(90);}if(e.code==='KeyG'&&!posture)secondaryInteraction();if(e.code==='KeyV'&&!posture){setScopeZoom(false);first=!first;}if(e.code==='KeyP')phone();if(e.code==='KeyI')arsenal();if(e.code==='Digit1')chooseWeapon('pistol');if(e.code==='Digit2')chooseWeapon('rifle');if(e.code==='Digit3')chooseWeapon('m16');if(e.code==='Digit0')chooseWeapon('none');if(e.code==='KeyT')startReload();if(e.code==='KeyR')repair();});
 for(const [id,delta] of [['held-size-minus',-1],['held-size-plus',1]])$(id).addEventListener('click',e=>{e.stopPropagation();resizeHeld(delta);});
 $('held-mount').addEventListener('click',e=>{e.stopPropagation();void mountHeld();});
 window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>keys.clear());document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==canvas)clearControls();});document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas&&canPlay()&&!posture?.sleeping){const sensitivity=scopeZoom ? .0012 : .003;player.yaw-=e.movementX*sensitivity;player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch+e.movementY*sensitivity));}});
@@ -976,10 +988,78 @@ for(const [id,fn] of [['touchInteract',interact],['touchSecondary',secondaryInte
 for(const event of ['pointerup','pointercancel','lostpointercapture'])fireButton.addEventListener(event,e=>{if(triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('blur',()=>{clearControls();audio.stopAll();});document.addEventListener('visibilitychange',()=>{if(document.hidden)clearControls();});
 
+// The HUD map is a local 2D projection of the actual game layout, not a second
+// WebGL scene. Only the local room and the already shared corridor are shown.
+function minimapProject(x,z,player,scale){
+ const dx=x-player.x,dz=z-player.z,c=Math.cos(player.yaw),s=Math.sin(player.yaw);
+ return [96+(c*dx-s*dz)*scale,96+(s*dx+c*dz)*scale];
+}
+function minimapEdge(p,r=77){
+ const dx=p[0]-96,dy=p[1]-96,d=Math.hypot(dx,dy);
+ return d>r?[96+dx*r/d,96+dy*r/d]:p;
+}
+function minimapRoomShapes(walls,objects,layout,bodies,held){
+ const shapes=[];
+ for(const [id,w] of Object.entries(layout)){
+  if(w.kind==='floor'||w.kind==='ceiling'||w.p[1]-w.s[1]/2>1.9)continue;
+  // Use the actual opening layout. Wall damage is indicated, not reconstructed.
+  const damaged=(walls[id]||[]).some(c=>c[2]>=4);
+  shapes.push({p:w.p,s:w.s,color:damaged?'#bd9273':'#82929e'});
+ }
+ for(const [id,b] of Object.entries(bodies)){
+  if(id==='window'||id===held||!(objects[id]>0))continue;
+  const o=spec[id];if(!o||id==='surface_rug')continue;
+  shapes.push({p:b.p,s:boundsSize(o.s,b.q),color:o.imported?'#7baaa4':'#566873'});
+ }
+ return shapes;
+}
+let lastMinimap=-Infinity;
+function updateMinimap(now,vr=false){
+ const hud=$('minimap'),visible=started&&!studioOpen&&!vr&&!posture?.sleeping&&!scopeZoom&&$('phone').hidden;
+ hud.hidden=!visible;
+ if(!visible||now-lastMinimap<80)return;lastMinimap=now;
+ const map=$('minimap-canvas'),ctx=map.getContext('2d');if(!ctx)return;
+ const dpr=Math.min(2,window.devicePixelRatio||1),res=Math.round(192*dpr);
+ if(map.width!==res||map.height!==res){map.width=res;map.height=res;}
+ ctx.setTransform(res/192,0,0,res/192,0,0);ctx.clearRect(0,0,192,192);
+ ctx.save();ctx.beginPath();ctx.arc(96,96,91,0,Math.PI*2);ctx.clip();
+ ctx.fillStyle='#101923';ctx.fillRect(0,0,192,192);
+ const scale=lobbyState?8:13;
+ const box=(p,s,color)=>{ctx.fillStyle=color;ctx.fillRect(p[0]-s[0]/2,p[2]-s[2]/2,s[0],s[2]);};
+ ctx.save();ctx.translate(96,96);ctx.scale(scale,scale);ctx.rotate(player.yaw);ctx.translate(-player.x,-player.z);
+ if(lobbyState){
+  const L=LOBBY_LAYOUT;box([0,0,0],[L.halfWidth*2,0,L.halfLength*2],'#394854');
+  for(const x of [-L.halfWidth,L.halfWidth])box([x,0,0],[.15,0,L.halfLength*2],'#82929e');
+  for(const z of [-L.halfLength,L.halfLength])box([0,0,z],[L.halfWidth*2,0,.15],'#82929e');
+  for(let i=0;i<L.roomsPerSide*2;i++){const d=lobbyDoor(i);if(d)box([d.x,0,d.z],[.23,0,L.doorWidth],i===lobbyState.slot?'#68e3b7':'#a6b2bd');}
+ }else{
+  box([0,0,0],[9.8,0,9.8],'#34434e');
+  for(const a of minimapRoomShapes(state.walls||{},state.objects,WALLS,bodies,held))box(a.p,a.s,a.color);
+  box([0,0,-4.94],[1.12,0,.16],'#68e3b7');box([-4.94,0,-1],[.15,0,2.6],'#6eafc6');
+  if(state.unlocked&&!lobbyEnabled){box([0,0,-10],[9.8,0,10],'#34434e');for(const x of [-4.8,4.8])box([x,0,-10],[.2,0,10],'#82929e');box([0,0,-15],[9.8,0,.2],'#82929e');}
+ }
+ ctx.restore();
+ function dot(p,color,r=3){if(Math.hypot(p[0]-96,p[1]-96)>87)return;ctx.beginPath();ctx.arc(...p,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();ctx.lineWidth=1;ctx.strokeStyle='#16232e';ctx.stroke();}
+ const project=(x,z)=>minimapProject(x,z,player,scale);
+ if(lobbyState){
+  for(const peer of renderer.lobby.peers.values()){const v=peer.g.position;dot(project(v.x,v.z),'#8db8f5',3.5);}
+  const npc=renderer.lobby.npc;if(npc?.visible)dot(project(npc.position.x,npc.position.z),'#e9bc74',3.5);
+  const own=lobbyDoor(lobbyState.slot);
+  if(own){const p=minimapEdge(project(own.x,own.z),78);ctx.fillStyle='#71edc0';ctx.fillRect(p[0]-3.5,p[1]-3.5,7,7);ctx.strokeStyle='#17252f';ctx.strokeRect(p[0]-3.5,p[1]-3.5,7,7);}
+ }
+ // Compass is rotated with the world while the player arrow always points up.
+ const north=minimapEdge(project(player.x,player.z-100),80);ctx.font='bold 11px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#e6edf1';ctx.fillText('N',...north);
+ ctx.beginPath();ctx.moveTo(96,86);ctx.lineTo(89,104);ctx.lineTo(96,100);ctx.lineTo(103,104);ctx.closePath();ctx.fillStyle='#f6fafc';ctx.fill();ctx.strokeStyle='#17252f';ctx.lineWidth=1.5;ctx.stroke();
+ ctx.restore();ctx.beginPath();ctx.arc(96,96,91,0,Math.PI*2);ctx.strokeStyle='#a2b5c5b0';ctx.lineWidth=2;ctx.stroke();
+ const own=accountProfile?lobbyDoor(accountProfile.slot)?.number:null;
+ const label=lobbyState?'Hotelflur · '+(own?'Zimmer '+own:'Hotel'):own?'Zimmer '+own:'Hotelzimmer';
+ if($('minimap-location').textContent!==label)$('minimap-location').textContent=label;
+}
+
 let prev=performance.now();
 function frame(now,xrFrame){
   let dt=Math.max(0,Math.min(.035,(now-prev)/1000));prev=now;
-  if(studioOpen){updateAvatarModelStatus();renderer.renderStudio(canvas,dt);return;}
+  if(studioOpen){$('minimap').hidden=true;updateAvatarModelStatus();renderer.renderStudio(canvas,dt,$('character-preview'));return;}
   const vr=!!renderer.xrMode?.active;const xrInput=vr?renderer.xrMode.inputs(xrFrame):null;
   if(canPlay()&&!posture&&!lobbyTransition){
     stepReload(dt);stepTrigger(dt);
@@ -1017,6 +1097,7 @@ function frame(now,xrFrame){
     renderer.lobby.step(dt,player,!first&&!vr&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5);
     audio.listener(eye,d);updateGreeting(now,eye,d);
     renderer.equip(null,false);renderer.render(canvas,eye,target,mobile,dt,player,false,true);
+    updateMinimap(now,vr);
     if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}
     return;
   }
@@ -1037,6 +1118,7 @@ function frame(now,xrFrame){
   renderer.showCharacter(player,third&&started,dt,!posture&&(keys.has('KeyW')||keys.has('KeyA')||keys.has('KeyS')||keys.has('KeyD')||Math.hypot(...touchMove)>.05),started&&!vr,{posture,weapon:equipped});
   renderer.syncMarks(state.marks||[]);
   if(started&&active)audio.listener(eye,d);renderer.equip(equipped,first&&started&&!scopeZoom);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom);
+  updateMinimap(now,vr);
   if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}
 }
 setInterval(()=>{if(started&&!busy)refresh().catch(()=>{});},3000);
@@ -1063,6 +1145,7 @@ async function setupXR(){
 }
 
 const qualityChoice=$('quality'), lightChoice=$('lighting'), status=$('assetstatus');
+showPhonePage('welcome');updatePhone();
 qualityChoice.value=sessionStorage.getItem('sl_quality')||'auto';
 lightChoice.value=sessionStorage.getItem('sl_lighting')||'lebombo';
 function changeProfile(){sessionStorage.setItem('sl_quality',qualityChoice.value);sessionStorage.setItem('sl_lighting',lightChoice.value);location.reload();}

@@ -569,10 +569,15 @@ export class RoomRenderer {
     applyRoomAvatarPose(root,posture,posture?null:weapon,look);
     updateRoomAvatarProp(root,this.weaponModels,posture?null:weapon);
   }
-  renderStudio(canvas,dt){
-    const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),dpr=Math.min(devicePixelRatio||1,1.5);
+  renderStudio(canvas,dt,preview=null){
+    const w=Math.max(1,(preview||canvas).clientWidth),h=Math.max(1,(preview||canvas).clientHeight),dpr=Math.min(devicePixelRatio||1,1.5);
     if(w!==this.width||h!==this.height||dpr!==this.dpr){this.width=w;this.height=h;this.dpr=dpr;this.renderer.setPixelRatio(dpr);this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
-    this.studio.render(this.renderer,w/h,dt);
+    this.studio.render(this.renderer,w/h,dt,!!preview);
+    // Copy immediately after rendering, before the WebGL drawing buffer is discarded.
+    if(preview){
+      if(preview.width!==canvas.width||preview.height!==canvas.height){preview.width=canvas.width;preview.height=canvas.height;}
+      preview.getContext('2d')?.drawImage(canvas,0,0);
+    }
   }
   render(canvas,eye,target,mobile,dt=1/60,player=null,scopeZoom=false,inLobby=false){
     const scene=inLobby?this.lobby.scene:this.scene;

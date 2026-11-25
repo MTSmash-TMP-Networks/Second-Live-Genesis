@@ -154,6 +154,7 @@ const sessionTest=new Function('assert',getPart('let enteringGame=false,pendingA
  const nodes=new Map(),$=id=>{if(!nodes.has(id))nodes.set(id,{hidden:false,value:'',textContent:''});return nodes.get(id);};
  const renderer={studio:{clear(){cleared++;}},roomModels:{clear(){cleared++;}}};
  const clearControls=()=>{},updateWorldStatus=()=>{},setAuthMode=mode=>{resetMode=mode;};
+ const showPhonePage=page=>{assert.equal(page,'welcome');$('welcome').hidden=false;$('character-editor').hidden=true;$('phone').hidden=false;};
  const document={exitPointerLock(){},body:{classList:{remove(){}}}},location={reload(){reloads++;}};
  const window={dispatchEvent(){notified++;}},Event=class{};
  const expired=Object.assign(Error('expired'),{status:401,code:'session_required'});
@@ -254,3 +255,20 @@ const north=mountPose({p:[-3,1.5,-5],s:[4,3,.2],axis:0},[-3,1.4,-4.9],[.8,.6,.1]
 assert.equal(north.rotation,0);assert.ok(Math.abs(north.center[2]+4.838)<1e-6);
 assert.equal(mountPose({kind:'floor'},[0,0,0],[1,1,1]),null);
 console.log('Wall mounting: inner face, orientation, height, fit and opening checks passed');
+
+const phoneMarkup=html.slice(html.indexOf('<section id="phone"'),html.indexOf('</body>'));
+for(const id of ['welcome','character-editor','arsenal','updater','account-form','phone-page-home'])assert.ok(phoneMarkup.includes('id="'+id+'"'),id+' is inside phone');
+assert.ok(ids.includes('character-preview')&&ids.includes('minimap-canvas'));
+assert.ok(!/<section id="phone"[^>]*\bhidden\b/.test(html),'phone initially visible');
+const nav=new Function(getPart('function allowedPhonePage(','function showPhonePage(')+'return allowedPhonePage;')();
+assert.equal(nav('home',false,false),'welcome');assert.equal(nav('models',false,false),'welcome');
+assert.equal(nav('settings',true,true),'character');assert.equal(nav('character',false,true),'character');
+assert.equal(nav('inventory',true,false),'inventory');assert.equal(nav('settings',true,false),'settings');
+assert.equal(nav('welcome',true,false),'home');
+const mapMath=new Function(getPart('function minimapProject(','function minimapRoomShapes(')+'return {minimapProject,minimapEdge};')();
+let mp=mapMath.minimapProject(2,2,{x:2,z:2,yaw:0},10);assert.equal(mp[0],96);assert.equal(mp[1],96);
+mp=mapMath.minimapProject(0,-1,{x:0,z:0,yaw:0},10);assert.equal(mp[0],96);assert.equal(mp[1],86);
+mp=mapMath.minimapProject(-1,0,{x:0,z:0,yaw:Math.PI/2},10);assert.ok(Math.abs(mp[0]-96)<1e-8);assert.equal(mp[1],86);
+mp=mapMath.minimapEdge([96,996]);assert.equal(mp[0],96);assert.equal(mp[1],173);
+assert.ok(game.includes('updateMinimap(now,vr)')&&game.includes("renderer.renderStudio(canvas,dt,$('character-preview'))"));
+console.log('Unified phone navigation and heading-up minimap projection passed');

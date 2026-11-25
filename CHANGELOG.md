@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.0 – Genesis Phone & Live Minimap
+- Ein durchgängiges virtuelles Smartphone für Anmeldung, Registrierung, Kontowiederaufnahme, Charakterstudio mit gerenderter Live-Vorschau, Inventar, Einstellungen und administrativen System-Updater. Spielmenüs werden nicht mehr als separate Vollbilddialoge dargestellt.
+- Lokale, mit der Blickrichtung rotierende Minimap unten rechts: aktueller Grundriss, Möbelpositionen, Tür und Fenster; im öffentlichen Flur eigene Zimmertür, anwesende Gäste und KI-Hotelservice. Keine fremden privaten Zimmereinrichtungen oder externen Kartenanfragen.
+- Karten-HUD wird bei Menüs, Schlaf, Zoom und WebXR ausgeblendet. Responsive Anordnung der Touch-Steuerung. Bestehende Konto- und Update-Berechtigungen bleiben unverändert.
+
 ## 0.12.10 – Low Light Visibility
 - Geschlossene intakte Vorhaenge blockieren weiterhin direkte Sonne und Fensterlicht. Eine schwache diffuse Restbeleuchtung (Hemisphaere 0,055, HDR-Umgebung 0,035) simuliert Dunkeladaptation und laesst Umrisse im unbeleuchteten Zimmer erkennen.
 - Offene Vorhaenge, Innenlampen und die globale Belichtung bleiben unveraendert. Der Vorhang dimmt stufenlos bis zur neuen Mindesthelligkeit; Beleuchtungstests entsprechend aktualisiert.

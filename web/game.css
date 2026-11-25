@@ -73,3 +73,51 @@ body.character-editing header,body.character-editing footer,body.character-editi
 #interaction-prompt:has(#held-model-size:not([hidden])){z-index:3}
 
 #held-model-size #held-mount{grid-column:1/-1;width:100%;height:38px;font-size:12px;line-height:1.2;padding:7px;pointer-events:auto}
+
+/* Genesis OS: one phone shell from sign-in through the entire game. */
+body:not(.playing) #phone,body.character-editing #phone{right:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:min(382px,calc(100vw - 24px));height:min(780px,calc(100dvh - 24px));max-height:none}
+body:not(.playing) #world,body.character-editing #world{visibility:hidden}
+body:not(.playing),body.character-editing{background:radial-gradient(ellipse at 50% 30%,#344353,#111a25 55%,#0b1018)}
+body:not(.playing) header,body:not(.playing) footer,body:not(.playing) #cross,body:not(.playing) #mode{display:none}
+#phone #welcome,#phone #character-editor,#phone #arsenal{position:static;inset:auto;display:block;width:auto;max-height:none;height:auto;overflow:visible;background:none;padding:0;pointer-events:auto}
+#phone #welcome article,#phone #arsenal article,#phone .character-panel{position:static;display:block;width:100%;max-width:none;max-height:none;overflow:visible;background:none;border:0;border-radius:0;box-shadow:none;padding:0;margin:0;pointer-events:auto}
+#phone .sl-form-page h2,#phone .character-panel h2{margin:8px 0}
+#phone #account-access{margin:18px 0}
+#phone #account-form label,#phone #game-auth label{display:block;font-size:12px;color:#d7e3ec;margin-top:12px}
+#phone #account-form input,#phone #game-auth input{margin-top:5px;font-size:14px}
+#phone .account-note{font-size:11px;line-height:1.45;color:#bdcdd9;margin:9px 0}
+#phone #welcome #loginerror,#phone #character-error{font-size:12px;margin:8px 0}
+#phone #welcome #assetstatus,#phone .buildstatus{font-size:11px;line-height:1.35;margin:7px 0;min-height:0}
+#phone #welcome small,#phone #arsenal small{font-size:10px;line-height:1.35;margin:8px 0}
+#phone #welcome small a{display:inline;width:auto;padding:0;margin:0;background:none;color:#a9e2d8;font-size:inherit}
+#phone #character-preview{display:block;width:100%;height:172px;border-radius:13px;margin:10px 0 3px;background:#202e3c}
+#phone .character-turn button,#phone .character-buttons button{font-size:11px;padding:9px 5px}
+#phone #character-fields{margin:10px 0;gap:8px}
+#phone #character-outfit-note{min-height:0}
+#phone #arsenal .weaponcards{grid-template-columns:1fr;gap:6px}
+#phone #arsenal .weaponcards button{padding:7px;margin-top:4px;text-align:left}
+#phone #arsenal .weaponcards img{height:95px}
+#phone #arsenal p,#phone #arsenal .phonehead{font-size:12px;margin:10px 0}
+#phone #updater{position:absolute;inset:83px 0 58px;display:block;z-index:20;padding:8px 18px 14px;overflow:auto;background:#142534}
+#phone #updater .update-card{width:100%;padding:0;max-height:none;overflow:visible;background:none;border:0;border-radius:0;box-shadow:none}
+#phone #updater h2{font-size:26px}
+#phone #updater p,#phone #updater small{font-size:11px;margin:8px 0}
+#phone #updater .phonehead{font-size:11px}
+#phone #updater button{font-size:12px;padding:10px}
+#phone:has(#updater:not([hidden])) #closephone,#phone:has(#updater:not([hidden])) #phone-home{visibility:hidden}
+#phone .sl-phone-dock:has(#phone-home[hidden]){min-height:12px;background:none;border:0;padding:0;margin-bottom:0}
+#phone #settings-graphics .graphicoptions{margin-top:12px}
+@media(max-height:480px){#phone #updater{inset:67px 0 48px}#phone #character-preview{height:132px}}
+/* Local, heading-up HUD radar. It never captures mouse or touch input. */
+body{--mini-size:clamp(138px,15vw,188px)}
+#minimap{position:absolute;z-index:2;right:max(20px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));width:var(--mini-size);pointer-events:none;text-align:center}
+#minimap-canvas{display:block;width:100%;height:auto;aspect-ratio:1;filter:drop-shadow(0 3px 10px #0009)}
+#minimap-location{font-size:11px;font-weight:650;color:#f1f5f7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#111820d9;border:1px solid #ffffff22;border-radius:8px;padding:5px 7px;margin-top:2px}
+.playing footer{max-width:min(610px,calc(100vw - var(--mini-size) - 68px))}
+.mobile{--mini-size:clamp(94px,26vw,124px)}
+.mobile #minimap{right:max(12px,env(safe-area-inset-right));bottom:max(64px,calc(env(safe-area-inset-bottom) + 56px))}
+.mobile.playing #actions{bottom:calc(max(64px,env(safe-area-inset-bottom) + 56px) + var(--mini-size) + 30px)}
+.mobile #minimap-location{font-size:9px;padding:3px}
+.mobile.playing footer{max-width:none}
+@media(max-height:560px) and (orientation:landscape){.mobile{--mini-size:96px}.mobile.playing #actions{bottom:max(45px,env(safe-area-inset-bottom));right:calc(var(--mini-size) + 28px);max-width:55vw}.mobile #minimap{bottom:max(40px,env(safe-area-inset-bottom))}}
+body:has(#phone:not([hidden])) #minimap,body.character-editing #minimap,.xr-playing #minimap{display:none!important}
