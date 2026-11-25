@@ -1,4 +1,4 @@
-import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
@@ -73,7 +73,7 @@ const DECOR_BOUNDS={...decorBounds,surface_windowframe:{p:[-4.88,1.74,-1],s:[.45
 const spec=Object.fromEntries(Object.entries(HOTEL_LAYOUT).filter(([,o])=>typeof o.max==='number'));
 
 let wallSolids=Object.values(WALLS).map(w=>({p:w.p,s:w.s})),wallSignatures={};
-let state={walls:{},decor:{},marks:[],lights_on:true,placements:{},rotations:{},objects:Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,o.max])),unlocked:false}, bodies=Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,{p:[...o.p],v:[0,0,0]}])), debris=[], busy=false, held=null, player={x:HOTEL_LAYOUT.spawn.p[0],z:HOTEL_LAYOUT.spawn.p[2],y:0,vy:0,yaw:HOTEL_LAYOUT.spawn.yaw,pitch:0}, keys=new Set(), first=true, started=false, active=false;
+let state={walls:{},decor:{},marks:[],lights_on:true,curtains_closed:false,placements:{},rotations:{},objects:Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,o.max])),unlocked:false}, bodies=Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,{p:[...o.p],v:[0,0,0]}])), debris=[], busy=false, held=null, player={x:HOTEL_LAYOUT.spawn.p[0],z:HOTEL_LAYOUT.spawn.p[2],y:0,vy:0,yaw:HOTEL_LAYOUT.spawn.yaw,pitch:0}, keys=new Set(), first=true, started=false, active=false;
 let lastInteractionHint=-Infinity, heldAngle=0;
 const yawQuat=a=>[0,Math.sin(a*Math.PI/360),0,Math.cos(a*Math.PI/360)];
 const quarter=a=>((Math.round(a/90)*90%360)+360)%360;
@@ -127,10 +127,10 @@ function sync(s){
     }
   }
   syncWallState(s.walls||{});syncDecorState(s.decor||{});renderer?.setRoomLight?.(s.lights_on!==false,s.decor||{});
-  const wasOpen=state.unlocked;state=s;renderer?.setDoorOpen?.(s.unlocked);if(started&&wasOpen!==s.unlocked)audio.play('door',[0,1.1,-4.95]); $('worldstate').textContent=personalWorld?'Privater Startraum':s.unlocked?'Testbereich freigeschaltet':'Startraum';
+  const wasOpen=state.unlocked;state=s;renderer?.setCurtainsClosed?.(s.curtains_closed===true,!started,s.decor||{});renderer?.setDoorOpen?.(s.unlocked);if(started&&wasOpen!==s.unlocked)audio.play('door',[0,1.1,-4.95]); $('worldstate').textContent=personalWorld?'Privater Startraum':s.unlocked?'Testbereich freigeschaltet':'Startraum';
 }
 let mutationVersion=0;async function refresh(){const v=mutationVersion;let s=await api('/api/game');if(!busy&&v===mutationVersion)sync(s);}
-async function action(action,id,mark,extra={}){if(busy)return false;busy=true;mutationVersion++;try{const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);$('notice').textContent=action==='reset_hotel_layout'?'Hotelanordnung wiederhergestellt':action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
+async function action(action,id,mark,extra={}){if(busy)return false;busy=true;mutationVersion++;try{const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);$('notice').textContent=action==='reset_hotel_layout'?'Hotelanordnung wiederhergestellt':action==='toggle_curtains'?(result.curtains_closed?'Vorhänge geschlossen':'Vorhänge geöffnet'):action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
 function dir(){let a=player.yaw,p=player.pitch;return [-Math.sin(a)*Math.cos(p),-Math.sin(p),-Math.cos(a)*Math.cos(p)];}
 function rotateInverse(v,q){if(!q)return v;const [x,y,z,w]=q,u=[-x,-y,-z],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],t=cross(u,v).map(n=>2*n),c=cross(u,t);return v.map((n,i)=>n+w*t[i]+c[i]);}
 function rayBox(eye,d,p,s,q=null){let pos=rotateInverse(eye.map((v,i)=>v-p[i]),q),dir=rotateInverse(d,q),lo=0,hi=8;for(let i=0;i<3;i++){if(Math.abs(dir[i])<1e-8){if(Math.abs(pos[i])>s[i]/2)return Infinity;}else{let a=(-s[i]/2-pos[i])/dir[i],z=(s[i]/2-pos[i])/dir[i];lo=Math.max(lo,Math.min(a,z));hi=Math.min(hi,Math.max(a,z));if(lo>hi)return Infinity;}}return lo;}
@@ -142,7 +142,68 @@ for(const id of [...weaponIds,'none'])$('equip-'+id).onclick=()=>{chooseWeapon(i
 chooseWeapon('none');
 function phone(){if(renderer?.xrMode?.active){renderer.xrMode.end().then(()=>phone()).catch(e=>$('notice').textContent=e.message);return;}document.exitPointerLock?.();clearControls();$('phone').hidden=false;active=false;audio.stopAll();audio.play('phone');showPhonePage('home');updatePhone();}
 const movable=id=>id&&id!=='window'&&Object.hasOwn(spec,id)&&state.objects[id]>0;
-function interactionTarget(){const d=dir(),eye=[player.x,player.y+1.65,player.z],hit=renderer?.surfaceHit(eye,d,held);return hit&&hit.dist<=3?hit:{id:null,dist:Infinity};}
+const CURTAIN_TARGETS=new Set(['surface_curtain_l','surface_curtain_r','surface_curtainrod','surface_windowframe','window']);
+const OBJECT_NAMES={surface_bed:'Bett',surface_wardrobe:'Garderobe',surface_nightstand:'Nachttisch',surface_lamp:'Nachttischleuchte',surface_rug:'Teppich',surface_picture:'Kopfteil und Wandregal',surface_ceilinglamp:'Deckenbeleuchtung',surface_switch:'Lichtschalter',surface_outlet:'Steckdose',surface_doortrim:'Türzarge',surface_windowframe:'Fensterrahmen',surface_curtain_l:'Vorhänge',surface_curtain_r:'Vorhänge',surface_curtainrod:'Vorhangstange',surface_radiator:'Heizkörper',crate:'Koffer',table:'Schreibtisch',chair:'Stuhl',sofa:'Sofa',coffee_table:'Couchtisch',window:'Fenster'};
+function objectName(id){
+  if(OBJECT_NAMES[id])return OBJECT_NAMES[id];
+  if(id==='surface_0')return 'Boden';
+  if(id==='surface_1')return 'Decke';
+  if(WALLS[id])return 'Wand';
+  if(id?.startsWith('surface_trim_'))return 'Sockelleiste';
+  if(id?.startsWith('surface_crown_'))return 'Deckenleiste';
+  return 'Einrichtung';
+}
+const removed=id=>(state.decor?.[id]||0)>=REMOVED;
+function curtainsUsable(){return !removed('surface_curtainrod')&&!(removed('surface_curtain_l')&&removed('surface_curtain_r'));}
+function interactionRay(ray=null){return ray||{origin:[player.x,player.y+1.65,player.z],direction:dir()};}
+function interactionTarget(ray=null){const {origin,direction}=interactionRay(ray);const hit=renderer?.surfaceHit(origin,direction,held);return hit||{id:null,dist:Infinity};}
+function primaryInteraction(hit,ray=null){
+  if(hit.dist>3)return null;
+  const id=hit.id;
+  if(id==='surface_switch'&&!removed(id))return {id,op:'toggle_light',label:state.lights_on!==false?'Licht ausschalten':'Licht einschalten',short:state.lights_on!==false?'Licht aus':'Licht an'};
+  if(CURTAIN_TARGETS.has(id)&&curtainsUsable())return {id,op:'toggle_curtains',label:state.curtains_closed?'Vorhänge öffnen':'Vorhänge schließen',short:state.curtains_closed?'Öffnen':'Schließen'};
+  if(movable(id))return {id,op:'pick_up',label:'Aufheben',short:'Aufheben'};
+  return null;
+}
+function doorInView(hit,ray=null){
+  if(state.unlocked||hit.dist>3||(hit.id&&hit.id!=='surface_doortrim'))return false;
+  const {origin,direction}=interactionRay(ray);
+  const d=rayBox(origin,direction,[0,1.1,-4.95],[1.245,2.25,.30]);
+  return d<=3&&d<=hit.dist+.06;
+}
+function damaged(id){
+  if(!id)return false;
+  if(spec[id]&&!movableDecor(id)&&state.objects[id]<spec[id].max)return true;
+  return (state.decor?.[id]||0)>0||!!state.walls?.[id]?.length||!!state.marks?.some(m=>m.target===id);
+}
+function updateInteractionHint(vr=false){
+  const playing=canPlay()&&!vr,panel=$('interaction-prompt'),actionButton=$('touchInteract'),repairButton=$('touchRepair');
+  $('touchRotateLeft').hidden=$('touchRotateRight').hidden=!held;
+  let name='',lines=[],short='Aktion',canAct=false,canRepair=false;
+  if(playing&&held){
+    const clear=!!placementPoint(held);
+    name=objectName(held);canAct=clear;short='Abstellen';
+    lines.push(clear?(mobile?'Abstellen: Stellplatz frei':'E · Abstellen'):'Stellplatz blockiert');
+    lines.push(mobile?'Drehtasten · 90°':'Q / F · Drehen');
+  }else if(playing){
+    const hit=interactionTarget(),primary=primaryInteraction(hit),fix=repairTarget(null,hit),id=hit.dist<=3?hit.id:null;
+    const door=doorInView(hit);
+    if(primary){name=objectName(primary.id);lines.push(mobile?primary.label:'E · '+primary.label);short=primary.short;canAct=true;}
+    else if(door){name='Tür';lines.push('Weitere Welt noch nicht verfügbar');}
+    else if(id&&CURTAIN_TARGETS.has(id)&&!curtainsUsable()){name=objectName(id);lines.push('Vorhänge oder Stange zuerst reparieren');}
+    if(fix&&damaged(fix.id)){
+      if(!name)name=objectName(fix.id);
+      lines.push((mobile?'':'R · ')+(fix.id===id||!primary&&!door?'Reparieren':objectName(fix.id)+' reparieren'));canRepair=true;
+    }
+    if(!name&&id&&!WALLS[id]){name=objectName(id);lines.push('Keine Aktion verfügbar');}
+  }
+  panel.hidden=!name;
+  if(name){if($('interaction-name').textContent!==name)$('interaction-name').textContent=name;const msg=lines.join('  |  ');if($('interaction-actions').textContent!==msg)$('interaction-actions').textContent=msg;}
+  $('cross').classList.toggle('actionable',playing&&(canAct||canRepair));
+  if(actionButton.textContent!==short)actionButton.textContent=short;
+  actionButton.disabled=!canAct||busy;repairButton.disabled=!canRepair||busy;
+  $('hint').textContent=started?(mobile?'Handy · Inventar':'P: Smartphone · I: Inventar'):'Spiel starten';
+}
 function horizontalHold(id){
   const s=turnedSize(spec[id].s,heldAngle),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52,flat=Math.hypot(d[0],d[2]);
   const dx=flat>.01?d[0]/flat:-Math.sin(player.yaw),dz=flat>.01?d[2]/flat:-Math.cos(player.yaw);
@@ -159,9 +220,11 @@ function placementPoint(id){
   return p.map(v=>Math.round(v*10000)/10000);
 }
 async function interact(){if(!canPlay()||busy)return;if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
-  const a=interactionTarget();if(a.id==='surface_switch'){if((state.decor?.surface_switch||0)>=REMOVED){$('notice').textContent='Schalter zuerst reparieren';return;}audio.play('click');await action('toggle_light','surface_switch');return;}
-  if(movable(a.id)){chooseWeapon('none');held=a.id;heldAngle=yawAngle(bodies[held].q);$('notice').textContent='Gegenstand aufgenommen · Q/F: drehen · E: abstellen';return;}
-  if(Math.abs(player.x)<1.3&&player.z<-3.2&&!state.unlocked)$('notice').textContent='Hinter dieser Tür entsteht die nächste Spielwelt.';
+  const hit=interactionTarget(),primary=primaryInteraction(hit);
+  if(primary?.op==='toggle_light'){audio.play('click');await action(primary.op,primary.id);return;}
+  if(primary?.op==='toggle_curtains'){await action(primary.op,primary.id);return;}
+  if(primary?.op==='pick_up'){chooseWeapon('none');held=primary.id;heldAngle=yawAngle(bodies[held].q);$('notice').textContent='Gegenstand aufgenommen · Q/F: drehen · E: abstellen';return;}
+  if(doorInView(hit))$('notice').textContent='Hinter dieser Tür entsteht die nächste Spielwelt.';
 }
 function groundAt(x,z){if(z<-5&&state.unlocked)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
 function coll(x,z){if(Math.abs(x)>4.65||z>4.65||z<(state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+1.6&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,.85,1.45].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&state.objects[id]>0&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+1.6&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
@@ -195,14 +258,24 @@ function fire(ray=null){
   $('cross').classList.add('pulse');setTimeout(()=>$('cross').classList.remove('pulse'),100);
   if(a.id&&state.objects[a.id]>0&&!movableDecor(a.id)){physicsWorld.impulse(a.id,direction);action('hit',a.id,a.mark);}else if(WALLS[a.id])action('damage_wall',a.id,a.mark);else if(DECOR_BOUNDS[a.id])action('damage_decor',a.id,a.mark);else if(a.id?.startsWith('surface_'))action('mark_surface',a.id,a.mark);else $('notice').textContent=a.dist<=8?'Oberfläche ohne Schadensspeicher':'Kein Objekt getroffen';
 }
-function repair(ray=null){
-  if(!canPlay())return;const origin=ray?.origin||[player.x,player.y+1.65,player.z],direction=ray?.direction||dir();
-  const surface=renderer.surfaceHit(origin,direction,held),a=aim(ray);let wall=null,dist=3;
+function repairTarget(ray=null,surface=null){
+  const {origin,direction}=interactionRay(ray);surface=surface||interactionTarget(ray);const a=aim(ray);let wall=null,dist=3;
   for(const [id,w] of Object.entries(WALLS)){if(!state.walls?.[id]?.some(c=>c[2]>=REMOVED))continue;const d=rayBox(origin,direction,w.p,w.s);if(d<dist&&d<=surface.dist+.01){dist=d;wall=id;}}
-  for(const [id,o] of Object.entries(DECOR_BOUNDS)){if((state.decor?.[id]||0)<REMOVED)continue;const p=movableDecor(id)?(state.placements?.[id]||spec[id].p):o.p,q=movableDecor(id)?yawQuat(state.rotations?.[id]||0):null;const d=rayBox(origin,direction,p,o.s,q);if(d<dist&&d<=surface.dist+.01){dist=d;wall=id;}}
-  if(a.id&&!movableDecor(a.id)&&state.objects[a.id]===0&&a.dist<Math.min(3,dist)&&a.dist<=surface.dist+.01){action('repair',a.id);return;}
-  if(wall){action('repair_surface',wall);return;}
-  if(surface.id&&surface.dist<3){if(surface.id.startsWith('surface_'))action('repair_surface',surface.id);else action('repair',surface.id);}
+  for(const [id,original] of Object.entries(DECOR_BOUNDS)){
+    if(!removed(id))continue;
+    const o=id==='surface_curtain_l'||id==='surface_curtain_r'?curtainBounds(id,renderer?.curtainProgress??Number(!!state.curtains_closed)):original;
+    const p=movableDecor(id)?(state.placements?.[id]||spec[id].p):o.p,q=movableDecor(id)?yawQuat(state.rotations?.[id]||0):null;
+    const d=rayBox(origin,direction,p,o.s,q);if(d<dist&&d<=surface.dist+.01){dist=d;wall=id;}
+  }
+  if(a.id&&!movableDecor(a.id)&&state.objects[a.id]===0&&a.dist<Math.min(3,dist)&&a.dist<=surface.dist+.01)return {id:a.id,op:'repair'};
+  if(wall)return {id:wall,op:'repair_surface'};
+  if(surface.id&&surface.dist<3)return {id:surface.id,op:surface.id.startsWith('surface_')?'repair_surface':'repair'};
+  return null;
+}
+function repair(ray=null){
+  if(!canPlay()||busy||held)return;
+  const target=repairTarget(ray);
+  if(target&&damaged(target.id))action(target.op,target.id);
 }
 $('mode').onclick=()=>setMode(!mobile);setMode(mobile);
 const stick=$('stick');let stickId=null;function moveStick(e){let r=stick.getBoundingClientRect(),x=(e.clientX-r.left-r.width/2)/(r.width*.36),y=(e.clientY-r.top-r.height/2)/(r.height*.36),l=Math.max(1,Math.hypot(x,y));touchMove=[x/l,-y/l];stick.style.setProperty('--jx',`${x/l*33}px`);stick.style.setProperty('--jy',`${y/l*33}px`);}stick.addEventListener('pointerdown',e=>{if(!canPlay()||stickId!==null)return;e.preventDefault();stickId=e.pointerId;stick.setPointerCapture(e.pointerId);moveStick(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId&&canPlay())moveStick(e);});for(const n of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(n,e=>{if(e.pointerId===stickId){stickId=null;touchMove=[0,0];stick.style.setProperty('--jx','0px');stick.style.setProperty('--jy','0px');}});
@@ -235,6 +308,7 @@ function frame(now,xrFrame){
   if(!first&&!vr){let t=eye.map((v,i)=>v-d[i]*2.1);if(!coll(t[0],t[2])){eye=t;target=eye.map((v,i)=>v+d[i]);}}
   renderer.begin();
   renderer.setDoorOpen?.(state.unlocked);
+  renderer.advanceCurtains?.(dt,state.decor||{});
   if(state.unlocked){part([0,-.12,-10],[10,.24,10],'a8a69a');part([-4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([0,1.4,-15],[10,2.8,.2],'c1b6a6');}
   for(let [id,b] of Object.entries(bodies)){
     let o=spec[id],hp=state.objects[id];
@@ -245,7 +319,7 @@ function frame(now,xrFrame){
   if(!first&&!vr&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5){part([player.x,player.y+1,player.z],[.5,1.1,.32],'354d65');part([player.x,player.y+1.7,player.z],[.32,.34,.32],'cba384');}
   renderer.syncMarks(state.marks||[]);
   if(started&&active)audio.listener(eye,d);renderer.equip(equipped,first&&started);renderer.render(canvas,eye,target,mobile,dt,player);
-  if(!started||performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();$('touchRotateLeft').hidden=$('touchRotateRight').hidden=!held;let a=started?interactionTarget():{id:null};$('hint').textContent=held?(placementPoint(held)?'E: Abstellen · Q/F: drehen · Stellplatz frei':'Stellplatz blockiert · Q/F: drehen oder weiter bewegen'):a.id==='surface_switch'?'E: Licht '+(state.lights_on!==false?'ausschalten':'einschalten'):movable(a.id)?'E: Aufheben · R: Reparieren':Math.abs(player.x)<1.3&&player.z<-3.2&&!state.unlocked?'Tür · nächste Welterweiterung':'R: Oberfläche reparieren · P: Smartphone · I: Inventar';}
+  if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}
 }
 setInterval(()=>{if(started&&!busy)refresh().catch(()=>{});},3000);
 
@@ -258,7 +332,7 @@ async function setupXR(){
   hint.textContent=supported?'VR bereit – nach dem Login starten':globalThis.isSecureContext?'Kein immersives WebXR erkannt':'VR benötigt HTTPS';
   if(!supported)return;
   mode.onEnd=()=>{xrEntering=false;first=xrReturnFirst;player.y=0;player.vy=0;clearControls();document.body.classList.remove('xr-playing');button.textContent='VR starten';button.disabled=false;active=$('phone').hidden&&$('arsenal').hidden;};
-  mode.onAction=(type,ray)=>{if(!canPlay())return;if(type==='repair'){repair(ray);return;}if(!state.unlocked&&Math.abs(player.x)<1.5&&player.z<-3.25){$('notice').textContent='Hinter dieser Tür entsteht die nächste Spielwelt.';return;}fire(ray);};
+  mode.onAction=(type,ray)=>{if(!canPlay())return;if(type==='repair'){repair(ray);return;}if(!equipped&&!busy){const primary=primaryInteraction(interactionTarget(ray),ray);if(primary?.op==='toggle_curtains'||primary?.op==='toggle_light'){action(primary.op,primary.id);return;}}if(!state.unlocked&&Math.abs(player.x)<1.5&&player.z<-3.25){$('notice').textContent='Hinter dieser Tür entsteht die nächste Spielwelt.';return;}fire(ray);};
   button.onclick=async()=>{
     if(xrEntering||!started||!canPlay())return;
     if(mode.active){await mode.end();return;}
