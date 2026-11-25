@@ -2,7 +2,7 @@
 FROM node:22-bookworm-slim AS renderer
 WORKDIR /build
 RUN npm install --no-audit --no-fund --save-exact three@0.170.0 esbuild@0.25.10 @dimforge/rapier3d-compat@0.17.3
-COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/hotel_room.js web/engine/hotel_layout.json web/engine/hotel_reference.json web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js web/engine/portal_door.js web/engine/optional_asset.js ./
+COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/hotel_room.js web/engine/hotel_layout.json web/engine/hotel_reference.json web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js web/engine/portal_door.js web/engine/optional_asset.js web/engine/hotel_lobby.js web/engine/lobby_layout.js web/engine/lobby_layout.json ./
 COPY web/engine/wall_layout.json /build/wall_layout.json
 COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs ./
 COPY web/game.js web/index.html scripts/game_only_smoke.mjs ./
@@ -65,7 +65,7 @@ RUN ./node_modules/.bin/esbuild avatar_smoke.mjs --bundle --platform=node --form
 # Game-only runtime; retained player identity uses the standard library.
 FROM python:3.13-slim-bookworm
 WORKDIR /app
-COPY server.py updater_api.py wall_damage.py world_capture.py /app/
+COPY server.py updater_api.py wall_damage.py world_capture.py hotel_lobby.py /app/
 COPY --chmod=0644 scripts/game_only_smoke.py /app/game_only_smoke.py
 COPY web/ /app/web/
 RUN rm -f /app/web/scanner.html /app/web/panorama.html /app/web/capture.js /app/web/capture-flow.js /app/web/capture-quality.js /app/web/capture.css /app/web/panorama.js /app/web/panorama-flow.js /app/web/panorama.css /app/web/device-access.js /app/web/app.js /app/web/style.css /app/web/engine/capture-view.js
