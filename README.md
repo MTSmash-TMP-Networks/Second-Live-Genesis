@@ -1,10 +1,20 @@
 # Second Live – World Genesis
 
-**v0.10.0 · Shared Hotel Lobby**
+**v0.11.0 · Accounts & Character Studio**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
 
-## Neu in 0.10.0 – Gemeinsamer Hotelflur
+## Neu in 0.11.0 – Benutzerkonten und Charakter-Editor
+
+Beim Start registriert man sich mit einem eindeutigen Spitznamen, einer E-Mail-Adresse und einem Passwort (mindestens zehn Zeichen). Danach erfolgt die Anmeldung mit E-Mail und Passwort. Eine gültige alte Gast-Sitzung im selben Browser übernimmt das bisherige persönliche Zimmer bei der ersten Registrierung; nach der Übernahme ist das Zimmer nur über das neue Konto erreichbar. Alte Spielstände und Fotos bleiben gespeichert. Ohne das ursprüngliche Gast-Cookie kann eine frühere Gast-Identität nicht automatisch zugeordnet werden.
+
+Jedes Konto erhält eine feste Zimmernummer zwischen 101 und 124. Die Türschilder zeigen den Spitznamen auch bei abwesenden Gästen. Maximal 24 registrierte Konten pro Hotel in dieser Version; zusätzliche Etagen sind noch nicht implementiert. Andere Spieler erhalten nur Spitznamen, Zimmernummer, Charakterauswahl und Flurpositionen, keine E-Mail-Adressen, Passwortdaten oder privaten Zimmerstände.
+
+Der Character Studio bietet eine drehbare Live-3D-Vorschau mit 14 Auswahlkategorien (Körperform, Größe, Gesicht, Haut, Frisur, Haarfarbe, Augen, Oberteil/Farbe, Hose/Farbe, Schuhe, Bart und Brille). Das lokal erzeugte stilisierte Menschenmodell hat geformte Oberflächen, einzelne Gesichtselemente, Kleidung und bewegliche Gelenke. Der gleiche gespeicherte Charakter erscheint im Flur und in der Third-Person-Ansicht. Änderungen sind im Zimmer über Smartphone → Einstellungen → Charakter gestalten möglich. Es handelt sich um den ersten eigenen modularen Avatar-Satz, nicht um importierte Sims-Modelle oder eine fertige professionelle Skinning-/Animationsbibliothek.
+
+Kontodaten liegen in zusätzlichen SQLite-Tabellen. Passwörter werden mit PBKDF2-HMAC-SHA256, 600.000 Iterationen und individuellem Salt gespeichert; separate HttpOnly/SameSite=Strict-Sitzungscookies laufen nach 30 Tagen ab. Anmeldeversuche sind begrenzt. Für den Betrieb mit echten Zugangsdaten HTTPS über den vertrauenswürdigen Reverse Proxy verwenden (X-Forwarded-Proto: https); unverschlüsseltes HTTP ist nur für lokale Entwicklungs-/Testumgebungen vorgesehen. E-Mail-Bestätigung, Passwort-Zurücksetzen und Kontoverwaltung sind noch nicht implementiert. Kein externer Avatar- oder Login-Dienst erforderlich.
+
+## Historisch: 0.10.0 – Gemeinsamer Hotelflur (Zimmervergabe ab 0.11.0 ersetzt)
 
 Mit E an der Zimmertür (Touch: Aktionstaste) wechselst du in einen 42 m langen, 3,6 m breiten, gemeinsam genutzten Hotelkorridor mit 24 Türen, Teppich, Leuchten und Zimmernummern. Alle Gäste desselben Serverprozesses im Flur sehen einander als bewegte 3D-Avatare. Deine für den aktuellen Flurbesuch zugewiesene Tür ist grün markiert. E an dieser Tür bringt dich zurück in deinen bestehenden privaten Raum. Fremde Türen sind nicht betretbar. Die beiden Bereiche sind getrennte Szenen mit einem Übergang an der Tür, noch keine nahtlos zusammenhängende Hotelarchitektur. Zimmernummern werden für jeden Flurbesuch vergeben, nicht dauerhaft gebunden.
 
