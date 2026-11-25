@@ -30,7 +30,7 @@ WEB = ROOT / "web"
 MAX_BODY = 9 * 1024 * 1024
 MAX_IMAGE = 6 * 1024 * 1024
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
-SAFE_FILES = {"/device-access.js":"device-access.js","/audio.js":"audio.js","/capture.js":"capture.js", "/capture-quality.js":"capture-quality.js", "/capture.css":"capture.css", "/engine/capture-view.bundle.js":"engine/capture-view.bundle.js", "/updater.js": "updater.js", **{f"/assets/{n}.jpg": f"assets/{n}.jpg" for n in ("wood", "wall", "fabric")},"/scanner.html": "scanner.html", "/game.js": "game.js", "/bootstrap.js": "bootstrap.js", "/engine/renderer.bundle.js": "engine/renderer.bundle.js", "/engine/THREE-LICENSE.txt": "engine/THREE-LICENSE.txt", "/engine/RAPIER-LICENSE.txt": "engine/RAPIER-LICENSE.txt", "/game.css": "game.css", "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css", "/manifest.webmanifest": "manifest.webmanifest", "/icon.svg": "icon.svg"}
+SAFE_FILES = {"/assets/decoders/basis_transcoder.js":"assets/decoders/basis_transcoder.js","/assets/decoders/basis_transcoder.wasm":"assets/decoders/basis_transcoder.wasm","/device-access.js":"device-access.js","/audio.js":"audio.js","/capture.js":"capture.js", "/capture-quality.js":"capture-quality.js", "/capture.css":"capture.css", "/engine/capture-view.bundle.js":"engine/capture-view.bundle.js", "/updater.js": "updater.js", **{f"/assets/{n}.jpg": f"assets/{n}.jpg" for n in ("wood", "wall", "fabric")},"/scanner.html": "scanner.html", "/game.js": "game.js", "/bootstrap.js": "bootstrap.js", "/engine/renderer.bundle.js": "engine/renderer.bundle.js", "/engine/THREE-LICENSE.txt": "engine/THREE-LICENSE.txt", "/engine/RAPIER-LICENSE.txt": "engine/RAPIER-LICENSE.txt", "/game.css": "game.css", "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css", "/manifest.webmanifest": "manifest.webmanifest", "/icon.svg": "icon.svg"}
 
 
 def clean_location(value):
@@ -207,6 +207,34 @@ class GameStore:
         return True
 
     MAX_HP = {"crate": 60, "table": 100, "window": 35, "chair": 60, "sofa": 150, "coffee_table": 100}
+    MOVABLE = {"crate": ((-1.4,.45,-2.05),(.9,.9,.9)), "table": ((2.25,.39,-1.7),(1.6,.78,.85)), "chair": ((2.15,.5,.15),(.86,1,.9)), "sofa": ((-3.32,.55,2.84),(2.5,1.1,1.4)), "coffee_table": ((-3.3,.25,1.22),(1.4,.5,.76))}
+    @classmethod
+    def placement(cls, db, oid, position):
+        if not isinstance(oid,str) or oid not in cls.MOVABLE or db.execute("SELECT hp FROM objects WHERE id=?",(oid,)).fetchone()[0]<=0:
+            raise ValueError("Gegenstand nicht bewegbar")
+        if not isinstance(position,list) or len(position)!=3 or any(type(v) not in (int,float) or not math.isfinite(v) or abs(v)>10 for v in position):
+            raise ValueError("Ungueltige Position")
+        size=cls.MOVABLE[oid][1]; p=[round(v,4) for v in position]
+        # Explicit placement is upright on the room floor or lower safety level.
+        if abs(p[0])+size[0]/2>4.84 or abs(p[2])+size[2]/2>4.84 or min(abs(p[1]-size[1]/2),abs(p[1]-size[1]/2+1.35))>.015:
+            raise ValueError("Position ausserhalb der Raumflaeche")
+        floor=wall_damage.WALLS['surface_0']
+        removed={(c,r) for c,r in db.execute("SELECT col,row FROM wall_cells WHERE target='surface_0' AND stage>=?",(wall_damage.REMOVED,))}
+        lower=p[1]<size[1]/2-.5
+        for u,v in ((-1,-1),(-1,1),(1,-1),(1,1),(0,0)):
+            x=p[0]+u*size[0]*.45-floor['p'][0];z=p[2]+v*size[2]*.45-floor['p'][2]
+            missing=bool(removed) and wall_damage.nearest(floor,x,z) in removed
+            if missing!=lower:raise ValueError("Stellplatz nicht durchgehend begehbar")
+        saved={k:json.loads(v) for k,v in db.execute("SELECT id,position FROM placements")}
+        def overlaps(q,t):return all(abs(p[i]-q[i])<(size[i]+t[i])/2-.015 for i in range(3))
+        hp=dict(db.execute("SELECT id,hp FROM objects"))
+        for k,(q,t) in cls.MOVABLE.items():
+            if k!=oid and hp[k]>0 and overlaps(saved.get(k,q),t):raise ValueError("Stellplatz belegt")
+        # Fixed room furniture (client additionally checks actual wall/floor geometry).
+        decor=dict(db.execute("SELECT target,stage FROM decor_damage"))
+        for k,q,t in [('surface_bed',(3.4,.6,3.71),(1.56,1.2,2.26)),('surface_nightstand',(2.24,.32,4.53),(.55,.64,.52)),('surface_wardrobe',(3.95,1.4,-3.62),(1.44,2.8,.74))]:
+            if decor.get(k,0)<wall_damage.REMOVED and overlaps(q,t):raise ValueError("Stellplatz belegt")
+        db.execute("INSERT INTO placements VALUES (?,?) ON CONFLICT(id) DO UPDATE SET position=excluded.position",(oid,json.dumps(p)))
     def __init__(self, path):
         self.path = path / "world.sqlite3"
         with closing(sqlite3.connect(self.path)) as db, db:
@@ -217,12 +245,15 @@ class GameStore:
                 db.execute("ALTER TABLE impact_marks ADD COLUMN severity INTEGER NOT NULL DEFAULT 1")
             db.execute("CREATE INDEX IF NOT EXISTS impact_target ON impact_marks(target)")
             wall_damage.create_schema(db)
+            db.execute("CREATE TABLE IF NOT EXISTS room_settings (id INTEGER PRIMARY KEY CHECK(id=1), lights_on INTEGER NOT NULL)")
+            db.execute("INSERT OR IGNORE INTO room_settings VALUES (1,1)")
+            db.execute("CREATE TABLE IF NOT EXISTS placements (id TEXT PRIMARY KEY, position TEXT NOT NULL)")
             db.execute("INSERT OR IGNORE INTO progress VALUES (1,0)")
             db.executemany("INSERT OR IGNORE INTO objects VALUES (?,?)", self.MAX_HP.items())
     def state(self):
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("BEGIN")
-            return {"objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0]), "walls": wall_damage.state(db), "decor": dict(db.execute("SELECT target,stage FROM decor_damage")), "marks": [{"id":i,"target":t,"point":json.loads(p),"normal":json.loads(n),"severity":max(1,int(s or 1))} for i,t,p,n,s in db.execute("SELECT id,target,point,normal,severity FROM impact_marks ORDER BY id")]}
+            return {"lights_on": bool(db.execute("SELECT lights_on FROM room_settings WHERE id=1").fetchone()[0]), "placements": {k:json.loads(v) for k,v in db.execute("SELECT id,position FROM placements")}, "objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0]), "walls": wall_damage.state(db), "decor": dict(db.execute("SELECT target,stage FROM decor_damage")), "marks": [{"id":i,"target":t,"point":json.loads(p),"normal":json.loads(n),"severity":max(1,int(s or 1))} for i,t,p,n,s in db.execute("SELECT id,target,point,normal,severity FROM impact_marks ORDER BY id")]}
     def action(self, data, scans):
         if not isinstance(data, dict): raise ValueError("JSON object required")
         op = data.get("action")
@@ -234,6 +265,13 @@ class GameStore:
             if op == "unlock":
                 if len(scans.list()) < 3: raise ValueError("Mindestens drei Fotos erforderlich")
                 db.execute("UPDATE progress SET unlocked=1 WHERE id=1")
+            elif op == "toggle_light":
+                if data.get("id")!="surface_switch":raise ValueError("Unbekannter Lichtschalter")
+                row=db.execute("SELECT stage FROM decor_damage WHERE target='surface_switch'").fetchone()
+                if row and row[0]>=wall_damage.REMOVED:raise ValueError("Lichtschalter zerstoert; zuerst reparieren")
+                db.execute("UPDATE room_settings SET lights_on=1-lights_on WHERE id=1")
+            elif op == "place_object":
+                self.placement(db,data.get("id"),data.get("position"))
             elif op in ("hit", "repair"):
                 oid = data.get("id")
                 if not isinstance(oid,str) or oid not in self.MAX_HP: raise ValueError("Unbekanntes Objekt")
@@ -285,7 +323,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     game = GameStore(store.path) # preserve the original legacy world unchanged in personal mode
     capture = CaptureStore(store.path) if world_capture else None
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.7.3"
+        server_version = "SecondLive/0.7.4"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -296,7 +334,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Permissions-Policy", "camera=(self), geolocation=(self), xr-spatial-tracking=(self)")
-            self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' blob: data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+            self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self'; worker-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' blob: data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 
         def send_data(self, status, body: bytes, content_type="application/json; charset=utf-8", cache_control="no-store"):
             self.send_response(status)
@@ -433,6 +471,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     self.send_json(404, {"error": "Datei fehlt. Docker-Image bauen."})
                     return
                 typ, _ = mimetypes.guess_type(filepath.name)
+                if filepath.suffix == ".wasm": typ = "application/wasm"
                 self.send_data(200, filepath.read_bytes(), (typ or "application/octet-stream") + ("; charset=utf-8" if typ and (typ.startswith("text/") or typ.endswith("javascript")) else ""))
             elif path.startswith("/assets/polyhaven/"):
                 root = (WEB / "assets" / "polyhaven").resolve()
@@ -449,7 +488,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.7.3", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.7.4", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":

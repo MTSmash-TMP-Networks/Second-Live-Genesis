@@ -8,7 +8,7 @@ MODULES = ('server.py', 'updater_api.py', 'wall_damage.py', 'world_capture.py',
            'capture_compute.py', 'runtime_permissions.py')
 REQUIRED_WEB = ('index.html', 'game.js', 'audio.js', 'capture.js', 'device-access.js', 'scanner.html',
                 'engine/renderer.bundle.js', 'engine/capture-view.bundle.js', 'engine/wall_layout.json',
-                'assets/polyhaven/manifest.json')
+                'assets/polyhaven/manifest.json', 'assets/decoders/basis_transcoder.js', 'assets/decoders/basis_transcoder.wasm')
 
 
 def app_paths(root):

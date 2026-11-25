@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.4 – Room Interaction & Host Lifecycle
+- E / Touch schaltet die Raumbeleuchtung persistent; Tageslicht bleibt erhalten. Lichtschalter ausserhalb der Tuerzarge.
+- Fuenf bewegliche Spielobjekte aufheben und auf freiem Boden abstellen; validierte Position in der persoenlichen Welt gespeichert.
+- Originaltuer: lokale Meshopt-/KTX2-Decoder, korrigierte Zarge und Seitenflaechen, texturierter Fallback.
+- stop.sh beendet den zugeordneten Host-Updater sowie Spiel-/HTTPS-Container unter gemeinsamer Operationssperre; ein aktiver Build wird nicht abgebrochen.
+- start.sh startet vorhandene Images ohne erneuten Build; --build bleibt explizit verfuegbar.
+- Projektbezogene Bereinigung alter Update-Image-Tags nach erfolgreichem Update bzw. Stopp; aktuelles Image, Rollback, Containerreferenzen, Volumes und fremde Projekte bleiben erhalten.
+- Host-Dateien bei vorhandener Installation einmalig manuell aktualisieren.
+
 ## 0.7.3 – Mobile Capture / iOS HTTPS
 - QR-Kopplung erfordert eine erreichbare HTTPS-Adresse; HTTP, Loopback und ungueltige Ports werden abgewiesen.
 - Sichtbarer sicherer Browserkontext, dauerhaft sichtbare Geraetefehler, GPS-Wiederholungsversuch mit Genauigkeitspruefung.

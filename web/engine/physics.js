@@ -41,8 +41,8 @@ export class RoomPhysics {
       if(!state.objects[id]){if(e){this.remove(e);this.entries.delete(id);}continue;}
       if(!e||e.ref!==b){if(e)this.remove(e);e=this.add(b.p,spec.s,id==='window');e.ref=b;this.entries.set(id,e);}
       if(id==='window')continue;
-      if(id===held){if(!e.held){e.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased,true);e.col.setSensor(true);e.held=true;}e.body.setNextKinematicTranslation(vector(holdPoint));}
-      else if(e.held){e.body.setBodyType(RAPIER.RigidBodyType.Dynamic,true);e.col.setSensor(false);e.body.setLinvel(vector(b.v),true);e.body.setAngvel({x:1,y:1.6,z:.8},true);e.held=false;}
+      if(id===held){if(!e.held){e.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased,true);e.col.setSensor(true);e.held=true;}e.body.setNextKinematicTranslation(vector(holdPoint));e.body.setNextKinematicRotation({x:0,y:0,z:0,w:1});}
+      else if(e.held){e.body.setBodyType(RAPIER.RigidBodyType.Dynamic,true);e.col.setSensor(false);e.body.setLinvel(vector(b.v),true);e.body.setAngvel({x:0,y:0,z:0},true);e.held=false;}
     }
     const current=new Set(debris);
     for(const [b,e] of this.fragments)if(!current.has(b)){this.remove(e);this.fragments.delete(b);}

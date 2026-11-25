@@ -1,7 +1,7 @@
-Second Live v0.7.3 - Mobile Capture / iOS HTTPS Hotfix
-Basis: v0.7.2. 99 Python-Tests und 23 Subtests erfolgreich (pytest).
-Node: HTTPS-/QR-Validierung, Kamera-Fallback, keine Wiederholung bei verweigerter Berechtigung, GPS-Genauigkeit und Wiederholungsversuch erfolgreich (API-Testdoubles).
-Capture-Qualitaet, Desktop-/Touch-Client-Simulation und Syntax erfolgreich. Scanner-HTML und IDs geprueft.
-Server: HTTPS-QR-Validierung und Auslieferung des neuen JavaScript-Moduls durch lokale HTTP-Integrationstests geprueft.
-Kein echter Docker-/Caddy-/iOS-/Safari-Kameratest in dieser Umgebung. HTTPS-Aktivierung und Vertrauen der eigenen CA muessen auf dem Host bzw. Testgeraet erfolgen.
-Der Scanner ist weiterhin an Einwilligung, Scanauftrag und serverseitige Zustandspruefung gebunden. Keine Umgehung von Browserberechtigungen. Vorhandene Daten und Host-Updater unveraendert.
+Second Live v0.7.4 - Room Interaction & Host Lifecycle
+115 Python-Tests und 31 Subtests erfolgreich (pytest).
+Host-Lifecycle: Projektzuordnung, Operationssperren, sicherer echter Agent-Prozess-Stopp, no-build-Start, Cleanup und Rollback-Schutz mit Docker-CLI-Testdoubles.
+Raum-Interaktion: additive SQLite-Migration, individueller Lichtzustand, freier Stellplatz, persistente Position, ungueltige Positionen/zerstoerte Objekte abgelehnt.
+Desktop-/Touch-Simulation inklusive Lichtschalter, Aufheben und Abstellen erfolgreich. Node: Audio, Kameraqualitaet, HTTPS/GPS, Wandpartitionen, Handmesh, optionale Foto-Assets. Bash-/JS-Syntax geprueft.
+Door: GLB-Validator akzeptiert Meshopt/KTX2 und Meshopt-Fallback-Buffer. Decoder-Dateien sind im Dockerfile aus Three.js 0.170.0 vorgesehen. Tevy-Download wegen DNS-Sperre nicht moeglich. Echte Docker-, WebGL- und VR-Abnahme offen; visuelle Originaltuer und Physikbewegungen nicht live getestet.
+Host-Hotfix separat installieren: keine automatische Ersetzung der Host-Skripte durch Ingame-Updater. Stopp wartet nicht auf einen laufenden Build, sondern verweigert konkurrierenden Stopp. Keine globale Docker-/BuildKit-Bereinigung.

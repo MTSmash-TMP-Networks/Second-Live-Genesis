@@ -2,6 +2,8 @@ export { RoomPhysics } from './physics.js';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -100,7 +102,7 @@ export class RoomRenderer {
 
     const ceilingBounce=new THREE.PointLight(0xffefd9,2.0,10,2);
     ceilingBounce.position.set(0,2.75,.2);
-    this.scene.add(ceilingBounce);
+    this.scene.add(ceilingBounce);this.ceilingLight=ceilingBounce;
 
     this.cursor=0;this.width=0;this.height=0;this.dpr=0;
     this.onLost=e=>{e.preventDefault();this.status('Grafikkontext verloren. Bitte Seite neu laden.');};
@@ -338,6 +340,9 @@ export class RoomRenderer {
     hdri.dispose();pmrem.dispose();
 
     const loader=new GLTFLoader(manager);
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    // Local, pinned Three.js Basis transcoder; no browser CDN dependency.
+    if(manifest.door_models&&Object.keys(manifest.door_models).length){try{this.ktx2=new KTX2Loader(manager).setTranscoderPath('/assets/decoders/').setWorkerLimit(2).detectSupport(this.renderer);loader.setKTX2Loader(this.ktx2);}catch(e){console.warn('Optional door texture decoder unavailable',e);}}
     await this.loadRealism(manifest,path,loader,manager);
     await this.loadM16(manifest,path,manager);
     this.ensureInventoryPreviews();
@@ -372,7 +377,7 @@ export class RoomRenderer {
     const surfaceGroups=new Map();
     for(const o of objects){
       const m=new THREE.Mesh(this.geometry(o),this.material(o));
-      this.place(m,o);m.castShadow=o.m!=='glass';m.receiveShadow=true;this.staticGroup.add(m);
+      this.place(m,o);if(o.switchRocker)this.switchRocker=m;m.castShadow=o.m!=='glass';m.receiveShadow=true;this.staticGroup.add(m);
       if(o.surfaceId){this.impacts.register(o.surfaceId,m,o.m==='wooden_floor_01'||o.surfaceId==='surface_wardrobe'?'wood':'wall');this.walls.register(o.surfaceId,m);}
       if(o.groupSurface){let g=surfaceGroups.get(o.groupSurface);if(!g){g=new THREE.Group();g.name=o.groupSurface;this.staticGroup.add(g);surfaceGroups.set(o.groupSurface,g);this.impacts.register(o.groupSurface,g,'wood');}g.add(m);}
       if(o.parentSurface){const parent=this.impacts.targets.get(o.parentSurface)?.root;if(parent){parent.updateWorldMatrix(true,false);m.updateWorldMatrix(true,false);parent.attach(m);}}
@@ -431,6 +436,17 @@ export class RoomRenderer {
 
   place(mesh,o){mesh.position.set(...o.p);if(o.q)mesh.quaternion.set(...o.q);else mesh.rotation.set(0,o.r||0,0);}
   setDoorOpen(open){this.portalDoor?.setOpen(open);}
+  setRoomLight(on,decor={}){
+    const ceiling=on&&(decor.surface_ceilinglamp||0)<4;
+    if(this.ceilingLight)this.ceilingLight.intensity=ceiling?2:0;
+    if(this.ceilingDiffuser)this.ceilingDiffuser.material.emissiveIntensity=ceiling?.35:0;
+    const lamp=on&&(decor.surface_lamp||0)<4&&(decor.surface_nightstand||0)<4;
+    if(this.bedsideLight)this.bedsideLight.intensity=lamp?6:0;
+    if(this.bedsideShade)this.bedsideShade.emissiveIntensity=lamp?.17:0;
+    if(this.bedsideBulb)this.bedsideBulb.emissiveIntensity=lamp?1.3:0;
+    if(this.switchRocker)this.switchRocker.rotation.x=on?-.14:.14;
+    // Window/daylight sources deliberately remain active.
+  }
   begin(){this.cursor=0;for(const m of Object.values(this.models))m.root.visible=false;for(const m of Object.values(this.contactShadows))m.visible=false;}
   chipGeometry(variant){
     const k=(variant||0)%4;if(!this.chipGeometries.has(k)){

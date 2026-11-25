@@ -1,8 +1,15 @@
 # Second Live – World Genesis
 
-**v0.7.3 · Mobile Capture & iOS HTTPS / World Capture CPU-Testversion**
+**v0.7.4 · Room Interaction & Host Lifecycle / World Capture CPU-Testversion**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spieler sollen ihre gemeinsame Welt aus realen Aufnahmen erschaffen, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.7.4
+
+- E / Touch-Interaktion: Lichtschalter an der freien Wand rechts neben der Tuer anvisieren. Decken- und Nachttischbeleuchtung schalten gemeinsam; Tageslicht bleibt aktiv. Der Lichtzustand bleibt pro persoenlichem Raum gespeichert.
+- Kiste, Tisch, Stuhl, Sofa oder Couchtisch aus kurzer Distanz anvisieren, E zum Aufheben, bewegen, E zum Abstellen auf freier Bodenflaeche. Die Waffe wird abgelegt. Bei blockiertem Stellplatz weiter bewegen. Die Position nach ausdruecklichem Abstellen wird persistent; durch andere Physikinteraktionen verursachte spontane Bewegungen sind weiterhin lokal. Keine beweglichen Fenster, keine statischen Betten/Schraenke in diesem Schritt.
+- Meshopt- und KTX2-Decoder fuer die komprimierte Originaltuer, lokal aus dem gepinnten Three.js-Paket. Schmale Tuerumrandung, buendige seitliche Wandflaechen und versetzter Lichtschalter; modellierter Ersatz bleibt bei nicht ladbaren Originalassets. Scanportal bleibt gesperrt bis zur bisherigen Freigabe.
+- stop.sh und Wiederverwendung bestehender Docker-Images; Host-Hotfix siehe unten.
 
 ## Neu in 0.7.2
 
@@ -26,6 +33,19 @@ Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphon
 - Privater Scanauftrag: Einwilligung erteilen, Scan starten, Kamera öffnen. GPS ist dort optional. Gemeinsame geografische Scans erfordern weiterhin eine gültige Standortmessung mit höchstens 50 m Ungenauigkeit. Bei nicht verfügbarer Live-Kamera steht auf vertrauenswürdigem HTTPS die native Fotoaufnahme zur Verfügung. Nur unterstützte Bildformate lassen sich importieren.
 - Ab 0.7.3 prüft der Scanner den sicheren Browserkontext, verhindert HTTP-/localhost-QR-Ziele, zeigt Gerätefehler dauerhaft und bietet einen zweiten Ortungsversuch. HTTPS wird nicht durch JavaScript simuliert; iOS muss die Berechtigungen erteilen. Vor öffentlicher Freigabe ein regulär vertrauenswürdiges Zertifikat und die vorgesehene Authentifizierung einsetzen.
 
+## Start, Stopp und Image-Verwaltung (0.7.4)
+
+Die neuen Host-Skripte sind Teil des GitHub-Projekts. Bei einer vorhandenen Installation mit Ingame-Updater muessen `start.sh`, `stop.sh`, `scripts/host_updater.py`, `scripts/host_cleanup.py` und `scripts/stop_host.py` einmalig im **urspruenglichen Installationsordner** aktualisiert werden. Der Ingame-Updater ersetzt die Host-Dateien bewusst nicht. Die vorhandenen `scripts/start_guard.py`, `scripts/restart_updater.py` und `updater_api.py` werden weiterverwendet. Host-Hotfix siehe `docs/HOST-LIFECYCLE.md`.
+
+```sh
+./stop.sh                 # kontrolliert beenden und alte Update-Images bereinigen
+./start.sh                # vorhandenes Image starten; nur bei fehlendem Image bauen
+./start.sh --build        # gewuenschter Neu-Build (z.B. nach manueller Quellcode-Aenderung)
+./stop.sh --keep-images   # nur stoppen
+```
+
+Bei einer mit sudo gestarteten Linux-Installation dieselben Befehle mit sudo ausfuehren. Der Stopp verwendet Python 3 auf dem Host und dieselben Sperren wie der Updater. Ein aktiver Build, Containerwechsel oder Rollback wird nicht unterbrochen. Der Host-Updater wird beendet, ausstehende Requests werden verworfen, Spiel- und HTTPS-Container werden gestoppt. Keine Volumes oder Spielstaende werden geloescht. Nicht mehr benoetigte Second-Live-Update-Tags werden nach erfolgreichem Update und beim Stopp gezielt ohne force entfernt; laufende und gestoppte Container-Images, aktive Version und letztes Rollback bleiben erhalten. Keine globale Bereinigung von Docker/BuildKit, keine Loeschung der Release-Checkouts. Bei nicht eindeutig zuordenbaren Containern oder offenem Wechsel-Journal bleibt die Bereinigung aus.
+
 ## Schnellstart
 
 Voraussetzungen: Docker Engine oder Docker Desktop mit Compose v2 und `up --wait-timeout`, Internet für den Erstbuild, WebGL 2. Für den Auto-Updater zusätzlich Python 3 (mindestens 3.10) und Git **auf dem Docker-Host** (Linux/macOS).
@@ -39,7 +59,7 @@ chmod +x start.sh
 
 Die `.env`, ein zufälliger Scanner-/optionaler Spielschlüssel sowie ein unabhängiger Update-Admin-Schlüssel werden automatisch angelegt. Vorhandene Schlüssel, Port, HTTPS-Einstellungen und Compose-Projektname bleiben unverändert. Das Spiel ist unter `http://localhost:8765` bzw. `http://SERVER-IP:8765` im WLAN erreichbar. `start.sh --lan` öffnet eine bestehende Loopback-Bindung. Docker und Firewall werden nicht automatisch installiert oder verändert. Bei nicht interaktivem Start stehen die Schlüssel nur in `.env`.
 
-**Update von älteren ZIP-Versionen:** Dateien in den bisherigen Projektordner kopieren, `.env` und Docker-Volume unverändert lassen; `chmod +x start.sh && ./start.sh`. Ordnername/Compose-Projektname beibehalten, damit das existierende Datenvolume verwendet wird. Nicht `docker compose down -v` ausführen.
+**Update von älteren ZIP-Versionen:** Dateien in den bisherigen Projektordner kopieren, `.env` und Docker-Volume unverändert lassen; `chmod +x start.sh stop.sh && ./start.sh --build` (ohne aktive Ingame-Update-Konfiguration). Ordnername/Compose-Projektname beibehalten, damit das existierende Datenvolume verwendet wird. Nicht `docker compose down -v` ausführen.
 
 ## World Capture – erster CPU-Test
 
@@ -62,7 +82,7 @@ Im Startbildschirm oder virtuellen Smartphone (`P` bzw. Handy-Button) **System-U
 - GitHub `main` ist eine **vertrauenswürdige Softwarequelle**. Nur vertrauenswürdige Maintainer dürfen dort Änderungen zusammenführen. Das ist kein kryptografisch signiertes Release-System. Der Spielcontainer erhält keinen Docker-Socket und keinen Zugriff auf das Host-Dateisystem außerhalb der begrenzten Auftrags-/Statusbrücke. Die Brücke kann nur Check und Install des bestätigten Commits auslösen, keine freien Befehle oder URLs.
 - Seit 0.6.5 wird das gebaute Image vor dem Wechsel in einem isolierten Testcontainer (ohne Produktionsdaten, Netzwerk und veröffentlichte Ports) gestartet. Danach werden exakte Image-ID, Revision und Docker-Health separat geprüft. Fehler werden vor dem Rollback gesichert. Für eine bestehende Installation: die Hostdateien `scripts/host_updater.py` und `scripts/restart_updater.py` aktualisieren und `python3 scripts/restart_updater.py` im bisherigen Projektordner ausführen, erst nach Ende des laufenden Updates/Rollbacks. Kein Container-Neubau hierfür erforderlich.
 - Logs auf dem Host: `tail -n 120 .sl-update/build.log .sl-update/agent.log`; zusätzlich `.sl-update/diagnostics.log` ab 0.6.5. Die vorigen Build-/Diagnoselogs werden als `*.previous.log` aufbewahrt. Der Logordner enthält keine öffentlichen Download-Links. Wenn die Statusanzeige offline ist, `./start.sh` auf dem Host wiederholen; `start.sh` erkennt parallele Updates und verweigert den konkurrierenden Start. Diagnose: `docker compose ps`.
-- Beim Update bleiben gespeicherte Daten unverändert im Volume. Ein Image-Rollback macht keine zukünftigen inkompatiblen DB-Migrationen rückgängig. Vor größeren Updates Daten sichern. Alte Images/Checkouts werden nicht automatisch gelöscht, damit Wiederherstellung möglich bleibt; Speicherverbrauch am Host beobachten.
+- Beim Update bleiben gespeicherte Daten unverändert im Volume. Ein Image-Rollback macht keine zukünftigen inkompatiblen DB-Migrationen rückgängig. Vor größeren Updates Daten sichern. Ab Host-Updater 0.7.4 werden alte, eindeutig zugeordnete, nicht mehr benoetigte Update-Image-Tags nach erfolgreichem Wechsel gezielt entfernt. Release-Checkouts und globaler Build-Cache bleiben erhalten; Speicherverbrauch am Host beobachten.
 
 ## Desktop / Smartphone / VR
 

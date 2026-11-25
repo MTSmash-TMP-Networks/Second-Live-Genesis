@@ -13,7 +13,7 @@ URLS={q:SOURCE+'/v1/'+lod+'.glb' for q,lod in [('1k','lod1'),('2k','lod0')]}
 LIMIT=12*1024*1024
 
 def download(url):
-    with urlopen(Request(url,headers={'User-Agent':'SecondLive/0.7.1 (optional CC0 asset)'}),timeout=15) as response:
+    with urlopen(Request(url,headers={'User-Agent':'SecondLive/0.7.4 (optional CC0 asset)'}),timeout=15) as response:
         p=urlsplit(response.geturl())
         if p.scheme!='https' or p.hostname not in ('tevy.dev','www.tevy.dev') or p.username or p.password:raise ValueError('Unexpected asset host')
         raw=response.read(LIMIT+1)
@@ -28,7 +28,7 @@ def validate(raw):
     data=json.loads(raw[20:20+n]);
     if not data.get('meshes') or not data.get('scenes'):raise ValueError('Empty asset')
     if any('uri' in item for key in ('buffers','images') for item in data.get(key,[])):raise ValueError('Only embedded resources allowed')
-    if any(ext in data.get('extensionsRequired',[]) for ext in ('KHR_draco_mesh_compression','EXT_meshopt_compression','KHR_texture_basisu')):raise ValueError('Unsupported compressed asset')
+    if any(ext in data.get('extensionsRequired',[]) for ext in ('KHR_draco_mesh_compression',)):raise ValueError('Unsupported compressed asset')
     # Reject malformed chunks, including missing embedded binary buffer.
     offset=20+n;binary=0
     while offset<len(raw):
@@ -37,7 +37,10 @@ def validate(raw):
         if offset+size>len(raw):raise ValueError('Truncated data')
         if kind==b'BIN\x00':binary+=size
         offset+=size
-    if sum(b.get('byteLength',0) for b in data.get('buffers',[]))>binary:raise ValueError('Missing binary data')
+    buffers=data.get('buffers',[]);
+    if buffers and buffers[0].get('byteLength',0)>binary:raise ValueError('Missing binary data')
+    for b in buffers[1:]:
+        if b.get('extensions',{}).get('EXT_meshopt_compression',{}).get('fallback') is not True:raise ValueError('Unexpected additional buffer')
     return data
 
 def extend(root,fetch=download):

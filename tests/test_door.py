@@ -2,8 +2,10 @@ import json,struct,tempfile,unittest
 from pathlib import Path
 from scripts.download_door import extend,validate,URLS
 
-def glb(external=False):
+def glb(external=False,extensions=None,fallback=False):
     data={'asset':{'version':'2.0'},'meshes':[{}],'scenes':[{}],'buffers':[{'byteLength':4}]}
+    if extensions:data['extensionsRequired']=extensions
+    if fallback:data['buffers'].append({'byteLength':100,'extensions':{'EXT_meshopt_compression':{'fallback':True}}})
     if external:data['images']=[{'uri':'https://invalid/image.png'}]
     j=json.dumps(data).encode();j+=b' '*(-len(j)%4)
     content=struct.pack('<I4s',len(j),b'JSON')+j+struct.pack('<I4s',4,b'BIN\0')+b'1234'
@@ -13,6 +15,10 @@ class TestDoor(unittest.TestCase):
         self.assertTrue(validate(glb())['meshes'])
         for invalid in (b'bad',glb(True),glb()[:-1]):
             with self.assertRaises(ValueError):validate(invalid)
+    def test_compressed_door_validation(self):
+        data=validate(glb(extensions=['EXT_meshopt_compression','KHR_texture_basisu'],fallback=True))
+        self.assertEqual(len(data['buffers']),2)
+        with self.assertRaises(ValueError):validate(glb(extensions=['KHR_draco_mesh_compression']))
     def test_optional_download(self):
         with tempfile.TemporaryDirectory() as temp:
             p=Path(temp);(p/'manifest.json').write_text(json.dumps({'files':[],'bytes':0}))

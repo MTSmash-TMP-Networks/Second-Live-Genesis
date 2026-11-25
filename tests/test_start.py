@@ -16,6 +16,9 @@ case "$*" in
   'compose version'|'info') exit 0 ;;
   'compose up --help') echo --wait-timeout; exit 0 ;;
   *' config --quiet') exit 0 ;;
+  *' config --images second-live') echo "${FAKE_GAME_IMAGE:-genesis-second-live}"; exit 0 ;;
+  'image inspect '*) exit "${FAKE_IMAGE_MISSING:-1}" ;;
+  *' up -d --no-build --wait --wait-timeout 180') exit "${FAKE_UP_STATUS:-0}" ;;
   *' up -d --build --wait --wait-timeout 180') exit "${FAKE_UP_STATUS:-0}" ;;
   *' ps'|*' logs --tail 60') exit 0 ;;
   *' cp https:/data/caddy/pki/authorities/local/root.crt '*)
@@ -60,11 +63,19 @@ class StartTests(unittest.TestCase):
         self.assertIn('http://192.168.20.42:8765', first.stdout)
         token = re.search(r'SECOND_LIVE_TOKEN=(\w+)', saved).group(1)
         self.assertNotIn(token, first.stdout)
-        second = self.run_start()
+        second = self.run_start(FAKE_IMAGE_MISSING='0')
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertEqual(saved, self.envfile.read_text())
-        self.assertEqual(self.log.read_text().count('up -d --build --wait'), 2)
+        self.assertEqual(self.log.read_text().count('up -d --build --wait'), 1)
+        self.assertEqual(self.log.read_text().count('up -d --no-build --wait'), 1)
         self.assertNotIn('down', self.log.read_text())
+
+    def test_explicit_rebuild_and_active_tag(self):
+        self.assertEqual(self.run_start(FAKE_IMAGE_MISSING='0', FAKE_GAME_IMAGE='second-live-update-genesis:abc').returncode, 0)
+        self.assertIn('image inspect second-live-update-genesis:abc',self.log.read_text())
+        self.assertIn('up -d --no-build --wait',self.log.read_text())
+        self.assertEqual(self.run_start('--build',FAKE_IMAGE_MISSING='0').returncode,0)
+        self.assertEqual(self.log.read_text().count('up -d --build --wait'),1)
 
     def test_preserve_existing_settings_and_opt_in_lan(self):
         self.envfile.write_text('# custom\nCOMPOSE_PROJECT_NAME=genesis\nSECOND_LIVE_HOST=127.0.0.1\nSECOND_LIVE_PORT=9765\nSECOND_LIVE_TOKEN="' + 'a'*48 + '" # keep\nCUSTOM=value\n')

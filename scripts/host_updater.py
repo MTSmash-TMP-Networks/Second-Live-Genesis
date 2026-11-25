@@ -19,12 +19,13 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from updater_api import atomic_json, SHA
+from host_cleanup import cleanup_images
 
 REPO = 'https://github.com/MTSmash-TMP-Networks/Second-Live-Genesis.git'
 REF = 'refs/heads/main'
 LABEL = 'org.opencontainers.image.revision'
 BUSY = {'checking', 'downloading', 'building', 'switching', 'rollback'}
-AGENT_VERSION = '0.6.5'
+AGENT_VERSION = '0.7.4'
 REQUIRED = ('Dockerfile', 'server.py', 'updater_api.py', 'web/index.html', 'scripts/host_updater.py', 'UPDATE_PROTOCOL')
 
 
@@ -308,6 +309,14 @@ finally:
         self.transaction.unlink(missing_ok=True)
         self.previous.unlink(missing_ok=True)
         self.publish(state='success',current=sha,latest=sha,message='Update erfolgreich installiert. Spiel neu laden.')
+        # The new and rollback images are committed. Cleanup is best-effort and
+        # cannot turn an otherwise successful update into a rollback.
+        try:
+            removed,warnings=cleanup_images(self.root,self.project,self.run)
+            print(f'Image-Bereinigung: {len(removed)} alte Tags entfernt',flush=True)
+            for warning in warnings: print('Image-Bereinigung:',warning,flush=True)
+        except Exception as exc:
+            print('Image-Bereinigung uebersprungen:',exc,flush=True)
 
     def restore_previous(self):
         if self.previous.exists(): os.replace(self.previous,self.active)

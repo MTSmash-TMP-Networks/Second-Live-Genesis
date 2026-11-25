@@ -58,13 +58,13 @@ function nightstand(r,g){const wood=r.textured.oak_veneer_01,paint=new THREE.Mes
 function lamp(r,g,baseY){
   const brass=new THREE.MeshStandardMaterial({color:0x9d8b73,metalness:.62,roughness:.38});
   const ceramic=new THREE.MeshStandardMaterial({color:0xd6c6b5,roughness:.48});
-  const shade=surface(r,0xf4e7d1,[3,2]);shade.emissive=new THREE.Color(0xffcc88);shade.emissiveIntensity=.17;
+  const shade=surface(r,0xf4e7d1,[3,2]);shade.emissive=new THREE.Color(0xffcc88);shade.emissiveIntensity=.17;r.bedsideShade=shade;
   const body=new THREE.Mesh(new THREE.LatheGeometry([new THREE.Vector2(0,0),new THREE.Vector2(.09,0),new THREE.Vector2(.12,.035),new THREE.Vector2(.115,.09),new THREE.Vector2(.075,.16),new THREE.Vector2(.045,.22),new THREE.Vector2(.038,.25),new THREE.Vector2(0,.25)],32),ceramic);body.position.y=baseY;body.castShadow=true;body.receiveShadow=true;g.add(body);
   cylinder(g,.021,.021,.14,[0,baseY+.30,0],brass);
   const s=new THREE.Mesh(new THREE.CylinderGeometry(.12,.20,.25,40,1,true),shade);s.position.y=baseY+.42;s.castShadow=true;s.receiveShadow=true;g.add(s);
   for(const [radius,y] of [[.12,.545],[.20,.295]]){const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,.003,6,40),brass);ring.rotation.x=Math.PI/2;ring.position.y=baseY+y;g.add(ring);}
-  const light=new THREE.PointLight(0xffe0b0,6,3.2,2);light.position.set(0,baseY+.36,0);g.add(light);
-  const bulb=new THREE.Mesh(new THREE.SphereGeometry(.044,12,8),new THREE.MeshBasicMaterial({color:0xffe5b2}));bulb.position.copy(light.position);g.add(bulb);
+  const light=new THREE.PointLight(0xffe0b0,6,3.2,2);light.position.set(0,baseY+.36,0);g.add(light);r.bedsideLight=light;
+  const bulb=new THREE.Mesh(new THREE.SphereGeometry(.044,12,8),new THREE.MeshStandardMaterial({color:0xe7ddca,emissive:0xffe5b2,emissiveIntensity:1.3,roughness:.6}));bulb.position.copy(light.position);g.add(bulb);r.bedsideBulb=bulb.material;
 }
 function rug(r,g){const m=surface(r,0xa5a095,[7,6]);const o=rounded(g,[3.2,.018,2.22],[-.65,.012,1.4],m,.008);o.castShadow=false;r.impacts?.register('surface_rug',o,'fabric');
   const border=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([[-2.19,.023,.36],[.89,.023,.36],[.89,.023,2.44],[-2.19,.023,2.44]].map(p=>new THREE.Vector3(...p))),new THREE.LineBasicMaterial({color:0x77756b}));g.add(border);
@@ -92,5 +92,5 @@ export async function buildRoomDecor(r,manifest,path,loader){
     shadow(r,group,[0,0,0],slot.s[0]*1.35,slot.s[2]*1.30);
   }
   // Soft ceiling fixture with an actual curved diffuser.
-  const diffuser=new THREE.Mesh(new THREE.SphereGeometry(.37,24,12),new THREE.MeshStandardMaterial({color:0xf6f2e8,roughness:.48,emissive:0xffeac9,emissiveIntensity:.16}));diffuser.scale.y=.28;diffuser.position.set(0,2.86,0);g.add(diffuser);r.impacts?.register('surface_ceilinglamp',diffuser,'glass');
+  const diffuser=new THREE.Mesh(new THREE.SphereGeometry(.37,24,12),new THREE.MeshStandardMaterial({color:0xf6f2e8,roughness:.48,emissive:0xffeac9,emissiveIntensity:.16}));diffuser.scale.y=.28;diffuser.position.set(0,2.86,0);g.add(diffuser);r.ceilingDiffuser=diffuser;r.impacts?.register('surface_ceilinglamp',diffuser,'glass');
 }

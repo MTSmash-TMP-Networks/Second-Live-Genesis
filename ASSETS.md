@@ -78,3 +78,6 @@ Die ausgewählten Poly-Haven-IDs `residential_garden`, `service_pistol` und `bol
 - Wooden Interior Door (tevy), CC0 1.0, https://tevy.dev/models/wooden-interior-door – gepinnte GLB-Version v1 (LOD0 und LOD1). Optionaler Download beim Docker-Build; externe Originaldateien konnten in der Entwicklungsumgebung nicht abgerufen werden. Keine Pflichtabhängigkeit.
 - Spielgeräusche: eigene prozedurale Spiel-Soundeffekte in web/audio.js; keine Originalaufnahmen realer Waffen, keine externen Audiodateien.
 - Virtuelles Smartphone: eigenes UI, keine Apple-Grafikdateien.
+
+### Door decoder update (0.7.4)
+The pinned CC0 door source documents meshopt geometry and KTX2 textures: https://tevy.dev/docs . The matching Three.js 0.170.0 decoder and Basis transcoder are served locally; Draco remains unsupported. The original GLB is optional and the local door remains available. Actual source GLB/WebGL validation still requires a live Docker/browser test.

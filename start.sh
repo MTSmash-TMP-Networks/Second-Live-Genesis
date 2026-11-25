@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Second Live v0.6.2 - local/LAN Docker launcher (Linux / macOS).
+# Second Live v0.7.4 - local/LAN Docker launcher (Linux / macOS).
 set -euo pipefail
 umask 077
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
@@ -13,7 +13,8 @@ fail() { printf 'FEHLER: %s\n' "$*" >&2; exit 1; }
 usage() {
   cat <<'HELP'
 Second Live - Docker-Start
-  ./start.sh                       Spiel bauen und starten (LAN, HTTP)
+  ./start.sh                       Vorhandenes Image starten (Erststart baut)
+  ./start.sh --build               Image ausdruecklich neu bauen
   ./start.sh --https               HTTPS mit lokaler CA aktivieren
   ./start.sh --https --lan-ip IP    HTTPS mit bestimmter Server-IP
   ./start.sh --lan                 Vorhandene Loopback-Bindung auf LAN umstellen
@@ -25,11 +26,13 @@ HELP
 https_requested=0
 lan_requested=0
 lan_override=''
+build_requested=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
     --https) https_requested=1; shift ;;
     --lan) lan_requested=1; shift ;;
+    --build) build_requested=1; shift ;;
     --lan-ip) [ "$#" -ge 2 ] || fail '--lan-ip benoetigt eine IPv4-Adresse.'; lan_override=$2; https_requested=1; shift 2 ;;
     *) fail "Unbekannte Option: $1 (siehe --help)" ;;
   esac
@@ -172,9 +175,18 @@ elif command -v git >/dev/null 2>&1 && [ -d .git ] && [ -z "$(git status --porce
 fi
 "${compose[@]}" config --quiet || fail 'Docker-Compose-Konfiguration ist ungueltig.'
 
-printf '\nSecond Live v0.6.2 - Docker-Build und Start\n'
-printf 'Beim ersten Build werden Three.js und Original-Assets geladen.\n'
-if ! "${compose[@]}" up -d --build --wait --wait-timeout 180; then
+# Reuse the selected image on ordinary starts, including after stop.sh.
+# config --images resolves both the default Compose tag and the updater override.
+game_image=$("${compose[@]}" config --images second-live) || fail 'Spiel-Image nicht ermittelbar.'
+[[ -n "$game_image" && ! "$game_image" =~ [[:space:]] ]] || fail 'Spiel-Image nicht eindeutig.'
+if [ "$build_requested" = 1 ] || ! docker image inspect "$game_image" >/dev/null 2>&1; then
+  build_flag=--build
+  printf '\nSecond Live - Docker-Build und Start\n'
+else
+  build_flag=--no-build
+  printf '\nSecond Live - Vorhandenes Image wird gestartet (kein Build)\n'
+fi
+if ! "${compose[@]}" up -d "$build_flag" --wait --wait-timeout 180; then
   printf '\nStart fehlgeschlagen. Containerstatus und letzte Logs:\n' >&2
   "${compose[@]}" ps >&2 || true
   "${compose[@]}" logs --tail 60 >&2 || true

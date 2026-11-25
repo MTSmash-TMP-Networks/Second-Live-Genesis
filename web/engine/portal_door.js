@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 // Existing 2 m scan portal retains its wall layout and legacy damage IDs.
 export const DOOR_WIDTH=1.12, DOOR_HEIGHT=2.2;
-export const PORTAL_SIDES=[-.78,.78].map(x=>({p:[x,1.1,-4.97],s:[.44,2.2,.2]}));
+export const PORTAL_SIDES=[-.78,.78].map(x=>({p:[x,1.1,-5],s:[.44,2.2,.2]}));
 export function fitDoor(model){
   model.updateMatrixWorld(true);let b=new THREE.Box3().setFromObject(model),s=b.getSize(new THREE.Vector3());
   if(s.z>s.x){model.rotation.y+=Math.PI/2;model.updateMatrixWorld(true);b=new THREE.Box3().setFromObject(model);s=b.getSize(new THREE.Vector3());}
@@ -13,9 +13,10 @@ export function fitDoor(model){
   model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});return root;
 }
 function box(group,size,p,material,r=.008){const mesh=new THREE.Mesh(new RoundedBoxGeometry(...size,3,Math.min(r,Math.min(...size)*.23)),material);mesh.position.set(...p);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);return mesh;}
-function localDoor(){
+function localDoor(renderer){
   const frame=new THREE.Group(),leaf=new THREE.Group(),pivot=new THREE.Group();frame.position.z=-4.97;
   const paint=new THREE.MeshStandardMaterial({color:0xddd8ce,roughness:.62}),green=new THREE.MeshStandardMaterial({color:0x526d64,roughness:.69}),inset=new THREE.MeshStandardMaterial({color:0x405a52,roughness:.74}),edge=new THREE.MeshStandardMaterial({color:0x6b8277,roughness:.58}),metal=new THREE.MeshStandardMaterial({color:0xa28b5a,metalness:.8,roughness:.33});
+  const wood=renderer.textured?.oak_veneer_01;if(wood?.normalMap){for(const m of [green,inset,edge]){m.normalMap=wood.normalMap;m.normalScale.set(.12,.12);}}
   for(const x of [-.52,.52]){box(frame,[.08,2.16,.19],[x,1.08,0],paint);box(frame,[.105,2.2,.04],[x,1.1,.103],paint);}
   box(frame,[1.12,.07,.19],[0,2.165,0],paint);box(frame,[1.12,.04,.045],[0,2.18,.105],paint);
   pivot.position.set(-.475,0,0);frame.add(pivot);leaf.position.x=.475;pivot.add(leaf);
@@ -29,9 +30,9 @@ function localDoor(){
 }
 export async function buildPortalDoor(renderer,manifest,path,loader){
   const fixed=new THREE.Group();fixed.name='Scan portal side panels';renderer.staticGroup.add(fixed);
-  const plaster=new THREE.MeshStandardMaterial({color:0xd9d4c9,roughness:.82});
-  for(const side of PORTAL_SIDES){box(fixed,side.s,side.p,plaster,.008);box(fixed,[.36,1.98,.018],[side.p[0],1.09,-4.856],plaster,.005);}
-  const {frame,pivot}=localDoor();renderer.staticGroup.add(frame);let original=null;
+  const plaster=renderer.textured?.white_plaster_02||new THREE.MeshStandardMaterial({color:0xd9d4c9,roughness:.82});
+  for(const side of PORTAL_SIDES)box(fixed,side.s,side.p,plaster,.002);
+  const {frame,pivot}=localDoor(renderer);renderer.staticGroup.add(frame);let original=null;
   const url=manifest.door_models?.[renderer.quality]||manifest.door_models?.['1k']||manifest.door_models?.['2k'];
   if(url)try{const gltf=await loader.loadAsync(path(url));original=fitDoor(gltf.scene);renderer.staticGroup.add(original);}catch(e){console.warn('Original door not usable; local panel door active',e);}
   renderer.realismStatus.door=original?'ready':'local';

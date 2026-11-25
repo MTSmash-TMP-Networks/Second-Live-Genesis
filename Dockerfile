@@ -66,6 +66,9 @@ COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bund
 COPY --from=renderer /build/capture-view.bundle.js /app/web/engine/capture-view.bundle.js
 COPY --from=renderer /build/THREE-LICENSE.txt /app/web/engine/THREE-LICENSE.txt
 COPY --from=door /build/polyhaven /app/web/assets/polyhaven/
+# Match the KTX2Loader version; local transcoding instead of CDN scripts.
+COPY --from=renderer /build/node_modules/three/examples/jsm/libs/basis/basis_transcoder.js /app/web/assets/decoders/basis_transcoder.js
+COPY --from=renderer /build/node_modules/three/examples/jsm/libs/basis/basis_transcoder.wasm /app/web/assets/decoders/basis_transcoder.wasm
 ARG SECOND_LIVE_REVISION=local
 LABEL org.opencontainers.image.revision=${SECOND_LIVE_REVISION}
 ENV SECOND_LIVE_REVISION=${SECOND_LIVE_REVISION}
