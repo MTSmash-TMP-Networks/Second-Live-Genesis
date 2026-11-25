@@ -400,7 +400,7 @@ function setAuthMode(mode){
 function applyAccount(profile){
  if(!profile||typeof profile.nickname!=='string'||!lobbyDoor(profile.slot))throw Error('Ungültiges Spielerprofil');
  accountProfile={nickname:profile.nickname,slot:profile.slot,avatar:normalizeCharacter(profile.avatar)};
- renderer?.setCharacter(accountProfile);$('account-phone').hidden=false;$('account-phone-name').textContent=accountProfile.nickname+' · Zimmer '+lobbyDoor(accountProfile.slot).number;updateWorldStatus();
+ renderer?.setCharacter(accountProfile);$('account-phone').hidden=false;$('account-phone-name').textContent=accountProfile.nickname+' · Zimmer '+lobbyDoor(accountProfile.slot).number;updateWorldStatus();window.dispatchEvent(new Event('sl-account-change'));
 }
 function openStudio(fromGame=false){
  if(!accountProfile||!graphicsReady||lobbyState||lobbyTransition)return;
@@ -455,7 +455,7 @@ async function enterGame(){
 }
 $('auth-login').onclick=()=>setAuthMode('login');$('auth-register').onclick=()=>setAuthMode('register');
 $('account-form').onsubmit=e=>{e.preventDefault();authenticate();};$('account-continue').onclick=()=>openStudio();
-$('account-switch').onclick=async()=>{if(accountBusy)return;accountBusy=true;authButtons();try{await api('/api/account',{action:'logout'});accountProfile=null;$('account-phone').hidden=true;setAuthMode('login');}catch(e){$('loginerror').textContent=e.message;}finally{accountBusy=false;authButtons();}};
+$('account-switch').onclick=async()=>{if(accountBusy)return;accountBusy=true;authButtons();try{await api('/api/account',{action:'logout'});accountProfile=null;$('account-phone').hidden=true;window.dispatchEvent(new Event('sl-account-change'));setAuthMode('login');}catch(e){$('loginerror').textContent=e.message;}finally{accountBusy=false;authButtons();}};
 $('character-left').onclick=()=>renderer.studio.turn(-Math.PI/6);$('character-right').onclick=()=>renderer.studio.turn(Math.PI/6);
 $('character-random').onclick=()=>{for(const [k,v] of Object.entries(CHARACTER_OPTIONS))characterDraft[k]=Math.floor(Math.random()*v.values.length);renderCharacterFields();renderer.studio.set(characterDraft);};
 $('character-cancel').onclick=()=>{if(!accountBusy)closeStudio();};
