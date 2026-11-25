@@ -413,6 +413,8 @@ export class RoomRenderer {
     this.status('Gemeinsamer Hotelflur wird vorbereitet');
     this.lobby=new HotelLobbyView(this);this.studio=new CharacterStudio();
     this.hotelViewRoot=new THREE.Group();this.scene.add(this.hotelViewRoot);
+    this.hotelHallLights=new THREE.Group();this.hotelViewRoot.add(this.hotelHallLights);this.hotelHallLights.visible=false;
+    for(const x of [-2.5,2.5]){const light=new THREE.PointLight(0xffe0ba,10,4.5,2);light.position.set(x,2.7,-7.05);this.hotelHallLights.add(light);}
     this.neighborView=new NeighborRoomView(this,spec);
     this.hotelSlot=null;this.hotelHallOpen=false;
     this.status('Fotomaterialien und 3D-Modelle bereit · '+this.quality.toUpperCase());
@@ -537,7 +539,7 @@ export class RoomRenderer {
       if(hall){this.lobby.projectInto(this.hotelViewRoot,slot);this.lobby.setOwn(slot);}
       else this.lobby.restoreProjection();
     }
-    this.neighborView?.setVisible(neighbor);
+    this.hotelHallLights.visible=hall;this.neighborView?.setVisible(neighbor);
     return {hall,neighbor};
   }
   setNeighborSnapshot(snapshot){this.neighborView?.setSnapshot(snapshot);}
