@@ -10,7 +10,76 @@ from pathlib import Path
 from server import create_server, GameStore, HOTEL_LAYOUT
 from world_capture import CaptureStore
 
+from hotel_lobby import HotelLobby, CAPACITY, LEASE, spawn
+from world_capture import CaptureError
+
 class GameOnlyTest(unittest.TestCase):
+    def test_lobby_capacity_leases_and_privacy(self):
+        now=[100.0]
+        lobby=HotelLobby(lambda:now[0])
+        a=lobby.request('a',{'action':'enter'})
+        b=lobby.request('b',{'action':'enter'})
+        self.assertNotEqual(a['slot'],b['slot'])
+        self.assertEqual(b['peers'],[{'slot':a['slot'],'position':a['position'],'yaw':a['yaw']}])
+        with self.assertRaises(CaptureError):
+            lobby.request('b',{'action':'leave','lease':a['lease']})
+        p=list(a['position']);p[2]+=.3
+        now[0]+=.25
+        update=lobby.request('a',{'action':'update','lease':a['lease'],'position':p,'yaw':0})
+        self.assertEqual(update['online'],2)
+        for invalid in ([10,0,0],[0,2,0],[0,0,float('nan')]):
+            with self.assertRaises(CaptureError):
+                lobby.request('a',{'action':'update','lease':a['lease'],'position':invalid,'yaw':0})
+        with self.assertRaises(CaptureError):
+            lobby.request('a',{'action':'update','lease':a['lease'],'position':[0,0,20],'yaw':0})
+        now[0]+=LEASE+.1
+        with self.assertRaises(CaptureError):
+            lobby.request('a',{'action':'leave','lease':a['lease']})
+        self.assertFalse(lobby.players)
+        for i in range(CAPACITY):
+            lobby.request(str(i),{'action':'enter'})
+        with self.assertRaises(CaptureError):
+            lobby.request('extra',{'action':'enter'})
+        replacement=lobby.request('0',{'action':'enter'})
+        self.assertEqual(replacement['online'],CAPACITY)
+        self.assertEqual(replacement['slot'],0)
+        self.assertEqual(lobby.request('0',{'action':'leave','lease':replacement['lease']}),{'left':True})
+        self.assertEqual(lobby.request('extra',{'action':'enter'})['slot'],0)
+
+    def test_two_players_meet_without_sharing_homes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);capture=CaptureStore(root)
+            player_a,key_a=capture.session();player_b,key_b=capture.session()
+            game_a=GameStore(capture.home_path(player_a));game_b=GameStore(capture.home_path(player_b))
+            game_a.action({'action':'toggle_light','id':'surface_switch'},None)
+            before_a,before_b=game_a.state(),game_b.state()
+            self.assertNotEqual(before_a['lights_on'],before_b['lights_on'])
+            srv=create_server(port=0,data_dir=root,token='test-token',guest_game=True,world_capture=True)
+            thread=threading.Thread(target=srv.serve_forever,daemon=True);thread.start()
+            base=f'http://127.0.0.1:{srv.server_port}'
+            def req(key,path,data=None):
+                headers={'Content-Type':'application/json','Cookie':'sl_player='+key}
+                body=None if data is None else json.dumps(data).encode()
+                with urllib.request.urlopen(urllib.request.Request(base+path,data=body,headers=headers),timeout=5) as res:
+                    return json.load(res)
+            try:
+                self.assertTrue(req(key_a,'/api/health')['hotel_lobby'])
+                with self.assertRaises(urllib.error.HTTPError) as e:
+                    req('invalid','/api/lobby',{'action':'enter'})
+                self.assertEqual(e.exception.code,401)
+                a=req(key_a,'/api/lobby',{'action':'enter'});b=req(key_b,'/api/lobby',{'action':'enter'})
+                self.assertEqual(b['online'],2)
+                self.assertEqual(b['peers'][0]['slot'],a['slot'])
+                self.assertEqual(set(b['peers'][0]),{'slot','position','yaw'})
+                self.assertNotEqual(a['slot'],b['slot'])
+                self.assertEqual(req(key_a,'/api/game'),before_a);self.assertEqual(req(key_b,'/api/game'),before_b)
+                req(key_b,'/api/lobby',{'action':'leave','lease':b['lease']})
+                remaining=req(key_a,'/api/lobby',{'action':'update','lease':a['lease'],'position':a['position'],'yaw':a['yaw']})
+                self.assertEqual(remaining['online'],1);self.assertFalse(remaining['peers'])
+                self.assertEqual(req(key_a,'/api/game'),before_a);self.assertEqual(req(key_b,'/api/game'),before_b)
+            finally:
+                srv.shutdown();srv.server_close();thread.join(timeout=5)
+
     def test_curtains_persist_and_preserve_other_state(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
