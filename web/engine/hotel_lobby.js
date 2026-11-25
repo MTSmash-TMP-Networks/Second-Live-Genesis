@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { LOBBY_LAYOUT as L, LOBBY_CAPACITY, lobbyDoor, roomHallTransform } from './lobby_layout.js';
-import { createCharacter, animateCharacter, disposeCharacter, normalizeCharacter } from './character.js';
+import { createCharacter, createHotelNpc, animateCharacter, disposeCharacter, normalizeCharacter } from './character.js';
 
 const mat=(color,roughness=.82,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
 const cube=new THREE.BoxGeometry(1,1,1);
@@ -21,7 +21,7 @@ function plaque(g,text,p,yaw,w=.33,h=.124){
 }
 function avatar(slot,profile){
  const g=createCharacter(profile?.avatar),name=profile?.nickname||'Gast '+lobbyDoor(slot).number;
- const nameMap=labelTexture(name),tag=new THREE.Sprite(new THREE.SpriteMaterial({map:nameMap,depthTest:true,transparent:true}));tag.position.set(0,2.03*g.userData.height,0);tag.scale.set(.83,.31,1);g.add(tag);
+ const nameMap=labelTexture(name),tag=new THREE.Sprite(new THREE.SpriteMaterial({map:nameMap,depthTest:true,transparent:true}));tag.position.set(0,2.03*g.userData.height,0);tag.scale.set(.83,.31,1);g.add(tag);g.userData.nameTag=tag;
  return g;
 }
 export class HotelLobbyView{
@@ -83,6 +83,37 @@ export class HotelLobbyView{
   // Bounded number of lights; no shadow-map cost in the public area.
   this.lights=[];for(let i=0;i<7;i++){const l=new THREE.PointLight(0xffdfb6,17,8,2);l.position.set(0,2.72,(i-3)*6);this.scene.add(l);this.lights.push(l);}
   this.local=null;
+  this.npc=createHotelNpc();this.npc.name='KI-Hotelservice';this.npc.visible=false;this.npcTarget=null;this.npcGreeting=0;
+  const tag=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture('KI-Hotelservice'),depthTest:true,transparent:true}));tag.position.set(0,2.13,0);tag.scale.set(1.02,.35,1);this.npc.add(tag);
+  this.guestRoot.add(this.npc);
+ }
+ syncNpc(p){
+  if(!p||!Array.isArray(p.position)||p.position.length!==3||!p.position.every(Number.isFinite)||!Number.isFinite(p.yaw)){
+   this.npc.visible=false;this.npcTarget=null;this.npcGreeting=0;return;
+  }
+  if(!this.npcTarget||this.npc.position.distanceTo(new THREE.Vector3(...p.position))>4){
+   this.npc.position.set(...p.position);this.npc.rotation.y=p.yaw;
+  }
+  this.npcTarget=p;this.npc.visible=true;
+ }
+ greetNpc(){this.npcGreeting=1.7;}
+ stepNpc(dt,player){
+  if(!this.npcTarget)return;
+  const p=this.npcTarget,g=this.npc,t=1-Math.exp(-dt*12);
+  g.position.lerp(new THREE.Vector3(...p.position),t);
+  g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;
+  animateCharacter(g,dt,p.walking!==false,'walk');
+  if(this.npcGreeting>0){
+   this.npcGreeting=Math.max(0,this.npcGreeting-dt);
+   const u=g.userData,weight=Math.min(1,this.npcGreeting*4);
+   // A small greeting gesture while continuing the patrol.
+   u.arms[1].rotation.z=.1+weight*.65;u.arms[1].rotation.x-=weight*.35;u.elbows[1].rotation.x-=weight*.55;
+   if(player){
+    const yaw=Math.atan2(g.position.x-player.x,g.position.z-player.z);
+    const angle=Math.atan2(Math.sin(yaw-g.rotation.y),Math.cos(yaw-g.rotation.y));
+    u.head.rotation.y=weight*Math.max(-.7,Math.min(.7,angle));
+   }
+  }else g.userData.arms[1].rotation.z=.1;
  }
  setOwn(slot,profile=null){
   this.own=slot;this.profile=profile;
@@ -105,7 +136,7 @@ export class HotelLobbyView{
    seen.add(p.slot);let a=this.peers.get(p.slot);const signature=JSON.stringify([p.nickname,normalizeCharacter(p.avatar)]);
    if(a&&a.signature!==signature){this.disposeAvatar(a.g);a=null;}
    if(!a){const g=avatar(p.slot,p);g.position.set(...p.position);g.rotation.y=p.yaw;this.guestRoot.add(g);a={g,signature};this.peers.set(p.slot,a);}
-   a.position=p.position;a.yaw=p.yaw;
+   a.position=p.position;a.yaw=p.yaw;a.stance=['walk','sprint','crouch'].includes(p.stance)?p.stance:'walk';
   }
   for(const [slot,a] of this.peers)if(!seen.has(slot)){this.disposeAvatar(a.g);this.peers.delete(slot);}
  }
@@ -114,9 +145,10 @@ export class HotelLobbyView{
   for(const a of this.peers.values()){
    const g=a.g,d=Math.hypot(a.position[0]-g.position.x,a.position[2]-g.position.z),t=1-Math.exp(-dt*12);
    g.position.lerp(new THREE.Vector3(...a.position),t);const diff=Math.atan2(Math.sin(a.yaw-g.rotation.y),Math.cos(a.yaw-g.rotation.y));g.rotation.y+=diff*t;
-   animateCharacter(g,dt,d>.035);
+   animateCharacter(g,dt,d>.035,a.stance);
   }
-  if(third&&this.own!==null){if(!this.local){this.local=avatar(this.own,this.profile);this.guestRoot.add(this.local);}this.local.visible=true;const moving=Math.hypot(this.local.position.x-player.x,this.local.position.z-player.z)>.005;this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=player.yaw;animateCharacter(this.local,dt,moving);}
+  this.stepNpc(dt,player);
+  if(third&&this.own!==null){if(!this.local){this.local=avatar(this.own,this.profile);this.guestRoot.add(this.local);}this.local.visible=true;const moving=Math.hypot(this.local.position.x-player.x,this.local.position.z-player.z)>.005;this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=player.yaw;animateCharacter(this.local,dt,moving,player.stance);}
   else if(this.local)this.local.visible=false;
  }
  // Share the exact corridor geometry and avatars between both scenes, not
@@ -138,5 +170,5 @@ export class HotelLobbyView{
   for(const p of [...this.plaques,...this.nameplates])p.scale.x=1;
   this.projectedSlot=null;
  }
- clear(){this.restoreProjection();this.sync([]);this.setOwn(null);this.setRooms([]);}
+ clear(){this.restoreProjection();this.sync([]);this.syncNpc(null);this.setOwn(null);this.setRooms([]);}
 }
