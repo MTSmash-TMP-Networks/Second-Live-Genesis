@@ -152,6 +152,7 @@ console.log('Hotel rug root, persistent target and rotated ray hit OK');
 // Shared corridor: actual layout, scene and animated remote guests (no GPU).
 import {LOBBY_LAYOUT,LOBBY_CAPACITY,lobbyDoor,lobbyDoorAt,lobbyWalkable} from './lobby_layout.js';
 import {HotelLobbyView} from './hotel_lobby.js';
+import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,animateCharacter,disposeCharacter,CharacterStudio,sculptedMesh} from './character.js';
 {
  const L=LOBBY_LAYOUT;
  assert.equal(LOBBY_CAPACITY,24);assert.equal(L.halfLength*2,42);
@@ -168,12 +169,22 @@ import {HotelLobbyView} from './hotel_lobby.js';
  globalThis.document={createElement(){return {width:0,height:0,getContext(){return {fillRect(){},strokeRect(){},fillText(){}};}};}};
  try{
   const lobby=new HotelLobbyView({textured:{hotel_carpet:new THREE.MeshStandardMaterial(),hotel_wall:new THREE.MeshStandardMaterial(),hotel_ceiling:new THREE.MeshStandardMaterial()}});
-  assert.equal(lobby.signs.length,24);lobby.setOwn(0);
+  assert.equal(lobby.signs.length,24);lobby.setOwn(0,{nickname:'Alpha',avatar:DEFAULT_CHARACTER});
+  const oldName=lobby.nameplates[1].material.map;lobby.setRooms([{slot:0,nickname:'Alpha'},{slot:1,nickname:'Beta'}]);assert.equal(lobby.roomNames.get(1),'Beta');assert.notEqual(lobby.nameplates[1].material.map,oldName);
   lobby.sync([{slot:1,position:[0,0,-2],yaw:0}]);assert.equal(lobby.peers.size,1);
   lobby.sync([{slot:1,position:[0,0,-1],yaw:1}]);lobby.step(.1,{x:0,y:0,z:0,yaw:0});
   assert.ok(lobby.peers.get(1).g.position.z>-2&&lobby.peers.get(1).g.position.z<-1);
-  lobby.sync([{slot:0,position:[0,0,0],yaw:0}]);assert.equal(lobby.peers.size,0);
+  const oldAvatar=lobby.peers.get(1).g;lobby.sync([{slot:1,nickname:'Beta',avatar:{...DEFAULT_CHARACTER,hair:4},position:[0,0,-1],yaw:1}]);assert.notEqual(lobby.peers.get(1).g,oldAvatar);assert.equal(lobby.peers.get(1).g.userData.character.hair,4);
+  lobby.sync([{slot:0,position:[0,0,0],yaw:0}]);assert.equal(lobby.peers.size,0);assert.equal(lobby.roomNames.get(1),'Beta');
   lobby.clear();assert.equal(lobby.own,null);
  }finally{if(savedDocument===undefined)delete globalThis.document;else globalThis.document=savedDocument;}
 }
-console.log('Shared lobby: layout, doors, avatar interpolation and cleanup OK');
+console.log('Shared lobby: layout, named doors, avatar interpolation and cleanup OK');
+{
+ const assertCharacter=(profile)=>{const g=createCharacter(profile);g.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(g);assert.ok(bounds.max.y>1.55&&bounds.max.y<2.15);assert.ok(bounds.min.y>-.13&&bounds.min.y<.13);assert.equal(g.userData.arms.length,2);assert.equal(g.userData.knees.length,2);let meshes=0;g.traverse(o=>{if(o.isMesh){meshes++;assert.ok(o.geometry.attributes.position.count>0);assert.ok([...o.geometry.attributes.position.array].every(Number.isFinite));}});assert.ok(meshes>25);animateCharacter(g,.2,true);assert.notEqual(g.userData.legs[0].rotation.x,0);disposeCharacter(g);};
+ assert.equal(Object.keys(CHARACTER_OPTIONS).length,14);assert.equal(normalizeCharacter({hair:999}).hair,DEFAULT_CHARACTER.hair);
+ for(const [key,opt] of Object.entries(CHARACTER_OPTIONS))for(let i=0;i<opt.values.length;i++)assertCharacter({...DEFAULT_CHARACTER,[key]:i});
+ const mesh=sculptedMesh([[0,.1,.1],[1,.1,.1]],12);const normal=mesh.attributes.normal;assert.ok(normal.getZ(0)>0);mesh.dispose();
+ const studio=new CharacterStudio();studio.set(DEFAULT_CHARACTER);const old=studio.root;studio.set({...DEFAULT_CHARACTER,skin:0});assert.notEqual(studio.root,old);studio.turn(.3);let renders=0;studio.render({render(scene,camera){assert.equal(scene,studio.scene);assert.equal(camera,studio.camera);renders++;}},1.8,.016);studio.render({render(){renders++;}},.6,.016);assert.equal(renders,2);disposeCharacter(studio.root);
+}
+console.log('Character models: all customization variants, geometry, movement and preview checks OK');
