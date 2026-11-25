@@ -338,7 +338,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     game = GameStore(store.path) # preserve the original legacy world unchanged in personal mode
     capture = CaptureStore(store.path) if world_capture else None
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.7.8"
+        server_version = "SecondLive/0.7.9"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -504,7 +504,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.7.8", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.7.9", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
