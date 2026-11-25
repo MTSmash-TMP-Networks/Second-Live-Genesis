@@ -17,3 +17,6 @@ The server publishes a shared patrol clock. A locally advanced phase avoids stop
 ## Verification
 
 Docker checks upload authorization, malformed and external GLB resources, placement, storage limits, persistence, frontend phone elements, placement math, model normalization, reflection state restoration and patrol continuity. Actual rendering and importing a textured third-party model should be tested in a browser after installation.
+
+### Local avatar reflection (0.12.3)
+The room renderer receives the active furniture posture separately from camera yaw. It uses a joint-based cosmetic sitting pose or a horizontal bed pose and restores the base animation before the next frame. An equipped cosmetic game asset follows the avatar's hand; it is independent of the hidden camera viewmodel. No weapon logic or collisions are changed. These local poses are not sent to the shared corridor, which remains unarmed. The exact fit of individual Rocketbox models on furniture should be verified visually.

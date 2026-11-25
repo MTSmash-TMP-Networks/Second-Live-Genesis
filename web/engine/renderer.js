@@ -26,6 +26,8 @@ import { NeighborRoomView, HallFacadeViews, hotelOpenings } from './hotel_connec
 export { hotelOpenings } from './hotel_connections.js';
 import { CharacterStudio, createCharacter, animateCharacter, disposeCharacter } from './character.js';
 import { RoomModels, buildRoomMirror } from './room_customization.js';
+import { resetRoomAvatarPose, applyRoomAvatarPose, updateRoomAvatarProp, clearRoomAvatarProps } from './avatar_room_pose.js';
+export { resetRoomAvatarPose, applyRoomAvatarPose, updateRoomAvatarProp, clearRoomAvatarProps } from './avatar_room_pose.js';
 export { CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, CharacterStudio, createHotelNpc, animateCharacter, disposeCharacter } from './character.js';
 export { LOBBY_LAYOUT, LOBBY_CAPACITY, lobbyDoor, lobbyWalkable, lobbyDoorAt } from './lobby_layout.js';
 export { PORTAL_SIDES };
@@ -550,10 +552,22 @@ export class RoomRenderer {
   setNeighborSnapshot(snapshot){this.neighborView?.setSnapshot(snapshot);}
   syncHallFacades(rows,ownSlot,state){this.hallFacades?.sync(rows,ownSlot,state);}
   setCharacter(profile){
-    if(this.localCharacter)disposeCharacter(this.localCharacter);
+    if(this.localCharacter){resetRoomAvatarPose(this.localCharacter);clearRoomAvatarProps(this.localCharacter);disposeCharacter(this.localCharacter);}
     this.localCharacter=createCharacter(profile.avatar);this.localCharacter.visible=false;this.scene.add(this.localCharacter);
   }
-  showCharacter(player,visible,dt,moving=false,reflect=false){this.reflectPlayer=reflect;if(!this.localCharacter)return;const root=this.localCharacter;root.visible=visible;if(visible||reflect){root.position.set(player.x,player.y,player.z);root.rotation.y=player.yaw;animateCharacter(root,dt,moving,player.stance);}}
+  showCharacter(player,visible,dt,moving=false,reflect=false,{posture=null,weapon=null}={}){
+    this.reflectPlayer=reflect;if(!this.localCharacter)return;
+    const root=this.localCharacter;root.visible=visible;
+    if(!visible&&!reflect){updateRoomAvatarProp(root,this.weaponModels,null);return;}
+    resetRoomAvatarPose(root);
+    root.position.set(player.x,player.y,player.z);
+    const yaw=Number.isFinite(posture?.yaw)?posture.yaw:player.yaw;
+    root.rotation.y=yaw;
+    animateCharacter(root,dt,!posture&&moving,posture?'walk':player.stance);
+    const look=Math.atan2(Math.sin(player.yaw-yaw),Math.cos(player.yaw-yaw));
+    applyRoomAvatarPose(root,posture,posture?null:weapon,look);
+    updateRoomAvatarProp(root,this.weaponModels,posture?null:weapon);
+  }
   renderStudio(canvas,dt){
     const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),dpr=Math.min(devicePixelRatio||1,1.5);
     if(w!==this.width||h!==this.height||dpr!==this.dpr){this.width=w;this.height=h;this.dpr=dpr;this.renderer.setPixelRatio(dpr);this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}

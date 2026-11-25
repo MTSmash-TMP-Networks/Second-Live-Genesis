@@ -336,7 +336,7 @@ function enterPosture(id,kind){
  const pose=furniturePose(id,bodies[id]);
  if(!pose||pose.y<-.05||pose.y>.25||groundAt(pose.x,pose.z)<-.1){$('notice').textContent='Möbel steht nicht sicher – zuerst richtig abstellen';return false;}
  chooseWeapon('none');clearControls();
- posture={id,kind,eye:pose.eye,returnPose:{x:player.x,z:player.z,yaw:player.yaw,pitch:player.pitch,first},sleeping:false};
+ posture={id,kind,eye:pose.eye,yaw:pose.yaw,returnPose:{x:player.x,z:player.z,yaw:player.yaw,pitch:player.pitch,first},sleeping:false};
  first=true;Object.assign(player,{x:pose.x,z:pose.z,y:pose.y,vy:0,yaw:pose.yaw,pitch:pose.pitch,stance:'walk',eyeHeight:1.65});
  $('notice').textContent=kind==='sit'?'Du sitzt auf dem Sofa':'Du liegst im Bett';
  return true;
@@ -769,7 +769,7 @@ function frame(now,xrFrame){
   if(posture){
     const pose=furniturePose(posture.id,bodies[posture.id]);
     if(!movable(posture.id)||!pose||pose.y<-.05||pose.y>.25||Math.hypot(player.x-pose.x,player.z-pose.z)>.25||groundAt(pose.x,pose.z)<-.1)leavePosture();
-    else{player.x=pose.x;player.z=pose.z;player.y=pose.y;player.vy=0;}
+    else{player.x=pose.x;player.z=pose.z;player.y=pose.y;player.vy=0;posture.yaw=pose.yaw;}
   }
   let d=dir(),eye=playerEye(),target=eye.map((v,i)=>v+d[i]);
   if(!first&&!vr&&!posture){let t=eye.map((v,i)=>v-d[i]*2.1);if(!coll(t[0],t[2])){eye=t;target=eye.map((v,i)=>v+d[i]);}}
@@ -795,7 +795,7 @@ function frame(now,xrFrame){
   }
   for(let b of debris)draw(b);
   const third=!first&&!vr&&!posture&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5;
-  renderer.showCharacter(player,third&&started,dt,keys.has('KeyW')||keys.has('KeyA')||keys.has('KeyS')||keys.has('KeyD')||Math.hypot(...touchMove)>.05,started&&!vr);
+  renderer.showCharacter(player,third&&started,dt,!posture&&(keys.has('KeyW')||keys.has('KeyA')||keys.has('KeyS')||keys.has('KeyD')||Math.hypot(...touchMove)>.05),started&&!vr,{posture,weapon:equipped});
   renderer.syncMarks(state.marks||[]);
   if(started&&active)audio.listener(eye,d);renderer.equip(equipped,first&&started&&!scopeZoom);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom);
   if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}

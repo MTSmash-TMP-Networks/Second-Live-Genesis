@@ -80,12 +80,12 @@ const HOTEL_LAYOUT={spawn:{p:[.8,0,.55]}};
 const movable=id=>!!bodies[id],groundAt=()=>0,coll=(x,z)=>Math.abs(x)+Math.abs(z)>10;
 const chooseWeapon=()=>{},clearControls=()=>{};
 `+getPart("function furniturePose(","function secondaryInteraction(")+`
-assert.ok(enterPosture('sofa','sit'));assert.equal(posture.kind,'sit');
+assert.ok(enterPosture('sofa','sit'));assert.equal(posture.kind,'sit');assert.equal(posture.yaw,furniturePose('sofa',bodies.sofa).yaw);
 assert.ok(Math.abs(playerEye()[1]-1.18)<.001);
 assert.ok(leavePosture());assert.equal(player.x,0);assert.equal(first,false);
 const p=furniturePose('surface_bed',bodies.surface_bed);
 assert.ok(Math.abs(p.x-(-.34))<.001);assert.ok(Math.abs(p.z-1.92)<.001);
-assert.ok(enterPosture('surface_bed','lie'));assert.ok(player.pitch<0);
+assert.ok(enterPosture('surface_bed','lie'));assert.ok(player.pitch<0);assert.equal(posture.yaw,p.yaw);
 setSleeping(true);assert.equal(posture.sleeping,true);assert.equal($('sleep-overlay').hidden,false);
 setSleeping(false);assert.equal($('sleep-overlay').hidden,true);
 assert.ok(leavePosture());assert.equal(posture,null);assert.equal(player.z,0);
@@ -137,3 +137,7 @@ assert.ok(game.includes("yaw:player.yaw,stance:player.stance"));
 assert.ok(game.includes("audio.play('greeting'"));
 assert.ok(game.includes("player.stance!=='crouch'&&keys.has('Space')"));
 console.log('Game-only UI, movement and proximity greetings passed');
+
+assert.ok(game.includes('posture.yaw=pose.yaw'));
+assert.ok(game.includes('started&&!vr,{posture,weapon:equipped}'));
+console.log('Room avatar receives furniture direction, posture and equipped cosmetic prop state');

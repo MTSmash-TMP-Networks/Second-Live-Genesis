@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.3 – Complete Avatar Mirror Poses
+- Lokaler Rocketbox-Charakter mit Sitzhaltung auf dem Sofa und Liegehaltung im Bett, einschließlich Schlafzustand. Körperrichtung folgt dem Möbel statt der frei drehbaren Ego-Kamera.
+- Ausgerüstete Spielrequisiten werden als separate, an der Avatarhand positionierte Darstellung im Spiegel und in der Third-Person-Ansicht angezeigt. Kamerahände und Ego-Viewmodel bleiben vom Spiegelpass ausgeschlossen; beim Ablegen und Aufstehen wird die normale Darstellung wiederhergestellt.
+- Neue Regressionstests für Sitz-/Liegehaltung, Rückkehr zur Standanimation, sichtbare Requisiten und Wiederherstellung der Render-Sichtbarkeit. Spielphysik und gespeicherte Daten bleiben unverändert.
+
 ## 0.12.2 – Personal Room Builder & Smooth Hotel Patrol
 - Gerahmter Echtzeitspiegel mit planarer Raumreflexion und sichtbarem eigenem Charakter auch in der Ego-Perspektive; kein Spiegel-Renderpass in WebXR.
 - Neue Smartphone-App „3D-Modelle“ mit Poly Haven/Sketchfab, Anleitung, lokalem GLB-Upload, privatem Inventar und gespeicherter Platzierung (Position, Höhe, Größe, Drehung, optionale feste Kollision).

@@ -9,7 +9,7 @@ try{
  page.on('console',m=>{if(/content.security.policy|refused to|unsafe.eval/i.test(m.text()))security.push(m.text());});
  await page.goto(url,{waitUntil:'domcontentloaded'});
  const result=await page.evaluate(async()=>{
-  const {CharacterStudio,DEFAULT_CHARACTER,createHotelNpc,animateCharacter,disposeCharacter}=await import('/engine/renderer.bundle.js');
+  const {CharacterStudio,DEFAULT_CHARACTER,createHotelNpc,animateCharacter,disposeCharacter,applyRoomAvatarPose,resetRoomAvatarPose}=await import('/engine/renderer.bundle.js');
   const studio=new CharacterStudio();
   const wait=async()=>{for(let i=0;i<600;i++){const u=studio.root?.userData;if(u?.realisticStatus==='ready')return u;if(u?.realisticStatus==='fallback')throw Error(u.realisticError);await new Promise(r=>setTimeout(r,100));}throw Error('Avatar timeout');};
   studio.set(DEFAULT_CHARACTER);
@@ -17,6 +17,11 @@ try{
   studio.set({...DEFAULT_CHARACTER,top:0,topColor:1});
   const b=await wait(),same=b.realistic.model===model;
   const outfit=b.realistic.outfit,visible=b.realistic.parts.filter(p=>p.label==='Top_tee'&&p.mesh.visible).length;
+  const avatar=studio.root,rig=b.realistic;
+  applyRoomAvatarPose(avatar,{kind:'sit'});const seated=Math.abs(rig.pivot.position.y)>.05;
+  resetRoomAvatarPose(avatar);applyRoomAvatarPose(avatar,{kind:'lie'});const lying=Math.abs(rig.pivot.quaternion.x)>0.5||Math.abs(rig.pivot.quaternion.z)>0.5;
+  resetRoomAvatarPose(avatar);const reset=rig.pivot.position.length()<1e-6;
+  if(!seated||!lying||!reset)throw Error('Actual Rocketbox room pose failed');
   studio.set({...DEFAULT_CHARACTER,model:2});
   const c=await wait(),second=c.realistic.look.model.id;
   studio.render({render(){}},1.8,.016);studio.clear();
