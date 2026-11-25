@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.9 – Docker Build Hotfix
+- Allow the live capture smoke test in the Docker build context without including the other development tests.
+- Copy the test with explicit read-only permissions and execute it directly from /app as the unprivileged runtime user, including checkouts created with umask 077.
+- Keep the live 3D functionality, existing tests, persisted game data and updater unchanged.
+
 ## 0.7.8 – Live 3D World Capture
 - Automatische räumliche SfM-Vorschau ab vier Fotos, gebündelte Updates während laufender Kameraaufnahme.
 - Vergrößerbare echte 3D-Punktwolke, Kamerapositionen und Anzahl räumlich verbundener Fotos; keine simulierte Geometrie oder Abdeckungsprozentwerte.
