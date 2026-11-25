@@ -243,12 +243,15 @@ def reconstruct_live(store,job,threads):
         return build_live_preview(*best,job['frames'])
 
 def live_worker(store,threads):
+    checked=0;preferred='colmap'
     while True:
-        try:job=store.claim_live()
+        if time.monotonic()-checked>=5:
+            preferred='da3' if da3_client.health()['status']=='ready' else 'colmap';checked=time.monotonic()
+        try:job=store.claim_live(preferred)
         except Exception:time.sleep(2);continue
         if not job:time.sleep(.8);continue
         try:
-            if da3_client.health()['status']=='ready':
+            if preferred=='da3':
                 # Snapshot protects the inputs against simultaneous removal/cancellation.
                 with tempfile.TemporaryDirectory(prefix='.live-sfm-',dir=store.files) as tmp:
                     folder=Path(tmp)
