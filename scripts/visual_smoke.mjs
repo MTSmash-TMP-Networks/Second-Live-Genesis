@@ -150,16 +150,20 @@ const rugHit=rugMarks.cast([0,1.5,0],[0,-1,0],[rugScene]);assert.equal(rugHit.id
 console.log('Hotel rug root, persistent target and rotated ray hit OK');
 
 // Shared corridor: actual layout, scene and animated remote guests (no GPU).
-import {LOBBY_LAYOUT,LOBBY_CAPACITY,lobbyDoor,lobbyDoorAt,lobbyWalkable} from './lobby_layout.js';
+import {LOBBY_LAYOUT,LOBBY_CAPACITY,lobbyDoor,lobbyDoorAt,lobbyWalkable,pairedRoom,roomHallTransform,hallToRoom} from './lobby_layout.js';
+import {NeighborRoomView,hotelOpenings} from './hotel_connections.js';
 import {HotelLobbyView} from './hotel_lobby.js';
 import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,animateCharacter,disposeCharacter,CharacterStudio,sculptedMesh} from './character.js';
 {
  const L=LOBBY_LAYOUT;
- assert.equal(LOBBY_CAPACITY,24);assert.equal(L.halfLength*2,42);
+ assert.equal(LOBBY_CAPACITY,24);assert.equal(L.halfLength*2,132);
  assert.ok(lobbyWalkable(0,0));assert.ok(!lobbyWalkable(L.halfWidth,0));assert.ok(!lobbyWalkable(0,L.halfLength));assert.equal(lobbyDoor(24),null);
  const numbers=new Set();
  for(let i=0;i<LOBBY_CAPACITY;i++){
   const d=lobbyDoor(i);numbers.add(d.number);
+  const origin=hallToRoom(i,[d.x,0,d.z]),partner=lobbyDoor(pairedRoom(i)),adjacent=hallToRoom(i,[partner.x,0,partner.z]);
+  assert.ok(Math.abs(origin[0])<1e-8&&Math.abs(origin[2]+5.1)<1e-8);
+  assert.ok(Math.abs(adjacent[0]-10)<1e-8&&Math.abs(adjacent[2]+5.1)<1e-8);assert.equal(pairedRoom(pairedRoom(i)),i);
   assert.equal(lobbyDoorAt([0,1.65,d.z],[d.side,0,0]).slot,i);
   assert.equal(lobbyDoorAt([0,1.65,d.z+1.3],[d.side,0,0]),null);
   assert.equal(lobbyDoorAt([0,2.7,d.z],[d.side,0,0]),null);
@@ -176,6 +180,21 @@ import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,a
   assert.ok(lobby.peers.get(1).g.position.z>-2&&lobby.peers.get(1).g.position.z<-1);
   const oldAvatar=lobby.peers.get(1).g;lobby.sync([{slot:1,nickname:'Beta',avatar:{...DEFAULT_CHARACTER,hair:4},position:[0,0,-1],yaw:1}]);assert.notEqual(lobby.peers.get(1).g,oldAvatar);assert.equal(lobby.peers.get(1).g.userData.character.hair,4);
   lobby.sync([{slot:0,position:[0,0,0],yaw:0}]);assert.equal(lobby.peers.size,0);assert.equal(lobby.roomNames.get(1),'Beta');
+  const roomScene=new THREE.Scene(),projected=new THREE.Group();roomScene.add(projected);
+  // Rays through the north wall must hit corridor geometry, not the old outdoor photo.
+  const visible=o=>{for(let p=o;p;p=p.parent)if(!p.visible)return false;return true;};
+  for(const slot of [0,1,12,13,23]){
+   lobby.projectInto(projected,slot);assert.equal(lobby.root.parent,projected);assert.equal(lobby.guestRoot.parent,projected);
+   assert.equal(lobby.wallSections[slot].visible,false);assert.equal(lobby.doorSections[slot].visible,false);
+   const opposite=(slot+L.roomsPerSide)%LOBBY_CAPACITY;assert.equal(lobby.wallSections[opposite].visible,true);
+   roomScene.updateMatrixWorld(true);
+   for(const x of [-3,3]){
+    const ray=new THREE.Raycaster(new THREE.Vector3(x,1.4,-4.8),new THREE.Vector3(0,0,-1));
+    const hit=ray.intersectObject(projected,true).find(h=>visible(h.object));
+    assert.ok(hit&&hit.distance>3.5&&hit.distance<4.2,'corridor opposite wall blocks outdoor view');
+   }
+   lobby.restoreProjection();assert.equal(lobby.root.parent,lobby.scene);assert.equal(lobby.wallSections[slot].visible,true);
+  }
   lobby.clear();assert.equal(lobby.own,null);
  }finally{if(savedDocument===undefined)delete globalThis.document;else globalThis.document=savedDocument;}
 }
@@ -188,3 +207,26 @@ console.log('Shared lobby: layout, named doors, avatar interpolation and cleanup
  const studio=new CharacterStudio();studio.set(DEFAULT_CHARACTER);const old=studio.root;studio.set({...DEFAULT_CHARACTER,skin:0});assert.notEqual(studio.root,old);studio.turn(.3);let renders=0;studio.render({render(scene,camera){assert.equal(scene,studio.scene);assert.equal(camera,studio.camera);renders++;}},1.8,.016);studio.render({render(){renders++;}},.6,.016);assert.equal(renders,2);disposeCharacter(studio.root);
 }
 console.log('Character models: all customization variants, geometry, movement and preview checks OK');
+
+{
+ assert.deepEqual(hotelOpenings({surface_8:[[1,1,3]],surface_6:[[2,2,3]]}),{hall:false,neighbor:false});
+ assert.deepEqual(hotelOpenings({surface_9:[[1,1,REMOVED]],surface_6:[[2,2,REMOVED]]}),{hall:true,neighbor:true});
+ assert.deepEqual(hotelOpenings({surface_2:[[1,1,REMOVED]],surface_7:[[2,2,REMOVED]]}),{hall:false,neighbor:false});
+ const scene=new THREE.Scene(),staticGroup=new THREE.Group(),mat=new THREE.MeshStandardMaterial({color:0xaabbcc});
+ scene.add(staticGroup);
+ const east=new THREE.Mesh(new THREE.BoxGeometry(...WALLS.surface_6.s),mat);east.position.set(...WALLS.surface_6.p);staticGroup.add(east);
+ const decor=new THREE.Mesh(new THREE.BoxGeometry(...HOTEL_LAYOUT.surface_rug.s),mat);staticGroup.add(decor);
+ const table=new THREE.Group();table.add(new THREE.Mesh(new THREE.BoxGeometry(1,.5,.7),mat));
+ const rv=new NeighborRoomView({scene,staticGroup,models:{table:{root:table}},walls:{entries:new Map([['surface_6',{mesh:east}]])},impacts:{targets:new Map([['surface_rug',{root:decor}]])},textured:{hotel_wall:mat,hotel_carpet:mat,hotel_ceiling:mat}},HOTEL_LAYOUT);
+ assert.ok(!rv.clones.has(east));assert.equal(rv.root.visible,false);
+ rv.setVisible(true);rv.setSnapshot({room:{placements:{table:[1,.39,-2]},rotations:{table:90},objects:{table:100},decor:{surface_rug:4},lights_on:false}});
+ assert.equal(rv.furnished.visible,true);assert.equal(rv.shell.visible,false);
+ assert.equal(rv.items.get('surface_rug').root.visible,false);
+ assert.equal(rv.light.intensity,0);assert.equal(rv.items.get('table').root.rotation.y,Math.PI/2);
+ scene.updateMatrixWorld(true);const point=rv.items.get('table').root.getWorldPosition(new THREE.Vector3());
+ assert.ok(Math.abs(point.x-9)<1e-8&&Math.abs(point.z+2)<1e-8);
+ assert.ok(table.position.length()===0);assert.equal(east.visible,true);
+ rv.setSnapshot(null);assert.equal(rv.shell.visible,true);assert.equal(rv.furnished.visible,false);
+ rv.setVisible(false);assert.equal(rv.root.visible,false);
+}
+console.log('Connected hotel: 24 aligned rooms, corridor rays, visibility, mirrored neighbour layout and repair gating OK');
