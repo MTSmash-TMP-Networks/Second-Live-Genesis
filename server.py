@@ -27,6 +27,7 @@ from world_capture import CaptureStore, CaptureError
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
+HOTEL_LAYOUT = json.loads((WEB / 'engine' / 'hotel_layout.json').read_text('utf-8'))
 MAX_BODY = 9 * 1024 * 1024
 MAX_IMAGE = 6 * 1024 * 1024
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
@@ -213,8 +214,8 @@ class GameStore:
         return True
 
     MAX_HP = {"crate": 60, "table": 100, "window": 35, "chair": 60, "sofa": 150, "coffee_table": 100}
-    MOVABLE = {"crate": ((-1.4,.45,-2.05),(.9,.9,.9)), "table": ((2.25,.39,-1.7),(1.6,.78,.85)), "chair": ((2.15,.5,.15),(.86,1,.9)), "sofa": ((-3.32,.55,2.84),(2.5,1.1,1.4)), "coffee_table": ((-3.3,.25,1.22),(1.4,.5,.76))}
-    MOVABLE_DECOR = {"surface_bed": ((3.4,.6,3.71),(1.56,1.2,2.26)), "surface_wardrobe": ((3.95,1.4,-3.62),(1.44,2.8,.74))}
+    MOVABLE = {k:(tuple(v['p']),tuple(v['s'])) for k,v in HOTEL_LAYOUT.items() if 'max' in v and k!='window' and not v.get('decor')}
+    MOVABLE_DECOR = {k:(tuple(v['p']),tuple(v['s'])) for k,v in HOTEL_LAYOUT.items() if v.get('decor')}
     @staticmethod
     def turned_size(size, rotation):
         return (size[2],size[1],size[0]) if rotation in (90,270) else size
@@ -251,7 +252,7 @@ class GameStore:
         for k,(q,t) in movable.items():
             if k!=oid and alive(k) and overlaps(saved.get(k,q),cls.turned_size(t,angles.get(k,0))):
                 raise ValueError("Stellplatz belegt")
-        if decor.get('surface_nightstand',0)<wall_damage.REMOVED and overlaps((2.24,.32,4.53),(.55,.64,.52)):
+        if decor.get('surface_nightstand',0)<wall_damage.REMOVED and overlaps(HOTEL_LAYOUT['nightstand']['p'],HOTEL_LAYOUT['nightstand']['s']):
             raise ValueError("Stellplatz belegt")
         db.execute("INSERT INTO placements VALUES (?,?) ON CONFLICT(id) DO UPDATE SET position=excluded.position",(oid,json.dumps(p)))
         db.execute("INSERT INTO placement_rotations VALUES (?,?) ON CONFLICT(id) DO UPDATE SET rotation=excluded.rotation",(oid,rotation))
@@ -349,7 +350,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.9.1"
+        server_version = "SecondLive/0.9.2"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -525,7 +526,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.9.1", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.9.2", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
