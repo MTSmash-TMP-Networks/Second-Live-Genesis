@@ -12,6 +12,9 @@ Standard: SECOND_LIVE_COMPUTE=cpu, SECOND_LIVE_COMPUTE_THREADS=4 (1–8). SECOND
 ## Datenpfad
 Kamera nach Einwilligung → Qualitätsheuristik → ausgewählte JPEGs → serverseitige Validierung und Metadatenbereinigung → private Bilddateien → OpenCV / optionale ONNX-Semantik → COLMAP SfM → echte sparse Punktwolke bei erfolgreicher Rekonstruktion → optional an sparse Tiefe angenäherte Tiefenflächen → lokale experimentelle Three.js-Vorschau. Die Tiefenschätzung ist relativ. Kein PLY-/GLB-Weltimport, keine automatische Kollisions-/Zerstörungsgeometrie aus Scans. Nicht als exakte Architekturvermessung verwenden.
 
+## Alternative KI-Rekonstruktion ab 0.8.0
+Der optionale [DA3-Dienst](DA3.md) ist bei erfolgreicher Initialisierung bevorzugt; die folgenden COLMAP-Beschreibungen gelten für den Rückfallmodus. Die KI-Geometrie ist relativ und experimentell, nicht vermessen oder garantiert vollständig.
+
 ## Live-3D-Vorschau ab 0.7.8
 Der Server startet ab vier Fotos eine separate, ressourcenbegrenzte COLMAP-SfM-Rekonstruktion. Weitere Aufnahmen werden gebündelt in neuen Versuchen verarbeitet. Die farbige Punktwolke zeigt nur triangulierte Punkte sowie geschätzte registrierte Kamerapositionen. Nicht verbundene Fotos sind in der Bildprüfung gekennzeichnet. Ein Versuch hat maximal 100 Sekunden Rechenbudget plus kurze Prozessbeendigung; die Dauer hängt von CPU und Bildinhalt ab. Es gibt kein natives SLAM oder kontinuierliches Tracking des Handys. Koordinatensystem und Maßstab können sich zwischen Vorschauen ändern. Beim finalen Submit hat die bestehende vollständige Rekonstruktion Vorrang. Löschung oder Abbruch invalidiert den Live-Auftrag; keine Freigabe der Live-Daten an andere Spieler. Ein Update legt die zusätzliche SQLite-Tabelle automatisch an.
 
