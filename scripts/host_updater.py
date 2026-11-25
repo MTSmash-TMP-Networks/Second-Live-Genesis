@@ -55,7 +55,7 @@ class HostUpdater:
 
     def _run(self, args, *, timeout=90, stream=False):
         env = dict(os.environ)
-        for k in ('SECOND_LIVE_HOST','SECOND_LIVE_PORT','SECOND_LIVE_TOKEN','SECOND_LIVE_UPDATE_ADMIN_TOKEN','SECOND_LIVE_TLS_HOST','SECOND_LIVE_HTTPS','SECOND_LIVE_REVISION'):
+        for k in ('SECOND_LIVE_HOST','SECOND_LIVE_PORT','SECOND_LIVE_TOKEN','SECOND_LIVE_UPDATE_ADMIN_TOKEN','SECOND_LIVE_UPDATE_ADMIN_EMAIL','SECOND_LIVE_TLS_HOST','SECOND_LIVE_HTTPS','SECOND_LIVE_REVISION'):
             env.pop(k, None)
         env['GIT_TERMINAL_PROMPT'] = '0'
         logpath = self.work / 'build.log'
