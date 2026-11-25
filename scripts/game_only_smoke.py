@@ -149,6 +149,35 @@ class GameOnlyTest(unittest.TestCase):
             self.assertEqual(store.get('a',item['added']),blob)
             with self.assertRaises(CaptureError):store.get('b',item['added'])
 
+    def test_imported_object_motion_damage_repair_and_migration(self):
+        import sqlite3
+        from room_models import RoomModelStore
+        with tempfile.TemporaryDirectory() as tmp:
+            # Simulate a pre-0.12.6 database, without the new columns.
+            with sqlite3.connect(Path(tmp)/'room_models.sqlite3') as db:
+                db.execute("""CREATE TABLE room_models(id TEXT PRIMARY KEY,owner TEXT NOT NULL,name TEXT NOT NULL,data BLOB NOT NULL,bytes INTEGER NOT NULL,x REAL NOT NULL DEFAULT 0,y REAL NOT NULL DEFAULT 0,z REAL NOT NULL DEFAULT 0,extent REAL NOT NULL DEFAULT .8,rotation REAL NOT NULL DEFAULT 0,solid INTEGER NOT NULL DEFAULT 0,placed INTEGER NOT NULL DEFAULT 0,created REAL NOT NULL)""")
+                db.execute('INSERT INTO room_models(id,owner,name,data,bytes,created) VALUES (?,?,?,?,?,?)',('a'*32,'owner','chair.glb',room_model_fixture(),len(room_model_fixture()),0))
+            store=RoomModelStore(tmp)
+            row=store.list('owner')['models'][0];self.assertEqual(row['hp'],100);self.assertIsNone(row['pose'])
+            ident=row['id']
+            def act(op,**kwargs):return store.action('owner',{'action':op,'id':ident,**kwargs},GameStore.WEAPON_DAMAGE)['models'][0]
+            placed=act('place',x=1,y=0,z=1,extent=.8,rotation=0,solid=True)
+            p={'position':[1.2,.5,1.3],'quaternion':[0,0,0,1],'base_y':.1,'revision':placed['revision']}
+            moved=act('motion',**p);self.assertEqual(moved['pose']['p'],p['position'])
+            with self.assertRaises(CaptureError):act('motion',**p)
+            with self.assertRaises(CaptureError):store.action('other',{'action':'repair','id':ident})
+            for bad in ({'position':[99,.5,0]},{'quaternion':[0,0,0,0]},{'base_y':-1}):
+                with self.assertRaises(ValueError):act('motion',**{**p,'revision':moved['revision'],**bad})
+            first=act('hit',weapon='pistol',hp=0,damage=9999);self.assertEqual(first['hp'],75)
+            for _ in range(3):last=act('hit',weapon='pistol')
+            self.assertEqual(last['hp'],0)
+            with self.assertRaises(ValueError):act('motion',**{**p,'revision':last['revision']})
+            self.assertEqual(RoomModelStore(tmp).list('owner')['models'][0],last)
+            self.assertEqual(store.get('owner',ident),room_model_fixture())
+            repaired=act('repair');self.assertEqual(repaired['hp'],100);self.assertEqual(repaired['pose'],moved['pose'])
+            hidden=act('hide');self.assertFalse(hidden['placed'])
+            self.assertEqual(hidden['hp'],100)
+
     def test_private_room_model_validation_and_persistence(self):
         from room_models import RoomModelStore, validate_glb, MAX_MODELS
         blob=room_model_fixture()

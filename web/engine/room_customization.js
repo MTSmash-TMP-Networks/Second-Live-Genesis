@@ -28,7 +28,8 @@ function disposeModel(root){
  for(const g of geometries)g.dispose();for(const m of materials)m.dispose();root.removeFromParent();
 }
 export class RoomModels{
- constructor(scene){
+ constructor(scene,impacts=null){
+  this.impacts=impacts;
   this.root=new THREE.Group();this.root.name='Private imported room models';scene.add(this.root);
   this.entries=new Map();this.queue=[];this.active=false;this.boxes=[];
  }
@@ -40,12 +41,33 @@ export class RoomModels{
    let e=this.entries.get(id);
    if(!e){e={row,status:'loading',root:null,cancelled:false};this.entries.set(id,e);this.queue.push(e);}
    else e.row=row;
-   if(e.root)this.place(e);
+   if(e.root){e.root.visible=(row.hp??100)>0;}
   }
   this.updateBoxes();this.pump();
  }
  place(e){const r=e.row;e.root.position.set(r.x,r.y,r.z);e.root.rotation.y=r.rotation*Math.PI/180;e.root.scale.setScalar(r.extent);}
- remove(e){e.cancelled=true;e.controller?.abort();if(e.root){disposeModel(e.root);e.root=null;}}
+ remove(e){
+  e.cancelled=true;e.controller?.abort();
+  if(e.root){
+   this.impacts?.invalidateTarget(e.row.id);this.impacts?.targets.delete(e.row.id);
+   disposeModel(e.root);e.root=null;
+  }
+ }
+ physicsModels(){return [...this.entries.values()].filter(e=>e.root&&e.status==='ready').map(e=>({row:e.row,size:e.size}));}
+ drawBody(id,body,hp){
+  const e=this.entries.get(id);if(!e?.root)return false;
+  const root=e.root,rot=new THREE.Quaternion(...(body.q||[0,0,0,1]));
+  root.visible=hp>0;root.scale.setScalar(e.row.extent);
+  root.quaternion.copy(rot);root.position.set(...body.p).add(new THREE.Vector3(0,-e.size[1]*e.row.extent/2,0).applyQuaternion(rot));
+  if(e.damage!==hp){
+   if(!e.colors){
+    e.colors=new Map();root.traverse(o=>{for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[])if(m.color&&!e.colors.has(m))e.colors.set(m,m.color.clone());});
+   }
+   for(const [m,c] of e.colors)m.color.copy(c).multiplyScalar(.45+.55*hp/100);
+   e.damage=hp;
+  }
+  root.updateWorldMatrix(true,true);return true;
+ }
  retry(id){
   const old=this.entries.get(id);if(!old||old.status!=='error')return;
   const row=old.row;this.remove(old);const e={row,status:'loading',root:null,cancelled:false};
@@ -70,7 +92,7 @@ export class RoomModels{
    const gltf=await new GLTFLoader(manager).parseAsync(bytes,'');raw=gltf.scene;
    if(e.cancelled)return;
    const fitted=normalizeRoomModel(raw);e.root=fitted.root;e.size=fitted.size;raw=null;
-   this.place(e);this.root.add(e.root);e.status='ready';
+   this.place(e);e.root.visible=(e.row.hp??100)>0;this.root.add(e.root);this.impacts?.register(e.row.id,e.root,'wood');e.status='ready';
   }catch(err){
    if(!e.cancelled){e.status='error';e.error=String(err?.message||err).slice(0,180);}
   }finally{

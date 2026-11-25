@@ -238,6 +238,19 @@ def placement(data):
     need(not (solid and z-margin<-3.65 and abs(x)<.85+margin),'Zugang zur Zimmertuer muss frei bleiben')
     return (x,y,z,size,rotation,int(solid))
 
+def physical_pose(data):
+    p=data.get('position');q=data.get('quaternion')
+    need(isinstance(p,list) and len(p)==3 and isinstance(q,list) and len(q)==4,'Ungueltige Physikposition')
+    p=[number(p[0],-4.8,4.8),number(p[1],0,2.95),number(p[2],-4.8,4.8)]
+    q=[number(v,-1.001,1.001) for v in q]
+    length=math.sqrt(sum(v*v for v in q))
+    need(.98<=length<=1.02,'Ungueltige Physikrotation')
+    q=[v/length for v in q]
+    y=number(data.get('base_y'),0,2.75)
+    rotation=math.degrees(math.atan2(2*(q[3]*q[1]+q[0]*q[2]),1-2*(q[1]*q[1]+q[2]*q[2])))%360
+    return p[0],y,p[2],rotation,json.dumps({'p':p,'q':q},separators=(',',':'))
+
+
 class RoomModelStore:
     def __init__(self, path):
         self.path=Path(path)/'room_models.sqlite3'
@@ -249,11 +262,15 @@ class RoomModelStore:
                 z REAL NOT NULL DEFAULT 0, extent REAL NOT NULL DEFAULT .8, rotation REAL NOT NULL DEFAULT 0,
                 solid INTEGER NOT NULL DEFAULT 0, placed INTEGER NOT NULL DEFAULT 0, created REAL NOT NULL)''')
             db.execute('CREATE INDEX IF NOT EXISTS room_models_owner ON room_models(owner)')
+            columns={r[1] for r in db.execute('PRAGMA table_info(room_models)')}
+            for name,definition in (('hp','INTEGER NOT NULL DEFAULT 100'),('pose','TEXT'),('revision','INTEGER NOT NULL DEFAULT 0')):
+                if name not in columns:db.execute('ALTER TABLE room_models ADD COLUMN '+name+' '+definition)
     def list(self, owner):
         with closing(sqlite3.connect(self.path)) as db:
             db.row_factory=sqlite3.Row
-            rows=[dict(r) for r in db.execute('SELECT id,name,bytes,x,y,z,extent,rotation,solid,placed FROM room_models WHERE owner=? ORDER BY created,id',(owner,))]
-        for r in rows:r['solid']=bool(r['solid']);r['placed']=bool(r['placed'])
+            rows=[dict(r) for r in db.execute('SELECT id,name,bytes,x,y,z,extent,rotation,solid,placed,hp,pose,revision FROM room_models WHERE owner=? ORDER BY created,id',(owner,))]
+        for r in rows:
+            r['solid']=bool(r['solid']);r['placed']=bool(r['placed']);r['pose']=json.loads(r['pose']) if r['pose'] else None
         return {'models':rows,'max_file':MAX_FILE,'max_models':MAX_MODELS,'max_owner':MAX_OWNER}
     def add(self, owner, name, blob):
         need(isinstance(name,str) and name.lower().endswith('.glb'),'GLB-Datei erwartet')
@@ -274,13 +291,32 @@ class RoomModelStore:
             row=db.execute('SELECT data FROM room_models WHERE owner=? AND id=?',(owner,identifier)).fetchone()
         if row is None:raise CaptureError('Modell nicht gefunden',404)
         return row[0]
-    def action(self,owner,data):
+    def action(self,owner,data,damage_profiles=None):
         identifier=data.get('id');op=data.get('action')
         need(isinstance(identifier,str) and len(identifier)==32 and all(c in '0123456789abcdef' for c in identifier),'Ungueltige Modell-ID')
         with closing(sqlite3.connect(self.path)) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            current=db.execute('SELECT hp,placed,revision FROM room_models WHERE owner=? AND id=?',(owner,identifier)).fetchone()
+            if current is None:raise CaptureError('Modell nicht gefunden',404)
+            hp,placed,revision=current
+            if 'revision' in data:
+                need(type(data['revision']) is int,'Ungueltige Modellrevision')
+                if data['revision']!=revision:raise CaptureError('Modell wurde inzwischen geaendert',409)
             if op=='place':
-                row=db.execute('UPDATE room_models SET x=?,y=?,z=?,extent=?,rotation=?,solid=?,placed=1 WHERE owner=? AND id=?',(*placement(data),owner,identifier))
-            elif op=='hide':row=db.execute('UPDATE room_models SET placed=0 WHERE owner=? AND id=?',(owner,identifier))
+                row=db.execute('UPDATE room_models SET x=?,y=?,z=?,extent=?,rotation=?,solid=?,placed=1,pose=NULL,revision=revision+1 WHERE owner=? AND id=?',(*placement(data),owner,identifier))
+            elif op=='motion':
+                need('revision' in data and placed and hp>0,'Modell ist nicht bewegbar')
+                row=db.execute('UPDATE room_models SET x=?,y=?,z=?,rotation=?,pose=?,revision=revision+1 WHERE owner=? AND id=?',(*physical_pose(data),owner,identifier))
+            elif op=='hit':
+                weapon=data.get('weapon','pistol')
+                need(placed and hp>0 and isinstance(weapon,str) and damage_profiles and weapon in damage_profiles,'Ungueltiger Spieltreffer')
+                # Reuse the existing fictional furniture damage profile; no client HP input.
+                damage=damage_profiles[weapon][0]
+                if 'position' in data:
+                    row=db.execute('UPDATE room_models SET hp=max(0,hp-?),x=?,y=?,z=?,rotation=?,pose=?,revision=revision+1 WHERE owner=? AND id=?',(damage,*physical_pose(data),owner,identifier))
+                else:row=db.execute('UPDATE room_models SET hp=max(0,hp-?),revision=revision+1 WHERE owner=? AND id=?',(damage,owner,identifier))
+            elif op=='repair':row=db.execute('UPDATE room_models SET hp=100,revision=revision+1 WHERE owner=? AND id=?',(owner,identifier))
+            elif op=='hide':row=db.execute('UPDATE room_models SET placed=0,revision=revision+1 WHERE owner=? AND id=?',(owner,identifier))
             elif op=='delete':row=db.execute('DELETE FROM room_models WHERE owner=? AND id=?',(owner,identifier))
             else:raise ValueError('Unbekannte Modellaktion')
             if row.rowcount!=1:raise CaptureError('Modell nicht gefunden',404)

@@ -66,3 +66,18 @@ import {roomRig,resetRoomAvatarPose,applyRoomAvatarPose,updateRoomAvatarProp,cle
  resetRoomAvatarPose(avatar);assert.ok(Math.abs(local(hips).y-.96)<1e-6);
 }
 console.log('Room avatar: seated and lying bone poses, restoration, hand-attached cosmetic props and mirror visibility verified');
+
+{
+ const imports=new RoomModels(new THREE.Scene());
+ const raw=new THREE.Group();raw.add(new THREE.Mesh(new THREE.BoxGeometry(1,2,1),new THREE.MeshStandardMaterial({color:0xffffff})));
+ const f=normalizeRoomModel(raw),e={row:{id:'item',extent:2,hp:100},root:f.root,size:f.size,status:'ready'};
+ imports.entries.set('item',e);imports.root.add(e.root);
+ imports.drawBody('item',{p:[1,1,2],q:[0,0,0,1]},100);
+ assert.ok(Math.abs(e.root.position.y)<1e-8);
+ const material=raw.children[0].material,initial=material.color.r;
+ imports.drawBody('item',{p:[1,1,2],q:[0,0,0,1]},50);assert.ok(material.color.r<initial);
+ imports.drawBody('item',{p:[1,1,2],q:[0,0,0,1]},0);assert.equal(e.root.visible,false);
+ imports.drawBody('item',{p:[1,1,2],q:[0,0,0,1]},100);assert.equal(e.root.visible,true);assert.equal(material.color.r,initial);
+ imports.clear();
+}
+console.log('Imported model world pose, damage tint, destruction and repair verified');

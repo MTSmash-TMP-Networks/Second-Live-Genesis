@@ -421,7 +421,7 @@ export class RoomRenderer {
     this.neighborView=new NeighborRoomView(this,spec);
     this.hallFacades=new HallFacadeViews(this,spec);
     // Do not clone live mirrors or private models into adjacent rooms.
-    this.roomModels=new RoomModels(this.scene);this.roomMirror=buildRoomMirror(this);
+    this.roomModels=new RoomModels(this.scene,this.impacts);this.roomMirror=buildRoomMirror(this);
     this.hotelSlot=null;this.hotelHallOpen=false;
     this.status('Fotomaterialien und 3D-Modelle bereit · '+this.quality.toUpperCase());
   }

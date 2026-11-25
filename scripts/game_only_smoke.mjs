@@ -180,3 +180,38 @@ await sessionTest(assert);
 assert.ok(game.includes("credentials:'same-origin'")&&game.includes("cache:'no-store'"));
 assert.ok(game.includes("expected_slot:accountProfile.slot"));
 console.log('Account session verification, reauthentication, draft ownership and restart recovery checks passed');
+
+assert.ok(ids.includes('room-model-repair'));
+const importBody=new Function('yawQuat',getPart('function importedSavedBody(','function syncRoomModelBodies(')+'return importedSavedBody;')(a=>[0,Math.sin(a*Math.PI/360),0,Math.cos(a*Math.PI/360)]);
+const normal=importBody({x:1,y:.3,z:2,rotation:90},[.4,.6,.5]);
+assert.equal(normal.p[1],.6);assert.ok(Math.abs(normal.q[1]-Math.SQRT1_2)<.001);
+const fallen=importBody({pose:{p:[2,.4,3],q:[1,0,0,0]}},[.4,.6,.5]);
+assert.equal(fallen.p[0],2);assert.equal(fallen.q[0],1);
+assert.ok(game.includes('syncRoomModelBodies();')&&game.includes('renderer.roomModels.drawBody(id,b,hp)'));
+assert.ok(game.includes("action('drop_import',id,null,motion)")&&game.includes("action('motion',id,null,motion)"));
+console.log('Imported rigid-body state, saved poses, drop and repair UI checks passed');
+
+const importedLifecycle=new Function('assert',`
+ const spec={},bodies={},state={objects:{}};let debris=[],held=null;
+ let rows=[{row:{id:'x',name:'Test',x:1,y:0,z:2,extent:1,rotation:0,hp:100,revision:0,solid:true},size:[.5,1,.5]}];
+ const renderer={roomModels:{physicsModels:()=>rows}},rgb=()=>[.5,.5,.5];
+ const yawQuat=a=>[0,Math.sin(a*Math.PI/360),0,Math.cos(a*Math.PI/360)];
+ `+getPart('function importedSavedBody(','function importedMotion(')+`
+ syncRoomModelBodies();assert.equal(state.objects.x,100);assert.equal(bodies.x.p[1],.5);
+ const live=bodies.x;live.p[0]=1.4;live.v[0]=.7;
+ // A hit acknowledgement stores a physical snapshot, not a body reset.
+ rows[0].row={...rows[0].row,hp:75,revision:1,pose:{p:[1.1,.5,2],q:[0,0,0,1]}};
+ syncRoomModelBodies('x');assert.equal(bodies.x,live);assert.equal(bodies.x.v[0],.7);assert.equal(state.objects.x,75);
+ syncRoomModelBodies();assert.equal(bodies.x,live);
+ // A remote resize/placement must recreate the collider.
+ rows[0].row={...rows[0].row,extent:.8,pose:null,x:2,revision:2};
+ syncRoomModelBodies();assert.ok(bodies.x!==live);assert.equal(bodies.x.p[0],2);
+ held='x';rows[0].row={...rows[0].row,hp:0,revision:3};
+ syncRoomModelBodies();assert.equal(state.objects.x,0);assert.equal(held,null);assert.equal(debris.length,6);
+ syncRoomModelBodies();assert.equal(debris.length,6);
+ rows[0].row={...rows[0].row,hp:100,revision:4};
+ syncRoomModelBodies();assert.equal(state.objects.x,100);assert.equal(debris.length,0);
+ rows=[];syncRoomModelBodies();assert.equal(bodies.x,undefined);assert.equal(spec.x,undefined);assert.equal(state.objects.x,undefined);
+ `);
+importedLifecycle(assert);
+console.log('Imported object lifecycle: preserve live motion, remote edit, destroy, repair and remove passed');

@@ -23,7 +23,7 @@ export class RoomPhysics {
   }
   remove(entry){this.world.removeRigidBody(entry.body);}
   impulse(id,d,strength=1){const e=this.entries.get(id),scale=Number.isFinite(strength)?Math.max(0,Math.min(2,strength)):1;if(e&&id!=='window'&&!this.spec[id].decor&&!e.held)e.body.applyImpulse(vector(d.map(x=>x*2.5*scale)),true);}
-  read(e,b){b.p=array(e.body.translation());b.v=array(e.body.linvel());b.q=rotation(e.body.rotation());}
+  read(e,b){b.p=array(e.body.translation());b.v=array(e.body.linvel());b.q=rotation(e.body.rotation());b.angular=array(e.body.angvel());}
   syncWalls(walls={}){
     for(const [id,e] of this.wallColliders){const cells=walls[id]||[],signature=wallSignature(cells);if(signature===e.signature)continue;
       const w=WALLS[id];let next;
@@ -44,6 +44,7 @@ export class RoomPhysics {
   step(dt,bodies,state,held,holdPoint,debris,holdRotation=[0,0,0,1]){
     this.syncWalls(state.walls||{});this.syncDecor(state.decor||{});
     if(this.unlocked!==state.unlocked){this.unlocked=state.unlocked;this.door.setEnabled(!this.unlocked);for(const c of this.extension)c.setEnabled(this.unlocked);}
+    for(const [id,e] of this.entries)if(!bodies[id]){this.remove(e);this.entries.delete(id);}
     for(const [id,b] of Object.entries(bodies)){
       let e=this.entries.get(id);const spec=this.spec[id];
       if(!state.objects[id]){if(e){this.remove(e);this.entries.delete(id);}continue;}

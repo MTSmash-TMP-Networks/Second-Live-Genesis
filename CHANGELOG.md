@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.6 – Dynamic Imported Room Objects
+- Eigene GLB-Modelle werden als dynamische Rapier-Starrkörper mit Schwerkraft und vereinfachter Objektkollision eingebunden. E: Aufheben/Abstellen, Q/F: Drehen, G: Fallenlassen.
+- Persistenter Schadenszustand, sichtbare Beschädigung, Bruchstückeffekte und Reparatur per R oder Smartphone. Originaldateien bleiben bei Zerstörung erhalten. Bestehende fiktive Spielschadensprofile werden wiederverwendet.
+- Automatisches Speichern ruhender Physikpositionen und Rotation, begrenzte Speicherfrequenz und Revisionsprüfung. Verlorene Gegenstände kehren ins Inventar zurück. Vorhandene Modelle werden ohne Neuimport migriert.
+- Bestehende Größen-/Dateigrenzen und kontogetrennte Speicherung bleiben erhalten. Kollision und Bruchstücke sind vereinfacht, keine exakte Mesh-Fraktur.
+
 ## 0.12.5 – TRELLIS GLB / WebP Import
 - Eingebettete statische WebP-Texturen mit EXT_texture_webp werden unterstützt, einschließlich der von TRELLIS 2 verwendeten eigenen Texturquellen und GLB-Nullbyte-Ausrichtung. Three.js 0.170.0 lädt WebP bereits nativ.
 - Geprüfte RIFF-/VP8-/VP8L-/VP8X-Abmessungen, keine animierten WebP-Texturen, keine externen Ressourcen. Dateigröße, Geometriegrenzen, Texturgrenzen und kontogetrennte Speicherung bleiben unverändert.

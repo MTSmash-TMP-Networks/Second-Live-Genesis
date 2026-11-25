@@ -108,7 +108,7 @@ const yawQuat=a=>[0,Math.sin(a*Math.PI/360),0,Math.cos(a*Math.PI/360)];
 const quarter=a=>((Math.round(a/90)*90%360)+360)%360;
 const yawAngle=q=>q?quarter(Math.atan2(2*(q[3]*q[1]+q[0]*q[2]),1-2*(q[1]*q[1]+q[2]*q[2]))*180/Math.PI):0;
 const turnedSize=(s,a)=>a===90||a===270?[s[2],s[1],s[0]]:s;
-const savedBody=(s,id)=>({p:[...(s.placements?.[id]||spec[id].p)],v:[0,0,0],q:yawQuat(s.rotations?.[id]||0)});
+const savedBody=(s,id)=>spec[id].imported?importedSavedBody(spec[id].row,spec[id].s):({p:[...(s.placements?.[id]||spec[id].p)],v:[0,0,0],q:yawQuat(s.rotations?.[id]||0)});
 const movableDecor=id=>!!spec[id]?.decor;
 function boundsSize(s,q){if(!q)return s;return [0,1,2].map(i=>{const axis=[0,0,0];axis[i]=1;return rotateInverse(axis,q).reduce((n,v,j)=>n+Math.abs(v)*s[j],0);});}
 function turnHeld(delta){if(!canPlay()||busy||!held)return;heldAngle=quarter(heldAngle+delta);$('notice').textContent='Drehung: '+heldAngle+'°';}
@@ -145,7 +145,7 @@ function syncWallState(next){
   if(wallSignatures!==sig){wallSignatures=sig;wallSolids=Object.entries(WALLS).flatMap(([id,w])=>solidRuns(w,next[id]||[]));}
   renderer?.syncWalls?.(next);physicsWorld?.syncWalls?.(next);
 }
-function collisionRoom(){return [...room.filter(o=>(!o.surfaceId||!WALLS[o.surfaceId])&&!movableDecor(o.surfaceId)&&(state.decor?.[o.surfaceId]||0)<REMOVED),...wallSolids,...(renderer?.roomModels?.colliders()||[])];}
+function collisionRoom(){return [...room.filter(o=>(!o.surfaceId||!WALLS[o.surfaceId])&&!movableDecor(o.surfaceId)&&(state.decor?.[o.surfaceId]||0)<REMOVED),...wallSolids];}
 function syncDecorState(next){
   for(const [id,original] of Object.entries(DECOR_BOUNDS)){
     const o=decorBoundsAt(id,original);
@@ -160,6 +160,7 @@ function sync(s){
   s={...s,objects:{...s.objects}};
   for(const [id,o] of Object.entries(spec))if(o.decor)s.objects[id]=Math.max(0,REMOVED-(s.decor?.[id]||0));
   for(const [id,o] of Object.entries(spec)){
+    if(o.imported){s.objects[id]=o.row.hp??100;continue;}
     const hp=s.objects[id],was=state.objects[id]||0;
     const changed=JSON.stringify(s.placements?.[id])!==JSON.stringify(state.placements?.[id])||(s.rotations?.[id]||0)!==(state.rotations?.[id]||0);
     if(!bodies[id]||(!was&&hp>0)||changed){bodies[id]=savedBody(s,id);if(!was&&hp>0)debris=debris.filter(d=>d.source!==id);}
@@ -172,11 +173,11 @@ function sync(s){
   const wasOpen=state.unlocked;state=s;renderer?.setCurtainsClosed?.(s.curtains_closed===true,!started,s.decor||{});renderer?.setDoorOpen?.(!lobbyEnabled&&s.unlocked);if(started&&!lobbyEnabled&&wasOpen!==s.unlocked)audio.play('door',[0,1.1,-4.95]); updateWorldStatus();
 }
 let mutationVersion=0;async function refresh(){const v=mutationVersion;try{let s=await api('/api/game');if(!busy&&v===mutationVersion)sync(s);}catch(e){if(started&&accountsEnabled&&e.status===401)location.reload();throw e;}}
-async function action(action,id,mark,extra={}){if(busy||lobbyState||lobbyTransition)return false;busy=true;mutationVersion++;try{const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);$('notice').textContent=action==='reset_hotel_layout'?'Hotelanordnung wiederhergestellt':action==='toggle_curtains'?(result.curtains_closed?'Vorhänge geschlossen':'Vorhänge geöffnet'):action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
+async function action(action,id,mark,extra={}){if(busy||lobbyState||lobbyTransition)return false;busy=true;mutationVersion++;try{if(spec[id]?.imported)return await importedAction(action,id,extra);const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);$('notice').textContent=action==='reset_hotel_layout'?'Hotelanordnung wiederhergestellt':action==='toggle_curtains'?(result.curtains_closed?'Vorhänge geschlossen':'Vorhänge geöffnet'):action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
 function dir(){let a=player.yaw,p=player.pitch;return [-Math.sin(a)*Math.cos(p),-Math.sin(p),-Math.cos(a)*Math.cos(p)];}
 function rotateInverse(v,q){if(!q)return v;const [x,y,z,w]=q,u=[-x,-y,-z],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],t=cross(u,v).map(n=>2*n),c=cross(u,t);return v.map((n,i)=>n+w*t[i]+c[i]);}
 function rayBox(eye,d,p,s,q=null){let pos=rotateInverse(eye.map((v,i)=>v-p[i]),q),dir=rotateInverse(d,q),lo=0,hi=8;for(let i=0;i<3;i++){if(Math.abs(dir[i])<1e-8){if(Math.abs(pos[i])>s[i]/2)return Infinity;}else{let a=(-s[i]/2-pos[i])/dir[i],z=(s[i]/2-pos[i])/dir[i];lo=Math.max(lo,Math.min(a,z));hi=Math.min(hi,Math.max(a,z));if(lo>hi)return Infinity;}}return lo;}
-function aim(ray=null,includeDestroyed=true){let d=ray?.direction||dir(),eye=ray?.origin||playerEye(),best=8.01,id=null;for(const o of collisionRoom())best=Math.min(best,(solidRay(o,eye,d)??rayBox(eye,d,o.p,o.s)));if(lobbyEnabled||!state.unlocked)best=Math.min(best,rayBox(eye,d,[0,1.1,-4.95],[1.85,2.2,.18]));for(const [k,b] of Object.entries(bodies)){if(k===held)continue;const live=state.objects[k]>0;if(!live&&!includeDestroyed)continue;const dist=rayBox(eye,d,live?b.p:(state.placements?.[k]||spec[k].p),spec[k].s,live?b.q:yawQuat(state.rotations?.[k]||0));if(dist<best){best=dist;id=k;}}return {id,dist:best};}
+function aim(ray=null,includeDestroyed=true){let d=ray?.direction||dir(),eye=ray?.origin||playerEye(),best=8.01,id=null;for(const o of collisionRoom())best=Math.min(best,(solidRay(o,eye,d)??rayBox(eye,d,o.p,o.s)));if(lobbyEnabled||!state.unlocked)best=Math.min(best,rayBox(eye,d,[0,1.1,-4.95],[1.85,2.2,.18]));for(const [k,b] of Object.entries(bodies)){if(k===held)continue;const live=state.objects[k]>0;if(!live&&!includeDestroyed)continue;const dist=rayBox(eye,d,live||spec[k].imported?b.p:(state.placements?.[k]||spec[k].p),spec[k].s,live||spec[k].imported?b.q:yawQuat(state.rotations?.[k]||0));if(dist<best){best=dist;id=k;}}return {id,dist:best};}
 function setScopeZoom(on){
  scopeZoom=!!on&&equipped==='rifle'&&!held&&!posture&&!reloadId&&canPlay()&&!renderer?.xrMode?.active&&first;
  $('scope-overlay').hidden=!scopeZoom;
@@ -292,6 +293,7 @@ const CURTAIN_TARGETS=new Set(['surface_curtain_l','surface_curtain_r','surface_
 const OBJECT_NAMES={surface_bed:'Bett',surface_wardrobe:'Garderobe',surface_nightstand:'Nachttisch',surface_lamp:'Nachttischleuchte',surface_rug:'Teppich',surface_picture:'Kopfteil und Wandregal',surface_ceilinglamp:'Deckenbeleuchtung',surface_switch:'Lichtschalter',surface_outlet:'Steckdose',surface_doortrim:'Türzarge',surface_windowframe:'Fensterrahmen',surface_curtain_l:'Vorhänge',surface_curtain_r:'Vorhänge',surface_curtainrod:'Vorhangstange',surface_radiator:'Heizkörper',crate:'Koffer',table:'Schreibtisch',chair:'Stuhl',sofa:'Sofa',coffee_table:'Couchtisch',window:'Fenster'};
 function objectName(id){
   if(OBJECT_NAMES[id])return OBJECT_NAMES[id];
+  if(spec[id]?.imported)return spec[id].row.name;
   if(id==='surface_0')return 'Boden';
   if(id==='surface_1')return 'Decke';
   if(WALLS[id])return 'Wand';
@@ -364,6 +366,7 @@ function leavePosture(){
  $('notice').textContent='Aufgestanden';return true;
 }
 function secondaryInteraction(){
+ if(canPlay()&&!lobbyState&&!lobbyTransition&&!busy&&held&&spec[held]?.imported){void dropImported();return;}
  if(!canPlay()||lobbyState||lobbyTransition||busy||held)return;
  if(posture){if(posture.kind==='lie')setSleeping(!posture.sleeping);return;}
  const hit=interactionTarget(),primary=primaryInteraction(hit);
@@ -390,6 +393,7 @@ function updateInteractionHint(vr=false){
     name=objectName(held);canAct=clear;short='Abstellen';
     lines.push(clear?(mobile?'Abstellen: Stellplatz frei':'E · Abstellen'):'Stellplatz blockiert');
     lines.push(mobile?'Drehtasten · 90°':'Q / F · Drehen');
+    if(spec[held]?.imported){secondary='Fallenlassen';lines.push(mobile?secondary:'G · Fallenlassen');}
   }else if(playing){
     const hit=interactionTarget(),primary=primaryInteraction(hit),fix=repairTarget(null,hit),id=hit.dist<=3?hit.id:null;
     const door=doorInView(hit);
@@ -420,7 +424,7 @@ function updateInteractionHint(vr=false){
 function horizontalHold(id){
   const s=turnedSize(spec[id].s,heldAngle),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52,flat=Math.hypot(d[0],d[2]);
   const dx=flat>.01?d[0]/flat:-Math.sin(player.yaw),dz=flat>.01?d[2]/flat:-Math.cos(player.yaw);
-  const clamp=(v,h)=>Math.max(-4.84+h/2,Math.min(4.84-h/2,v));
+  const clamp=(v,h)=>{const limit=spec[id].imported?4.72-Math.max(h/2,spec[id].row.extent*Math.SQRT2/2+.04):4.84-h/2;return Math.max(-limit,Math.min(limit,v));};
   return [clamp(player.x+dx*dist,s[0]),clamp(player.z+dz*dist,s[2])];
 }
 function placementPoint(id){
@@ -441,7 +445,7 @@ async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if
   if(doorInView(hit,ray)){if(lobbyEnabled)await enterLobby();else $('notice').textContent='Gemeinsamer Hotelflur nicht verfügbar.';}
 }
 function groundAt(x,z){if(lobbyState)return 0;if(z<-5&&state.unlocked&&!lobbyEnabled)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
-function coll(x,z,height=player.stance==='crouch'?1.12:1.6){if(lobbyState)return !lobbyWalkable(x,z);if(Math.abs(x)>4.65||z>4.65||z<(!lobbyEnabled&&state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+height&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,height*.53,height-.15].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+height&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
+function coll(x,z,height=player.stance==='crouch'?1.12:1.6){if(lobbyState)return !lobbyWalkable(x,z);if(Math.abs(x)>4.65||z>4.65||z<(!lobbyEnabled&&state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+height&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,height*.53,height-.15].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(!spec[id].imported||spec[id].row.solid)&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+height&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
 let enteringGame=false,pendingAvatar=null;
 function isPersonalSessionError(e){
  return e?.status===401&&(e.code==='session_required'||/^Persoenliche Sitzung fehlt/i.test(e.message||''));
@@ -618,6 +622,88 @@ $('phone-home').onclick=()=>showPhonePage('home');
 $('phone-app-models').onclick=$('world-open-models').onclick=()=>{showPhonePage('models');updateRoomModelUI();void refreshRoomModels(true).catch(e=>{$('room-model-message').textContent=e.message;});};$('phone-app-world').onclick=()=>{showPhonePage('world');updatePhone();};$('phone-app-settings').onclick=()=>{showPhonePage('settings');updatePhone();};$('phone-app-inventory').onclick=()=>{$('closephone').onclick();arsenal();};
 
 /* User-owned GLB furnishings: upload, select, place and persist during gameplay. */
+// Imported objects participate in the normal room rigid-body system.
+// Server coordinates are a floor anchor for edited placement; a saved motion
+// pose contains the exact centre and quaternion of a settled body.
+function importedSavedBody(row,size){
+ const q=row.pose?.q||yawQuat(row.rotation),p=row.pose?.p||[row.x,row.y+size[1]/2,row.z];
+ return {p:[...p],q:[...q],v:[0,0,0]};
+}
+function syncRoomModelBodies(preserveId=null){
+ const models=renderer.roomModels.physicsModels(),wanted=new Set(models.map(m=>m.row.id));
+ for(const id of Object.keys(spec))if(spec[id].imported&&!wanted.has(id)){
+  if(held===id)held=null;delete spec[id];delete bodies[id];delete state.objects[id];debris=debris.filter(d=>d.source!==id);
+ }
+ for(const {row,size} of models){
+  const id=row.id,hp=row.hp??100,old=spec[id],s=size.map(v=>Math.max(.015,v*row.extent));
+  const key=JSON.stringify([row.x,row.y,row.z,row.extent,row.rotation,row.pose]);
+  const saved=importedSavedBody(row,s);
+  // Our own hit/motion acknowledgements must not replace the live rigid body
+  // and discard its velocity. External edits, resizes and repairs restore it.
+  const preserve=id===preserveId&&old&&bodies[id]&&hp>0&&old.row.extent===row.extent;
+  if(!old||!bodies[id]||(!preserve&&old.poseKey!==key)||(!state.objects[id]&&hp>0))bodies[id]=saved;
+  if(old&&state.objects[id]>0&&!hp){
+   if(held===id)held=null;
+   const b=bodies[id];
+   for(let i=0;i<6;i++)debris.push({source:id,kind:'wallChip',variant:i,p:b.p.map((v,j)=>v+(Math.random()-.5)*s[j]*.35),s:s.map(v=>Math.max(.025,Math.min(.22,v*.18))),v:[(Math.random()-.5)*1.8,.6+Math.random(),(Math.random()-.5)*1.8],c:rgb('8b8377'),m:null,r:Math.random()*6});
+  }
+  if(old&&!state.objects[id]&&hp>0)debris=debris.filter(d=>d.source!==id);
+  spec[id]={imported:true,row,s,p:saved.p,max:100,c:'8b8377',poseKey:key,quiet:old?.poseKey===key?old.quiet||0:0};
+  state.objects[id]=hp;
+ }
+}
+function importedMotion(id,body=bodies[id]){
+ const o=spec[id],p=body.p,q=body.q||[0,0,0,1],h=boundsSize(o.s,q)[1];
+ if(![...p,...q].every(Number.isFinite)||Math.abs(p[0])>4.8||Math.abs(p[2])>4.8||p[1]<0||p[1]>2.95)return null;
+ return {position:p.map(v=>Math.round(v*10000)/10000),quaternion:q.map(v=>Math.round(v*1000000)/1000000),base_y:Math.max(0,Math.min(2.75,p[1]-h/2))};
+}
+async function importedAction(op,id,extra={}){
+ const o=spec[id];if(!o?.imported||roomModelBusy||!roomModelAllowed())return false;
+ roomModelBusy=true;roomModelRevision++;
+ try{
+  let request={id,revision:o.row.revision};
+  if(op==='place_object')request={...request,action:'place',x:extra.position[0],y:Math.max(0,extra.position[1]-o.s[1]/2),z:extra.position[2],extent:o.row.extent,rotation:extra.rotation,solid:o.row.solid};
+  else if(op==='hit')request={...request,action:'hit',weapon:extra.weapon,...(importedMotion(id)||{})};
+  else if(op==='repair')request={...request,action:'repair'};
+  else if(op==='drop_import'||op==='motion')request={...request,action:'motion',...extra};
+  else if(op==='hide')request={...request,action:'hide'};
+  else return false;
+  const result=await api('/api/room-models',request);
+  applyRoomModelList(result);syncRoomModelBodies(op==='hit'||op==='motion'?id:null);
+  if(op!=='motion')$('notice').textContent=op==='hit'?(state.objects[id]?'Modell beschädigt · '+state.objects[id]+' %':'Modell zerstört · R: reparieren'):op==='repair'?'Modell repariert':op==='hide'?'Modell zurück im Inventar':op==='drop_import'?'Modell losgelassen':'Modell abgestellt und gespeichert';
+  return true;
+ }catch(e){
+  $('notice').textContent=e.message;
+  if(e.status===409)queueMicrotask(()=>refreshRoomModels().catch(()=>{}));
+  return false;
+ }finally{roomModelBusy=false;}
+}
+async function dropImported(){
+ const id=held,o=spec[id];if(!o?.imported||!placementPoint(id))return;
+ const b=bodies[id],q=yawQuat(heldAngle),p=[...b.p],s=turnedSize(o.s,heldAngle);
+ // Releasing at the carried height uses the existing collision-safe footprint.
+ if(collisionRoom().some(x=>p.every((v,i)=>Math.abs(v-x.p[i])<(s[i]+x.s[i])/2-.018))||
+ Object.entries(bodies).some(([k,x])=>k!==id&&state.objects[k]>0&&p.every((v,i)=>Math.abs(v-x.p[i])<(s[i]+boundsSize(spec[k].s,x.q)[i])/2-.018))){
+  $('notice').textContent='Kein freier Platz zum Fallenlassen';return;
+ }
+ const motion=importedMotion(id,{p,q});if(!motion)return;
+ if(await action('drop_import',id,null,motion))held=null;
+}
+let importedSaveAt=0;
+function saveSettledImports(dt,now){
+ if(!roomModelAllowed()||busy||roomModelBusy||held||now<importedSaveAt)return;
+ for(const [id,o] of Object.entries(spec)){
+  if(!o.imported||!state.objects[id])continue;
+  const b=bodies[id],saved=importedSavedBody(o.row,o.s);
+  if(b.p[1]<-1.5||b.p[1]>4.5||Math.abs(b.p[0])>5.2||Math.abs(b.p[2])>5.2){importedSaveAt=now+1200;void action('hide',id);return;}
+  if(Math.hypot(...b.v)>.055||Math.hypot(...(b.angular||[0,0,0]))>.075){o.quiet=0;continue;}
+  o.quiet=(o.quiet||0)+dt;
+  const q=b.q||[0,0,0,1],dot=Math.abs(q.reduce((n,v,i)=>n+v*saved.q[i],0));
+  if(o.quiet<.65||(Math.hypot(...b.p.map((v,i)=>v-saved.p[i]))<.035&&dot>.999))continue;
+  const motion=importedMotion(id);if(!motion)continue;
+  importedSaveAt=now+1200;o.quiet=0;void action('motion',id,null,motion);return;
+ }
+}
 const ROOM_MODEL_MAX=16*1024*1024;
 let roomModelRows=[],roomModelBusy=false,roomModelRevision=0,roomModelRefreshing=false,roomModelLimits={max_models:8,max_owner:64*1024*1024},roomModelListKey='';
 const modelSelection=()=>$('room-model-select').value;
@@ -648,18 +734,19 @@ function fillRoomModelForm(){
  updateRoomModelUI();
 }
 function updateRoomModelUI(){
- const row=selectedRoomModel(),allowed=roomModelAllowed(),ready=allowed&&!roomModelBusy;
+ const row=selectedRoomModel(),allowed=roomModelAllowed(),ready=allowed&&!roomModelBusy&&!busy&&!held;
  $('room-model-usage').textContent=roomModelRows.length+' / '+roomModelLimits.max_models+' Modelle · '+(roomModelRows.reduce((n,r)=>n+r.bytes,0)/1048576).toFixed(1)+' / '+Math.round(roomModelLimits.max_owner/1048576)+' MiB';
  $('room-model-login').hidden=allowed;
  $('room-model-file').disabled=!ready;
  $('room-model-upload').disabled=!ready||!$('room-model-file').files?.length;
  $('room-model-select').disabled=!ready||!roomModelRows.length;
  $('room-model-editor').hidden=!row;
- for(const id of ['x','y','z','extent','rotation','solid','front','save','hide','delete','retry'])$('room-model-'+id).disabled=!ready||!row;
+ for(const id of ['x','y','z','extent','rotation','solid','front','save','hide','delete','retry','repair'])$('room-model-'+id).disabled=!ready||!row;
  $('room-model-hide').disabled=!ready||!row?.placed;
+ $('room-model-repair').disabled=!ready||!row||(row.hp??100)===100;
  const entry=row?renderer?.roomModels?.status(row.id):null;
  $('room-model-retry').hidden=entry?.status!=='error';
- $('room-model-render').textContent=!row?'':!row.placed?'Im Inventar · noch nicht platziert':entry?.status==='ready'?'Im Zimmer sichtbar':entry?.status==='error'?'Darstellung fehlgeschlagen: '+entry.error:'3D-Modell wird geladen …';
+ $('room-model-render').textContent=!row?'':!row.placed?'Im Inventar · noch nicht platziert':entry?.status==='ready'?((row.hp??100)>0?'Im Zimmer · Zustand '+(row.hp??100)+' %':'Zerstört · Reparatur möglich'):entry?.status==='error'?'Darstellung fehlgeschlagen: '+entry.error:'3D-Modell wird geladen …';
 }
 function applyRoomModelList(data,prefer=null,fill=false){
  if(!Array.isArray(data.models))throw Error('Ungültige Modellliste');
@@ -667,11 +754,11 @@ function applyRoomModelList(data,prefer=null,fill=false){
  roomModelRows=data.models;
  roomModelLimits={max_models:data.max_models||8,max_owner:data.max_owner||64*1024*1024};
  renderer?.roomModels?.sync(roomModelRows,roomModelBytes);
- const key=JSON.stringify(roomModelRows.map(r=>[r.id,r.name,r.placed]));
+ const key=JSON.stringify(roomModelRows.map(r=>[r.id,r.name,r.placed,r.hp]));
  if(key!==roomModelListKey||prefer){
   roomModelListKey=key;const select=$('room-model-select');select.replaceChildren();
   if(!roomModelRows.length){const opt=document.createElement('option');opt.value='';opt.textContent='Noch keine Modelle';select.append(opt);}
-  for(const row of roomModelRows){const opt=document.createElement('option');opt.value=row.id;opt.textContent=row.name+(row.placed?' · im Zimmer':' · Inventar');select.append(opt);}
+  for(const row of roomModelRows){const opt=document.createElement('option');opt.value=row.id;opt.textContent=row.name+((row.hp??100)===0?' · zerstört':row.placed?' · im Zimmer':' · Inventar');select.append(opt);}
   const wanted=prefer||prior;select.value=roomModelRows.some(r=>r.id===wanted)?wanted:(roomModelRows[0]?.id||'');
  }
  if(fill||prior!==modelSelection())fillRoomModelForm();else updateRoomModelUI();
@@ -683,7 +770,7 @@ async function refreshRoomModels(fill=false){
  finally{roomModelRefreshing=false;}
 }
 async function changeRoomModel(work){
- if(!roomModelAllowed()||roomModelBusy)return;
+ if(!roomModelAllowed()||roomModelBusy||busy||held)return;
  roomModelBusy=true;roomModelRevision++;updateRoomModelUI();
  try{await work();}catch(e){$('room-model-message').textContent=e.message;}
  finally{roomModelBusy=false;updateRoomModelUI();}
@@ -711,7 +798,7 @@ $('room-model-upload').onclick=()=>changeRoomModel(async()=>{
  $('room-model-file').value='';applyRoomModelList(result,result.added,true);
  const row=selectedRoomModel();
  if(row){
-  try{await persistRoomModel(row,modelFrontPlacement(player,row.extent));$('room-model-message').textContent='Importiert und vor dir platziert. Du kannst Größe und Position anpassen.';}
+  try{await persistRoomModel(row,{...modelFrontPlacement(player,row.extent),solid:true});$('room-model-message').textContent='Importiert und vor dir platziert. Du kannst Größe und Position anpassen.';}
   catch(e){$('room-model-message').textContent='Importiert. Im Inventar gespeichert: '+e.message;}
  }
 });
@@ -726,6 +813,11 @@ $('room-model-save').onclick=()=>changeRoomModel(async()=>{
  const row=selectedRoomModel();if(!row)return;
  if(!$('room-model-placement').reportValidity())return;
  await persistRoomModel(row,readRoomModelPlacement());$('room-model-message').textContent='Position, Größe und Drehung gespeichert.';
+});
+$('room-model-repair').onclick=()=>changeRoomModel(async()=>{
+ const row=selectedRoomModel();if(!row)return;
+ applyRoomModelList(await api('/api/room-models',{action:'repair',id:row.id,revision:row.revision}),row.id,true);
+ $('room-model-message').textContent='Modell vollständig repariert.';
 });
 $('room-model-hide').onclick=()=>changeRoomModel(async()=>{
  const row=selectedRoomModel();if(!row)return;
@@ -745,7 +837,7 @@ $('phone-sound').onchange=()=>{audio.configure($('phone-sound').checked,Number($
 setInterval(()=>{if(!$('phone').hidden)updatePhone();},15000);
 window.addEventListener('keydown',e=>{if(e.code==='Escape'&&!$('phone').hidden&&$('updater').hidden){$('closephone').onclick();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)audio.stopAll();});
-$('restore-hotel').onclick=async()=>{if(lobbyState||lobbyTransition){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}if(busy||!confirm('Möbel auf Hotel-Standardpositionen zurücksetzen? Schäden und Fortschritt bleiben erhalten.'))return;if(posture&&!leavePosture())return;if(held){bodies[held]=savedBody(state,held);held=null;}if(await action('reset_hotel_layout',null,null,{confirm:true})){for(const id of Object.keys(spec))if(id!=='window')bodies[id]=savedBody(state,id);const p=HOTEL_LAYOUT.spawn.p;player.x=p[0];player.y=0;player.z=p[2];player.vy=0;player.yaw=HOTEL_LAYOUT.spawn.yaw;player.pitch=0;updatePhone();}};
+$('restore-hotel').onclick=async()=>{if(lobbyState||lobbyTransition){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}if(busy||!confirm('Möbel auf Hotel-Standardpositionen zurücksetzen? Schäden und Fortschritt bleiben erhalten.'))return;if(posture&&!leavePosture())return;if(held){bodies[held]=savedBody(state,held);held=null;}if(await action('reset_hotel_layout',null,null,{confirm:true})){for(const id of Object.keys(spec))if(id!=='window'&&!spec[id].imported)bodies[id]=savedBody(state,id);const p=HOTEL_LAYOUT.spawn.p;player.x=p[0];player.y=0;player.z=p[2];player.vy=0;player.yaw=HOTEL_LAYOUT.spawn.yaw;player.pitch=0;updatePhone();}};
 $('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';updatePhone();}catch(e){$('notice').textContent=e.message;}};
 canvas.onclick=()=>{if(mobile||!canPlay())return;void audio.unlock();if(document.pointerLockElement!==canvas){canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;}};
 canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.pointerLockElement===canvas&&canPlay())pressTrigger();});
@@ -830,10 +922,11 @@ function frame(now,xrFrame){
   player.eyeHeight+=(eyeTarget-player.eyeHeight)*Math.min(1,dt*13);
   if(debris.length>80)debris.splice(0,debris.length-80);
   if(started&&!lobbyState){
+    syncRoomModelBodies();
     let holdPoint=[0,0,0];if(held){const s=spec[held].s,[x,z]=horizontalHold(held),floor=groundAt(x,z),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52;
       const y=movableDecor(held)?floor+s[1]/2:Math.min(2.85-s[1]/2,Math.max(floor+s[1]/2,player.y+1.2+d[1]*dist));holdPoint=[x,y,z];}
-    physicsWorld.syncImported(renderer.roomModels?.colliders()||[]);
     physicsWorld.step(dt,bodies,lobbyEnabled?{...state,unlocked:false}:state,held,holdPoint,debris,yawQuat(heldAngle));
+    saveSettledImports(dt,now);
   }
   if(posture){
     const pose=furniturePose(posture.id,bodies[posture.id]);
@@ -859,6 +952,7 @@ function frame(now,xrFrame){
   if(state.unlocked&&!lobbyEnabled){part([0,-.12,-10],[10,.24,10],'a8a69a');part([-4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([0,1.4,-15],[10,2.8,.2],'c1b6a6');}
   for(let [id,b] of Object.entries(bodies)){
     let o=spec[id],hp=state.objects[id];
+    if(o.imported){renderer.roomModels.drawBody(id,b,hp);if(!hp&&!debris.some(d=>d.source===id)){for(let i=0;i<3;i++){const a=i*2.1;part([b.p[0]+Math.cos(a)*.15,Math.max(.04,o.row.y+.04),b.p[2]+Math.sin(a)*.15],[.12,.07,.09],o.c,a);}}continue;}
     if(o.decor){renderer.drawMovableDecor(id,b.p,o.s,b.q,hp>0,id===held);continue;}
     if(hp>0){if(!renderer.drawModel(id,b.p,o.s,hp,o.max,b.q))part(b.p,o.s,id==='window'?o.c:hp<o.max?'947665':o.c,0,b.q);}else {for(let i=0;i<4;i++){let a=i*1.73;const at=state.placements?.[id]||o.p,x=id==='window'?-4.42:at[0];part([x+Math.cos(a)*.19,at[1]-o.s[1]/2+.032,at[2]+Math.sin(a)*.26],id==='window'?[.13,.012,.08]:[.23,.06,.12],o.c,a);}}
   }

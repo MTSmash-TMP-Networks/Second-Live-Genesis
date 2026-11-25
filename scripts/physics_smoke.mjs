@@ -54,3 +54,18 @@ for(let i=0;i<3;i++)rp.step(1/60,rb,rs,'surface_rug',[1,.009,1],[],quarter);
 rp.step(1/60,rb,rs,null,null,[]);assert.equal(rp.entries.get('surface_rug').col.isSensor(),true);
 assert.ok(Math.abs(rb.surface_rug.p[1]-.009)<.001);
 console.log('Rapier: movable non-blocking rug');
+
+const customSpec={},cp=await RoomPhysics.create([{p:[0,-.1,0],s:[10,.2,10]}],customSpec);
+const cb={},cs={objects:{},unlocked:false};
+customSpec.custom={p:[0,1.5,0],s:[.5,.5,.5],imported:true};cb.custom={p:[0,1.5,0],q:[0,0,0,1],v:[0,0,0]};cs.objects.custom=100;
+for(let i=0;i<180;i++)cp.step(1/60,cb,cs,null,null,[]);
+assert.ok(Math.abs(cb.custom.p[1]-.25)<.06);
+for(let i=0;i<30;i++)cp.step(1/60,cb,cs,'custom',[1,1.5,0],[]);
+assert.equal(cp.entries.get('custom').held,true);
+cp.step(1/60,cb,cs,null,null,[]);
+for(let i=0;i<180;i++)cp.step(1/60,cb,cs,null,null,[]);
+assert.ok(Math.abs(cb.custom.p[1]-.25)<.06);
+cs.objects.custom=0;cp.step(1/60,cb,cs,null,null,[]);assert.ok(!cp.entries.has('custom'));
+cs.objects.custom=100;cp.step(1/60,cb,cs,null,null,[]);assert.ok(cp.entries.has('custom'));
+delete cb.custom;delete customSpec.custom;delete cs.objects.custom;cp.step(1/60,cb,cs,null,null,[]);assert.ok(!cp.entries.has('custom'));
+console.log('Rapier: runtime imported objects, gravity, grab/drop, destruction, repair and cleanup');
