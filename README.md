@@ -1,8 +1,16 @@
 # Second Live – World Genesis
 
-**v0.9.2 · Hotel Room / World Foundation**
+**v0.9.3 · Hotel Realism / World Foundation**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.9.3 – Realistischere Hotelmaterialien und Möbel
+
+Die Wände und Decke nutzen glatte, matte Hotelanstriche statt ungleichmäßiger Putz-/Betonmaps. Drei kleine Farbtexturen (Tapete, Teppich, goldgelber Stoff) wurden aus der bereitgestellten Fotovorlage ausgeschnitten, farblich korrigiert und gekachelt; die vorhandenen fotografischen Normal-/Rauheitsmaps sorgen für feinere Gewebedetails. Die Möbel besitzen weichere, dichter modellierte Polster, Nähte und eine über die Matratzenkante fallende Bettdecke. Die indirekte Beleuchtung und Fensterschatten sind überarbeitet.
+
+Optionales Stuhlmodell: [SheenChair](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/e124e8d8d7330a5372bc2b4d00d39a4a9d7997ea/Models/SheenChair), © 2020 Wayfair, LLC / Eric Chadwick, CC0 1.0. Das Modell wird nur während des Builds geladen und lokal ausgeliefert, auf Senfgelb abgestimmt und in die vorhandene Kollisionsgröße eingepasst. Bei Fehler bleibt das lokale Polstermodell verfügbar.
+
+Unter Meine Welt → Hotelanordnung wiederherstellen können gespeicherte Möbelpositionen und Drehungen nach Bestätigung zurückgesetzt werden. Andere Spielstände, Schäden und Fortschritt bleiben unverändert. Das bestehende Raumgerüst bleibt erhalten; die Fototexturen sind keine metrisch kalibrierten Materialscans. Eine echte Grafikabnahme ist erforderlich.
 
 ## Neu in 0.9.2 – Hotelzimmer
 
