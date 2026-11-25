@@ -74,6 +74,8 @@ class CaptureStore:
                 point_count INTEGER NOT NULL DEFAULT 0, result TEXT, message TEXT NOT NULL DEFAULT ''
             );
             ''')
+            if 'da3' not in {row[1] for row in db.execute('PRAGMA table_info(worker)')}:
+                db.execute("ALTER TABLE worker ADD COLUMN da3 TEXT NOT NULL DEFAULT '{}'")
             if 'scan_region' not in {row[1] for row in db.execute('PRAGMA table_info(players)')}:
                 db.execute('ALTER TABLE players ADD COLUMN scan_region TEXT')
                 db.execute('UPDATE players SET scan_region=region')
@@ -152,7 +154,7 @@ class CaptureStore:
             result['id']=row['id']; result['evaluation']=bool(row['evaluation'])
             result['frames']=[{'id':f['id'],'status':f['status'],'analysis':json.loads(f['result']) if f['result'] else None} for f in db.execute('SELECT id,status,result FROM frames WHERE scan=? ORDER BY created',(row['id'],))]
             if row['status']=='capturing':
-                live=db.execute("SELECT state,attempted,revision,registered,source_count,point_count,message,json_extract(result,'$.registered_ids') AS registered_ids,json_extract(result,'$.frame_ids') AS frame_ids FROM live_previews WHERE scan=?",(row['id'],)).fetchone()
+                live=db.execute("SELECT state,attempted,revision,registered,source_count,point_count,message,json_extract(result,'$.registered_ids') AS registered_ids,json_extract(result,'$.frame_ids') AS frame_ids,json_extract(result,'$.kind') AS kind,json_extract(result,'$.input_count') AS input_count,json_extract(result,'$.warning') AS warning FROM live_previews WHERE scan=?",(row['id'],)).fetchone()
                 result['live']=dict(live) if live else {'state':'waiting','attempted':0,'revision':None,'registered':0,'source_count':0,'point_count':0,'message':''}
                 for k in ('registered_ids','frame_ids'):result['live'][k]=json.loads(result['live'].get(k) or '[]')
         elif row['status']=='published': result['id']=row['id']
@@ -164,7 +166,7 @@ class CaptureStore:
             row=db.execute('SELECT s.* FROM targets t JOIN scans s ON s.id=t.scan WHERE t.id=?',(target,)).fetchone()
             worker=db.execute('SELECT * FROM worker WHERE id=1').fetchone()
             out=self._view(db,row,player) if row else {'scope':scope,'status':'unexplored','mine':False,'frames':[],'preview':False}
-            out['worker']={'online':bool(worker and time.time()-worker['heartbeat']<90),'device':worker['device'] if worker else 'nicht gestartet'}
+            out['worker']={'online':bool(worker and time.time()-worker['heartbeat']<90),'device':worker['device'] if worker else 'nicht gestartet','da3':json.loads(worker['da3']) if worker and time.time()-worker['heartbeat']<90 else {'status':'offline'}}
             return out
     def reserve(self,player,scope,location=None,evaluation=False):
         now=time.time()
@@ -223,7 +225,10 @@ class CaptureStore:
         with self.tx() as db:
             self.expire(db); row=self._owned(db,player,scan); old=row['status']; now=time.time()
             if action=='submit' and old=='capturing':
-                if db.execute('SELECT count(*) FROM frames WHERE scan=?',(scan,)).fetchone()[0]<MIN_FRAMES: raise CaptureError('Mindestens 8 unterschiedliche Aufnahmen erforderlich (keine Qualitaetsgarantie)',400)
+                count=db.execute('SELECT count(*) FROM frames WHERE scan=?',(scan,)).fetchone()[0]
+                live=db.execute("SELECT json_extract(result,'$.kind') AS kind,registered FROM live_previews WHERE scan=?",(scan,)).fetchone()
+                minimum=4 if live and live['kind']=='da3_multiview' and live['registered']>=2 else MIN_FRAMES
+                if count<minimum: raise CaptureError('Mindestens '+str(minimum)+' unterschiedliche Aufnahmen erforderlich (keine Qualitaetsgarantie)',400)
                 state='queued'; msg='CPU-Auftrag in Warteschlange'
                 db.execute('DELETE FROM live_previews WHERE scan=?',(scan,))
             elif action=='retry' and old=='failed': state='capturing'; msg='Weitere Perspektiven aufnehmen'; db.execute('UPDATE scans SET expires=? WHERE id=?',(now+LEASE,scan))
@@ -311,8 +316,8 @@ class CaptureStore:
                     (time.time(),job['token'],result['registered'],result['total_frames'],len(result['points']),json.dumps(result,allow_nan=False,separators=(',',':')),message[:250],job['scan']))
             return True
 
-    def heartbeat(self,device):
-        with self.tx() as db: db.execute('INSERT INTO worker VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET heartbeat=excluded.heartbeat,device=excluded.device',(time.time(),device))
+    def heartbeat(self,device,da3=None):
+        with self.tx() as db: db.execute('INSERT INTO worker(id,heartbeat,device,da3) VALUES(1,?,?,?) ON CONFLICT(id) DO UPDATE SET heartbeat=excluded.heartbeat,device=excluded.device,da3=excluded.da3',(time.time(),device,json.dumps(da3 or {})))
     def recover_worker(self):
         with self.tx() as db:
             db.execute("UPDATE frames SET status='pending' WHERE status='processing'")
