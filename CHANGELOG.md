@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.0 – Shared Hotel Lobby
+- Gemeinsamer 42 m langer Hotelflur mit 24 nummerierten Türen, modellierter Hotelgestaltung, Teppich und Beleuchtung.
+- E an der Zimmertür wechselt in den Flur; E an der eigenen grün markierten Tür kehrt ins private Zimmer zurück. Getrennte Szenen, Türnummern für die Dauer eines Besuchs zugewiesen.
+- Authentifizierte Mehrspieler-Präsenz, interpolierte 3D-Gästeavatare und Gehbewegungen; Anzeige der Gästezahl und eigenen Zimmernummer.
+- Unbewaffneter Begegnungsbereich, getrennt von privaten Möbeln und Schäden. Keine Fremdzimmer, private Daten bleiben isoliert.
+- Bis zu 24 gleichzeitige Flurgäste je Serverprozess; automatische Präsenzbereinigung und Rückkehr bei Verbindungsverlust. Vorhandene Spielstände bleiben unverändert.
+
 ## 0.9.6 – Room Life
 - E am Sofa: Hinsetzen; E am Bett: Hinlegen; F: Schlafen/Wachwerden; E: Aufstehen bzw. Aufwachen. G nimmt Sitz-/Liegemöbel weiterhin auf. Möbelrelative Kameraposition und sichere Aufstehposition.
 - Separater Teppich mit E bewegbar und Q/F drehbar, persistent gespeichert; flache Platzierung unter Möbeln ohne blockierenden Kollisionskörper.
