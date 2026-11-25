@@ -152,8 +152,9 @@ class CaptureStore:
             result['id']=row['id']; result['evaluation']=bool(row['evaluation'])
             result['frames']=[{'id':f['id'],'status':f['status'],'analysis':json.loads(f['result']) if f['result'] else None} for f in db.execute('SELECT id,status,result FROM frames WHERE scan=? ORDER BY created',(row['id'],))]
             if row['status']=='capturing':
-                live=db.execute('SELECT state,attempted,revision,registered,source_count,point_count,message FROM live_previews WHERE scan=?',(row['id'],)).fetchone()
+                live=db.execute('SELECT state,attempted,revision,registered,source_count,point_count,message,json_extract(result,'$.registered_ids') AS registered_ids,json_extract(result,'$.frame_ids') AS frame_ids FROM live_previews WHERE scan=?',(row['id'],)).fetchone()
                 result['live']=dict(live) if live else {'state':'waiting','attempted':0,'revision':None,'registered':0,'source_count':0,'point_count':0,'message':''}
+                for k in ('registered_ids','frame_ids'):result['live'][k]=json.loads(result['live'].get(k) or '[]')
         elif row['status']=='published': result['id']=row['id']
         result['preview']=row['status'] in ('review','published') and (mine or row['status']=='published')
         return result
@@ -296,7 +297,7 @@ class CaptureStore:
                 os.link(source/(fid+'.jpg'),dest/(f'{i:04d}_{fid}.jpg'))
             return True
 
-    def finish_live(self,job,result=None,message='',interrupted=False):
+    def finish_live(self,job,result=None,message='',interrupted=False,error=False):
         with self.tx() as db:
             row=db.execute("SELECT l.token,s.status FROM live_previews l JOIN scans s ON s.id=l.scan WHERE l.scan=?",(job['scan'],)).fetchone()
             if not row or row['token']!=job['token'] or row['status']!='capturing':return False
@@ -304,7 +305,7 @@ class CaptureStore:
                 db.execute("UPDATE live_previews SET state='waiting',attempted=0,updated=?,message='Live-Berechnung pausiert' WHERE scan=?",(time.time(),job['scan']))
                 return False
             if result is None:
-                db.execute("UPDATE live_previews SET state='insufficient',updated=?,message=? WHERE scan=?",(time.time(),message[:250],job['scan']))
+                db.execute("UPDATE live_previews SET state=?,updated=?,message=? WHERE scan=?",('error' if error else 'insufficient',time.time(),message[:250],job['scan']))
             else:
                 db.execute("""UPDATE live_previews SET state='ready',updated=?,revision=?,registered=?,source_count=?,point_count=?,result=?,message=? WHERE scan=?""",
                     (time.time(),job['token'],result['registered'],result['total_frames'],len(result['points']),json.dumps(result,allow_nan=False,separators=(',',':')),message[:250],job['scan']))
