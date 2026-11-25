@@ -6,6 +6,8 @@ COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web
 COPY web/engine/wall_layout.json /build/wall_layout.json
 COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs ./
 COPY web/engine/capture-view.js ./capture-view.js
+COPY web/capture.js web/capture-flow.js web/scanner.html scripts/capture_ui_smoke.mjs ./
+RUN node --check capture.js && node capture_ui_smoke.mjs
 RUN ./node_modules/.bin/esbuild capture-view.js --bundle --platform=browser --format=esm --target=es2020 --minify --outfile=/build/capture-view.bundle.js
 # Rapier 0.17.3 advertises a CJS entry that esbuild may interpret as ESM.
 # Bypass package entry resolution for both builds; use the same embedded-WASM ESM file.
