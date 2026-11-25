@@ -1,6 +1,6 @@
 # Second Live – World Genesis
 
-**v0.7.6 · Furniture Placement & Rotation / World Capture CPU-Testversion**
+**v0.7.7 · Guided Mobile World Capture / World Capture CPU-Testversion**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spieler sollen ihre gemeinsame Welt aus realen Aufnahmen erschaffen, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
 
@@ -67,7 +67,9 @@ Die `.env`, ein zufälliger Scanner-/optionaler Spielschlüssel sowie ein unabh�
 
 **Update von älteren ZIP-Versionen:** Dateien in den bisherigen Projektordner kopieren, `.env` und Docker-Volume unverändert lassen; `chmod +x start.sh stop.sh && ./start.sh --build` (ohne aktive Ingame-Update-Konfiguration). Ordnername/Compose-Projektname beibehalten, damit das existierende Datenvolume verwendet wird. Nicht `docker compose down -v` ausführen.
 
-## World Capture – erster CPU-Test
+## World Capture – geführter Smartphone-Scan
+
+Ab v0.7.7 führt die Scan-App in vier Schritten durch Start, Aufnahmen, Fotoprüfung und 3D-Vorschau. Kamera-Hinweise und Fotozählung bleiben sichtbar; GPS ist nur für gemeinsame geografische Scans erforderlich. Die Galerie und native Kamera bleiben als Alternativen verfügbar. Die 24–40 empfohlenen Aufnahmen sind ein Richtwert, keine gemessene Raumabdeckung. Die Vorschau lässt sich mit einem Finger drehen, mit zwei Fingern zoomen/verschieben und zurücksetzen. Der Server rechnet unverändert echte COLMAP- und optionale KI-Daten, keine künstliche Ersatzwelt.
 
 Die neue Version legt automatisch eine persönliche Gastidentität und einen separaten Startraum an. Der bisherige globale Spielstand bleibt im Datenvolume erhalten; neue Räume starten mit intakter Vorlage. Browser-Cookies identifizieren den Spieler. Ohne Konto gibt es keine automatische Wiederherstellung einer gelöschten Sitzung. Kopplung über einen einmaligen QR-Code ist möglich. GPS ist freiwillig; private Scans benötigen keinen Standort. Gemeinsame Testregionen verwenden grobe Geohash-Zellen (Länge 7), nicht exakte Raum-/Gebäudegrenzen. Veröffentlichte Vorschauen sperren neue Scanaufträge für diese Region; Entfernen durch den Eigentümer gibt sie frei. Keine produktive öffentliche Welt oder Multiplayer-Synchronisierung.
 
