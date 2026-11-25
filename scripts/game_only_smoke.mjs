@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const html=readFileSync(new URL('./index.html',import.meta.url),'utf8');
+const game=readFileSync(new URL('./game.js',import.meta.url),'utf8');
+const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
+assert.equal(new Set(ids).size,ids.length);
+for(const [,id] of game.matchAll(/\$\('([^']+)'\)/g))assert.ok(ids.includes(id),'Missing DOM element '+id);
+for(const obsolete of ['phone-app-capture','start-gps','/scanner.html','/panorama.html','/api/capture/locate','locationFix'])assert.ok(!(html+game).includes(obsolete),obsolete);
+assert.ok(game.includes('health.personal_world===true'));
+assert.ok(game.includes("api('/api/session',{})"));
+assert.ok(ids.includes('phone-app-world')&&ids.includes('update-open-phone'));
+console.log('Game-only UI, session handling and DOM checks passed');
