@@ -44,3 +44,13 @@ for(let i=0;i<10;i++)bp.step(1/60,bb,bs,null,null,[]);
 assert.ok(Math.abs(bb.bed.q[1]-Math.SQRT1_2)<.001,'saved orientation restored');
 assert.ok(Math.abs(bb.bed.p[0]-1)<.001,'placed furniture remains stationary');
 console.log('Rapier: movable decor rotation and stable placement');
+
+// Thin rug is non-blocking, including after grab/release.
+const rugSpec={surface_rug:{p:[0,.009,0],s:[3.2,.018,2.22],decor:true}};
+const rp=await RoomPhysics.create([{p:[0,-.1,0],s:[10,.2,10]}],rugSpec);
+const rb={surface_rug:{p:[0,.009,0],v:[0,0,0],q:[0,0,0,1]}},rs={objects:{surface_rug:4},unlocked:false};
+rp.step(1/60,rb,rs,null,null,[]);assert.equal(rp.entries.get('surface_rug').col.isSensor(),true);
+for(let i=0;i<3;i++)rp.step(1/60,rb,rs,'surface_rug',[1,.009,1],[],quarter);
+rp.step(1/60,rb,rs,null,null,[]);assert.equal(rp.entries.get('surface_rug').col.isSensor(),true);
+assert.ok(Math.abs(rb.surface_rug.p[1]-.009)<.001);
+console.log('Rapier: movable non-blocking rug');
