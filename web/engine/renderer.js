@@ -517,7 +517,7 @@ export class RoomRenderer {
     }
   }
   reload(progress){this.reloadProgress=Math.max(0,Math.min(1,progress||0));}
-  render(canvas,eye,target,mobile,dt=1/60,player=null){
+  render(canvas,eye,target,mobile,dt=1/60,player=null,scopeZoom=false){
     this.swayTime+=dt;
     const idle=Math.sin(this.swayTime*1.4)*.004;
     this.weaponRoot.position.x=.23+idle;
@@ -532,6 +532,7 @@ export class RoomRenderer {
     if(this.xrMode.active){if(player)this.xrMode.place(player);this.renderer.render(this.scene,this.camera);return;}
     const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),dpr=Math.min(devicePixelRatio||1,this.quality==='1k'||mobile?1.25:1.75);
     if(w!==this.width||h!==this.height||dpr!==this.dpr){this.width=w;this.height=h;this.dpr=dpr;this.renderer.setPixelRatio(dpr);this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
+    const fov=scopeZoom?28:65;if(this.camera.fov!==fov){this.camera.fov=fov;this.camera.updateProjectionMatrix();}
     this.camera.position.set(...eye);this.camera.lookAt(...target);this.renderer.render(this.scene,this.camera);
   }
 }
