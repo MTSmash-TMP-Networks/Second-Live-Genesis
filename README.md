@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.9.3 · Hotel Realism / World Foundation**
+**v0.9.4 · Hotel Realism / Door Wall Fix**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.9.4 – Wandabschluss an der Tür
+
+Die beiden Wandstücke neben der Tür verwenden jetzt exakt das gleiche glatte Hotelwandmaterial wie der angrenzende Raum. Die Sockelleisten reichen bis zur Türzarge. Türmodell, Öffnungsmechanik, Raumabmessungen und Spielstände bleiben unverändert.
 
 ## Neu in 0.9.3 – Realistischere Hotelmaterialien und Möbel
 
