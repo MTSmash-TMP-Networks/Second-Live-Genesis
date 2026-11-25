@@ -1,9 +1,10 @@
-import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
 let renderer=null, physicsWorld=null, graphicsReady=false;
 let equipped=null, xrEntering=false, xrReturnFirst=true, posture=null, scopeZoom=false, lastWheel=-Infinity;
+let lobbyEnabled=false,lobbyState=null,lobbyTransition=false;
 const weaponIds=['pistol','rifle','m16'];
 const weaponCycle=['none',...weaponIds];
 function nextWeapon(current,direction){const i=Math.max(0,weaponCycle.indexOf(current||'none'));return weaponCycle[(i+(direction>0?1:-1)+weaponCycle.length)%weaponCycle.length];}
@@ -130,14 +131,14 @@ function sync(s){
     }
   }
   syncWallState(s.walls||{});syncDecorState(s.decor||{});renderer?.setRoomLight?.(s.lights_on!==false,s.decor||{});
-  const wasOpen=state.unlocked;state=s;renderer?.setCurtainsClosed?.(s.curtains_closed===true,!started,s.decor||{});renderer?.setDoorOpen?.(s.unlocked);if(started&&wasOpen!==s.unlocked)audio.play('door',[0,1.1,-4.95]); $('worldstate').textContent=personalWorld?'Privater Startraum':s.unlocked?'Testbereich freigeschaltet':'Startraum';
+  const wasOpen=state.unlocked;state=s;renderer?.setCurtainsClosed?.(s.curtains_closed===true,!started,s.decor||{});renderer?.setDoorOpen?.(!lobbyEnabled&&s.unlocked);if(started&&!lobbyEnabled&&wasOpen!==s.unlocked)audio.play('door',[0,1.1,-4.95]); updateWorldStatus();
 }
 let mutationVersion=0;async function refresh(){const v=mutationVersion;let s=await api('/api/game');if(!busy&&v===mutationVersion)sync(s);}
-async function action(action,id,mark,extra={}){if(busy)return false;busy=true;mutationVersion++;try{const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);$('notice').textContent=action==='reset_hotel_layout'?'Hotelanordnung wiederhergestellt':action==='toggle_curtains'?(result.curtains_closed?'Vorhänge geschlossen':'Vorhänge geöffnet'):action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
+async function action(action,id,mark,extra={}){if(busy||lobbyState||lobbyTransition)return false;busy=true;mutationVersion++;try{const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);$('notice').textContent=action==='reset_hotel_layout'?'Hotelanordnung wiederhergestellt':action==='toggle_curtains'?(result.curtains_closed?'Vorhänge geschlossen':'Vorhänge geöffnet'):action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
 function dir(){let a=player.yaw,p=player.pitch;return [-Math.sin(a)*Math.cos(p),-Math.sin(p),-Math.cos(a)*Math.cos(p)];}
 function rotateInverse(v,q){if(!q)return v;const [x,y,z,w]=q,u=[-x,-y,-z],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],t=cross(u,v).map(n=>2*n),c=cross(u,t);return v.map((n,i)=>n+w*t[i]+c[i]);}
 function rayBox(eye,d,p,s,q=null){let pos=rotateInverse(eye.map((v,i)=>v-p[i]),q),dir=rotateInverse(d,q),lo=0,hi=8;for(let i=0;i<3;i++){if(Math.abs(dir[i])<1e-8){if(Math.abs(pos[i])>s[i]/2)return Infinity;}else{let a=(-s[i]/2-pos[i])/dir[i],z=(s[i]/2-pos[i])/dir[i];lo=Math.max(lo,Math.min(a,z));hi=Math.min(hi,Math.max(a,z));if(lo>hi)return Infinity;}}return lo;}
-function aim(ray=null,includeDestroyed=true){let d=ray?.direction||dir(),eye=ray?.origin||playerEye(),best=8.01,id=null;for(const o of collisionRoom())best=Math.min(best,(solidRay(o,eye,d)??rayBox(eye,d,o.p,o.s)));if(!state.unlocked)best=Math.min(best,rayBox(eye,d,[0,1.1,-4.95],[1.85,2.2,.18]));for(const [k,b] of Object.entries(bodies)){if(k===held)continue;const live=state.objects[k]>0;if(!live&&!includeDestroyed)continue;const dist=rayBox(eye,d,live?b.p:(state.placements?.[k]||spec[k].p),spec[k].s,live?b.q:yawQuat(state.rotations?.[k]||0));if(dist<best){best=dist;id=k;}}return {id,dist:best};}
+function aim(ray=null,includeDestroyed=true){let d=ray?.direction||dir(),eye=ray?.origin||playerEye(),best=8.01,id=null;for(const o of collisionRoom())best=Math.min(best,(solidRay(o,eye,d)??rayBox(eye,d,o.p,o.s)));if(lobbyEnabled||!state.unlocked)best=Math.min(best,rayBox(eye,d,[0,1.1,-4.95],[1.85,2.2,.18]));for(const [k,b] of Object.entries(bodies)){if(k===held)continue;const live=state.objects[k]>0;if(!live&&!includeDestroyed)continue;const dist=rayBox(eye,d,live?b.p:(state.placements?.[k]||spec[k].p),spec[k].s,live?b.q:yawQuat(state.rotations?.[k]||0));if(dist<best){best=dist;id=k;}}return {id,dist:best};}
 function setScopeZoom(on){
  scopeZoom=!!on&&equipped==='rifle'&&!held&&!posture&&!reloadId&&canPlay()&&!renderer?.xrMode?.active&&first;
  $('scope-overlay').hidden=!scopeZoom;
@@ -146,8 +147,8 @@ function setScopeZoom(on){
  document.body.classList.toggle('scope-zoom',scopeZoom);
 }
 function toggleScope(){if(equipped!=='rifle'||held||posture||reloadId||!canPlay()||renderer?.xrMode?.active)return;if(!first)first=true;setScopeZoom(!scopeZoom);}
-function chooseWeapon(id){if((held||posture)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Testmodus':equipped==='rifle'?'Gewehr · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer (Spielmodus)':'Unbewaffnet';}
-function arsenal(){document.exitPointerLock?.();clearControls();active=false;$('arsenal').hidden=false;}
+function chooseWeapon(id){if((held||posture||lobbyState||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Testmodus':equipped==='rifle'?'Gewehr · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer (Spielmodus)':'Unbewaffnet';}
+function arsenal(){if(lobbyState||lobbyTransition){$('notice').textContent='Der Hotelflur ist ein gemeinsamer, unbewaffneter Bereich.';return;}document.exitPointerLock?.();clearControls();active=false;$('arsenal').hidden=false;}
 $('closearsenal').onclick=()=>{$('arsenal').hidden=true;active=true;clearControls();};
 for(const id of [...weaponIds,'none'])$('equip-'+id).onclick=()=>{chooseWeapon(id);$('closearsenal').onclick();};
 chooseWeapon('none');
@@ -179,7 +180,7 @@ function primaryInteraction(hit,ray=null){
   return null;
 }
 function doorInView(hit,ray=null){
-  if(state.unlocked||hit.dist>3||(hit.id&&hit.id!=='surface_doortrim'))return false;
+  if((!lobbyEnabled&&state.unlocked)||hit.dist>3||(hit.id&&hit.id!=='surface_doortrim'))return false;
   const {origin,direction}=interactionRay(ray);
   const d=rayBox(origin,direction,[0,1.1,-4.95],[1.245,2.25,.30]);
   return d<=3&&d<=hit.dist+.06;
@@ -229,7 +230,7 @@ function leavePosture(){
  $('notice').textContent='Aufgestanden';return true;
 }
 function secondaryInteraction(){
- if(!canPlay()||busy||held)return;
+ if(!canPlay()||lobbyState||lobbyTransition||busy||held)return;
  if(posture){if(posture.kind==='lie')setSleeping(!posture.sleeping);return;}
  const hit=interactionTarget(),primary=primaryInteraction(hit);
  if(primary?.secondary&&movable(primary.id))pickUp(primary.id);
@@ -239,11 +240,65 @@ function pickUp(id){
  chooseWeapon('none');held=id;heldAngle=yawAngle(bodies[held].q);
  $('notice').textContent='Gegenstand aufgenommen · Q/F: drehen · E: abstellen';
 }
+function updateWorldStatus(){
+ const message=lobbyState?'Hotelflur · '+lobbyState.online+' / '+lobbyState.capacity+' Gäste · Zimmer '+lobbyDoor(lobbyState.slot).number:personalWorld?'Privater Startraum':state.unlocked?'Testbereich freigeschaltet':'Startraum';
+ $('worldstate').textContent=message;$('phone-worldstate').textContent=message;
+}
+async function lobbyRequest(data,keepalive=false){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),3500);
+ try{
+  const res=await fetch('/api/lobby',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...(protectedGame?{'X-SecondLive-Token':token}:{})},body:JSON.stringify(data),signal:controller.signal,keepalive});
+  const result=await res.json();if(!res.ok){const e=Error(result.error||'Hotelflur nicht erreichbar');e.status=res.status;throw e;}return result;
+ }finally{clearTimeout(timer);}
+}
+async function enterLobby(){
+ if(!lobbyEnabled||lobbyState||lobbyTransition||busy||held||posture)return;
+ lobbyTransition=true;chooseWeapon('none');clearControls();$('notice').textContent='Hotelflur wird verbunden …';
+ try{
+  const result=await lobbyRequest({action:'enter'});
+  if(!lobbyDoor(result.slot)||!Array.isArray(result.position)||!lobbyWalkable(result.position[0],result.position[2])||typeof result.lease!=='string')throw Error('Ungültige Flursitzung');
+  lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
+  renderer.lobby.setOwn(result.slot);renderer.lobby.sync(result.peers||[]);
+  Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0});
+  audio.play('door');updateWorldStatus();$('notice').textContent='Willkommen im Hotelflur. Dein Zimmer: '+lobbyDoor(result.slot).number;
+ }catch(e){$('notice').textContent=e.message||'Hotelflur nicht erreichbar';}
+ finally{lobbyTransition=false;clearControls();}
+}
+function returnToRoom(message='Du bist wieder in deinem Zimmer.',notify=true){
+ const old=lobbyState;if(!old)return;
+ lobbyState=null;lobbyTransition=false;renderer.lobby.clear();clearControls();player.y=0;player.vy=0;
+ const spawn=HOTEL_LAYOUT.spawn.p,candidates=[[0,-3.8],[-.8,-3.6],[.8,-3.6],[spawn[0],spawn[2]]];
+ for(let z=-3.8;z<=4;z+=.65)for(let x=-4;x<=4;x+=.65)candidates.push([x,z]);
+ const p=candidates.find(([x,z])=>groundAt(x,z)>=-.05&&!coll(x,z))||[spawn[0],spawn[2]];
+ Object.assign(player,{x:p[0],z:p[1],y:groundAt(...p),yaw:Math.PI,pitch:0,vy:0});
+ audio.play('door');updateWorldStatus();$('notice').textContent=message;
+ if(notify)lobbyRequest({action:'leave',lease:old.lease},true).catch(()=>{});
+}
+async function updateLobby(){
+ const visit=lobbyState;if(!visit||visit.sending||lobbyTransition)return;
+ visit.sending=true;
+ try{
+  const result=await lobbyRequest({action:'update',lease:visit.lease,position:[player.x,player.y,player.z],yaw:player.yaw});
+  if(lobbyState!==visit)return;
+  visit.lastOK=performance.now();visit.online=result.online;visit.capacity=result.capacity;renderer.lobby.sync(result.peers||[]);updateWorldStatus();
+ }catch(e){
+  if(lobbyState!==visit)return;
+  if(e.status===409||performance.now()-visit.lastOK>LOBBY_LAYOUT.leaseSeconds*1000){returnToRoom('Flurverbindung beendet. Du bist wieder in deinem Zimmer.',false);}
+  else $('notice').textContent='Flurverbindung unterbrochen – erneuter Verbindungsversuch';
+ }finally{visit.sending=false;}
+}
+setInterval(updateLobby,LOBBY_LAYOUT.pollMilliseconds);
+window.addEventListener('pagehide',()=>{if(lobbyState)lobbyRequest({action:'leave',lease:lobbyState.lease},true).catch(()=>{});});
+function lobbyInteraction(ray=null){
+ if(!lobbyState)return null;const {origin,direction}=interactionRay(ray);return lobbyDoorAt(origin,direction);
+}
 function updateInteractionHint(vr=false){
   const playing=canPlay()&&!vr,panel=$('interaction-prompt'),actionButton=$('touchInteract'),repairButton=$('touchRepair');
   $('touchRotateLeft').hidden=$('touchRotateRight').hidden=!held;
   let name='',lines=[],short='Aktion',secondary='',canAct=false,canRepair=false;
-  if(playing&&posture){
+  if(playing&&lobbyState){
+    const door=lobbyInteraction();if(door){name='Zimmer '+door.number;if(door.slot===lobbyState.slot){short='Zimmer betreten';canAct=true;lines.push(mobile?short:'E · '+short);}else lines.push('Privates Gästezimmer · kein Zutritt');}
+  }else if(playing&&posture){
     name=posture.kind==='sit'?'Sofa · sitzend':posture.sleeping?'Bett · schlafend':'Bett · liegend';
     short=posture.sleeping?'Aufwachen':'Aufstehen';canAct=true;
     lines.push(mobile?short:'E · '+short);
@@ -257,7 +312,7 @@ function updateInteractionHint(vr=false){
     const hit=interactionTarget(),primary=primaryInteraction(hit),fix=repairTarget(null,hit),id=hit.dist<=3?hit.id:null;
     const door=doorInView(hit);
     if(primary){name=objectName(primary.id);lines.push(mobile?primary.label:'E · '+primary.label);short=primary.short;canAct=true;if(primary.secondary){secondary=primary.secondary;lines.push(mobile?secondary:'G · '+secondary);}}
-    else if(door){name='Tür';lines.push('Weitere Welt noch nicht verfügbar');}
+    else if(door){name='Zimmertür';if(lobbyEnabled){short='Flur betreten';canAct=true;lines.push(mobile?short:'E · '+short);}else lines.push('Gemeinsamer Flur nicht verfügbar');}
     else if(id&&CURTAIN_TARGETS.has(id)&&!curtainsUsable()){name=objectName(id);lines.push('Vorhänge oder Stange zuerst reparieren');}
     if(fix&&damaged(fix.id)){
       if(!name)name=objectName(fix.id);
@@ -269,12 +324,12 @@ function updateInteractionHint(vr=false){
   if(name){if($('interaction-name').textContent!==name)$('interaction-name').textContent=name;const msg=lines.join('  |  ');if($('interaction-actions').textContent!==msg)$('interaction-actions').textContent=msg;}
   $('cross').classList.toggle('actionable',playing&&(canAct||canRepair));
   if(actionButton.textContent!==short)actionButton.textContent=short;
-  actionButton.disabled=!canAct||busy;repairButton.disabled=!canRepair||busy;
+  actionButton.disabled=!canAct||busy||lobbyTransition;repairButton.disabled=!canRepair||busy;
   const extra=$('touchSecondary');extra.hidden=!secondary;extra.disabled=busy;extra.textContent=secondary||'Weitere Aktion';
   $('touchZoom').hidden=equipped!=='rifle'||!!posture||!!held;$('touchZoom').disabled=!!reloadId;
-  $('touchFire').disabled=!!posture;$('touchJump').disabled=!!posture;
-  $('touchReload').disabled=!!posture||!equipped;
-  $('hint').textContent=started?(mobile?'Handy · Inventar':'P: Smartphone · I: Inventar · Mausrad: Waffenwechsel'):'Spiel starten';
+  $('touchFire').disabled=!!posture||!!lobbyState||lobbyTransition;$('touchJump').disabled=!!posture;
+  $('touchReload').disabled=!!posture||!!lobbyState||!equipped;
+  $('hint').textContent=started?(lobbyState?'Gemeinsamer Hotelflur · E: eigenes Zimmer':mobile?'Handy · Inventar':'P: Smartphone · I: Inventar · Mausrad: Waffenwechsel'):'Spiel starten';
 }
 function horizontalHold(id){
   const s=turnedSize(spec[id].s,heldAngle),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52,flat=Math.hypot(d[0],d[2]);
@@ -291,16 +346,16 @@ function placementPoint(id){
   if(id!=='surface_rug'&&Object.entries(bodies).some(([k,b])=>k!==id&&k!=='surface_rug'&&state.objects[k]>0&&overlap(b.p,boundsSize(spec[k].s,b.q))))return null;
   return p.map(v=>Math.round(v*10000)/10000);
 }
-async function interact(){if(!canPlay()||busy)return;if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
-  const hit=interactionTarget(),primary=primaryInteraction(hit);
+async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if(lobbyState){const door=lobbyInteraction(ray);if(door?.slot===lobbyState.slot)returnToRoom();else if(door)$('notice').textContent='Dieses Gästezimmer ist privat.';return;}if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
+  const hit=interactionTarget(ray),primary=primaryInteraction(hit,ray);
   if(primary?.op==='toggle_light'){audio.play('click');await action(primary.op,primary.id);return;}
   if(primary?.op==='toggle_curtains'){await action(primary.op,primary.id);return;}
   if(primary?.op==='sit'||primary?.op==='lie'){enterPosture(primary.id,primary.op);return;}
   if(primary?.op==='pick_up'){pickUp(primary.id);return;}
-  if(doorInView(hit))$('notice').textContent='Hinter dieser Tür entsteht die nächste Spielwelt.';
+  if(doorInView(hit,ray)){if(lobbyEnabled)await enterLobby();else $('notice').textContent='Gemeinsamer Hotelflur nicht verfügbar.';}
 }
-function groundAt(x,z){if(z<-5&&state.unlocked)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
-function coll(x,z){if(Math.abs(x)>4.65||z>4.65||z<(state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+1.6&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,.85,1.45].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+1.6&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
+function groundAt(x,z){if(lobbyState)return 0;if(z<-5&&state.unlocked&&!lobbyEnabled)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
+function coll(x,z){if(lobbyState)return !lobbyWalkable(x,z);if(Math.abs(x)>4.65||z>4.65||z<(!lobbyEnabled&&state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+1.6&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,.85,1.45].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+1.6&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
 let enteringGame=false;async function enterGame(){if(!graphicsReady||enteringGame)return;enteringGame=true;void audio.unlock();if(protectedGame)token=$('token').value;try{if(personalWorld)await api('/api/session',{});await refresh();if(protectedGame)sessionStorage.setItem('second_live_token',token);$('welcome').hidden=true;started=true;active=true;document.body.classList.add('playing');if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});}catch(e){$('loginerror').textContent=e.message;}finally{enteringGame=false;}}
 $('start').onclick=()=>enterGame();
 const phonePages=['home','world','settings'];
@@ -311,14 +366,14 @@ $('phone-sound').onchange=()=>{audio.configure($('phone-sound').checked,Number($
 setInterval(()=>{if(!$('phone').hidden)updatePhone();},15000);
 window.addEventListener('keydown',e=>{if(e.code==='Escape'&&!$('phone').hidden&&$('updater').hidden){$('closephone').onclick();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)audio.stopAll();});
-$('restore-hotel').onclick=async()=>{if(busy||!confirm('Möbel auf Hotel-Standardpositionen zurücksetzen? Schäden und Fortschritt bleiben erhalten.'))return;if(posture&&!leavePosture())return;if(held){bodies[held]=savedBody(state,held);held=null;}if(await action('reset_hotel_layout',null,null,{confirm:true})){for(const id of Object.keys(spec))if(id!=='window')bodies[id]=savedBody(state,id);const p=HOTEL_LAYOUT.spawn.p;player.x=p[0];player.y=0;player.z=p[2];player.vy=0;player.yaw=HOTEL_LAYOUT.spawn.yaw;player.pitch=0;updatePhone();}};
+$('restore-hotel').onclick=async()=>{if(lobbyState||lobbyTransition){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}if(busy||!confirm('Möbel auf Hotel-Standardpositionen zurücksetzen? Schäden und Fortschritt bleiben erhalten.'))return;if(posture&&!leavePosture())return;if(held){bodies[held]=savedBody(state,held);held=null;}if(await action('reset_hotel_layout',null,null,{confirm:true})){for(const id of Object.keys(spec))if(id!=='window')bodies[id]=savedBody(state,id);const p=HOTEL_LAYOUT.spawn.p;player.x=p[0];player.y=0;player.z=p[2];player.vy=0;player.yaw=HOTEL_LAYOUT.spawn.yaw;player.pitch=0;updatePhone();}};
 $('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';updatePhone();}catch(e){$('notice').textContent=e.message;}};
 canvas.onclick=()=>{if(mobile||!canPlay())return;void audio.unlock();if(document.pointerLockElement!==canvas){canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;}};
 canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.pointerLockElement===canvas&&canPlay())pressTrigger();});
 canvas.addEventListener('contextmenu',e=>{if(canPlay()&&!mobile)e.preventDefault();});
 window.addEventListener('mousedown',e=>{if(e.button===2&&!mobile&&document.pointerLockElement===canvas&&canPlay()){e.preventDefault();toggleScope();}});
 window.addEventListener('wheel',e=>{
- if(!canPlay()||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
+ if(!canPlay()||lobbyState||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
  e.preventDefault();
  const now=performance.now();if(now-lastWheel<140)return;lastWheel=now;
  chooseWeapon(nextWeapon(equipped,e.deltaY));
@@ -330,7 +385,7 @@ window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener(
 function part(p,s,c,r=0,q=null){draw({p,s,c:rgb(c),r,q,m:mat(c)});}
 function canPlay(){return started&&active&&$('phone').hidden&&$('arsenal').hidden&&$('updater').hidden;}
 function fire(ray=null){
-  if(!canPlay()||posture||!equipped||busy||reloadId)return;
+  if(!canPlay()||lobbyState||lobbyTransition||posture||!equipped||busy||reloadId)return;
   if(ammo[equipped]<=0){startReload();return;}
   const direction=ray?.direction||dir(),origin=ray?.origin||playerEye(),a=renderer.surfaceHit(origin,direction,held);
   ammo[equipped]--;updateAmmo();
@@ -354,7 +409,7 @@ function repairTarget(ray=null,surface=null){
   return null;
 }
 function repair(ray=null){
-  if(!canPlay()||busy||held||posture)return;
+  if(!canPlay()||lobbyState||lobbyTransition||busy||held||posture)return;
   const target=repairTarget(ray);
   if(target&&damaged(target.id))action(target.op,target.id);
 }
@@ -369,7 +424,7 @@ let prev=performance.now();
 function frame(now,xrFrame){
   let dt=Math.max(0,Math.min(.035,(now-prev)/1000));prev=now;
   const vr=!!renderer.xrMode?.active;const xrInput=vr?renderer.xrMode.inputs(xrFrame):null;
-  if(started&&active&&!posture){
+  if(started&&active&&!posture&&!lobbyTransition){
     stepReload(dt);stepTrigger(dt);
     if(vr)player.yaw+=xrInput.turn;
     let f=vr?xrInput.move[1]:Number(keys.has('KeyW'))-Number(keys.has('KeyS'))+touchMove[1],s=vr?xrInput.move[0]:Number(keys.has('KeyD'))-Number(keys.has('KeyA'))+touchMove[0],a=player.yaw+(vr?xrInput.headYaw:0),m=(vr?1.6:3.4)*dt/Math.max(1,Math.hypot(f,s)),dx=(-Math.sin(a)*f+Math.cos(a)*s)*m,dz=(-Math.cos(a)*f-Math.sin(a)*s)*m;
@@ -380,10 +435,10 @@ function frame(now,xrFrame){
     player.vy-=9.81*dt;player.y=Math.max(ground,player.y+player.vy*dt);if(player.y===ground)player.vy=0;
   }
   if(debris.length>80)debris.splice(0,debris.length-80);
-  if(started){
+  if(started&&!lobbyState){
     let holdPoint=[0,0,0];if(held){const s=spec[held].s,[x,z]=horizontalHold(held),floor=groundAt(x,z),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52;
       const y=movableDecor(held)?floor+s[1]/2:Math.min(2.85-s[1]/2,Math.max(floor+s[1]/2,player.y+1.2+d[1]*dist));holdPoint=[x,y,z];}
-    physicsWorld.step(dt,bodies,state,held,holdPoint,debris,yawQuat(heldAngle));
+    physicsWorld.step(dt,bodies,lobbyEnabled?{...state,unlocked:false}:state,held,holdPoint,debris,yawQuat(heldAngle));
   }
   if(posture){
     const pose=furniturePose(posture.id,bodies[posture.id]);
@@ -393,9 +448,15 @@ function frame(now,xrFrame){
   let d=dir(),eye=playerEye(),target=eye.map((v,i)=>v+d[i]);
   if(!first&&!vr&&!posture){let t=eye.map((v,i)=>v-d[i]*2.1);if(!coll(t[0],t[2])){eye=t;target=eye.map((v,i)=>v+d[i]);}}
   renderer.begin();
-  renderer.setDoorOpen?.(state.unlocked);
+  if(lobbyState){
+    renderer.lobby.step(dt,player,!first&&!vr&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5);
+    renderer.equip(null,false);renderer.render(canvas,eye,target,mobile,dt,player,false,true);
+    if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}
+    return;
+  }
+  renderer.setDoorOpen?.(!lobbyEnabled&&state.unlocked);
   renderer.advanceCurtains?.(dt,state.decor||{});
-  if(state.unlocked){part([0,-.12,-10],[10,.24,10],'a8a69a');part([-4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([0,1.4,-15],[10,2.8,.2],'c1b6a6');}
+  if(state.unlocked&&!lobbyEnabled){part([0,-.12,-10],[10,.24,10],'a8a69a');part([-4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([4.8,1.4,-10],[.2,2.8,10],'c1b6a6');part([0,1.4,-15],[10,2.8,.2],'c1b6a6');}
   for(let [id,b] of Object.entries(bodies)){
     let o=spec[id],hp=state.objects[id];
     if(o.decor){renderer.drawMovableDecor(id,b.p,o.s,b.q,hp>0,id===held);continue;}
@@ -418,7 +479,7 @@ async function setupXR(){
   hint.textContent=supported?'VR bereit – nach dem Login starten':globalThis.isSecureContext?'Kein immersives WebXR erkannt':'VR benötigt HTTPS';
   if(!supported)return;
   mode.onEnd=()=>{xrEntering=false;first=xrReturnFirst;player.y=0;player.vy=0;clearControls();document.body.classList.remove('xr-playing');button.textContent='VR starten';button.disabled=false;active=$('phone').hidden&&$('arsenal').hidden;};
-  mode.onAction=(type,ray)=>{if(!canPlay())return;if(type==='repair'){repair(ray);return;}if(!equipped&&!busy){const primary=primaryInteraction(interactionTarget(ray),ray);if(primary?.op==='toggle_curtains'||primary?.op==='toggle_light'){action(primary.op,primary.id);return;}}if(!state.unlocked&&Math.abs(player.x)<1.5&&player.z<-3.25){$('notice').textContent='Hinter dieser Tür entsteht die nächste Spielwelt.';return;}fire(ray);};
+  mode.onAction=(type,ray)=>{if(!canPlay())return;if(lobbyState){if(type==='select')interact(ray);return;}if(type==='repair'){repair(ray);return;}if(!equipped&&lobbyEnabled&&doorInView(interactionTarget(ray),ray)){interact(ray);return;}if(!equipped&&!busy){const primary=primaryInteraction(interactionTarget(ray),ray);if(primary?.op==='toggle_curtains'||primary?.op==='toggle_light'){action(primary.op,primary.id);return;}}if(!lobbyEnabled&&!state.unlocked&&Math.abs(player.x)<1.5&&player.z<-3.25){$('notice').textContent='Weitere Welt noch nicht verfügbar.';return;}fire(ray);};
   button.onclick=async()=>{
     if(xrEntering||!started||!canPlay())return;
     if(mode.active){await mode.end();return;}
@@ -437,7 +498,7 @@ function changeProfile(){sessionStorage.setItem('sl_quality',qualityChoice.value
 qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListener('change',changeProfile);
 (async()=>{
   try{
-    const health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());protectedGame=health.requires_game_token===true; personalWorld=health.personal_world===true; $('game-auth').hidden=!protectedGame;
+    const health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());protectedGame=health.requires_game_token===true; personalWorld=health.personal_world===true;lobbyEnabled=health.hotel_lobby===true; $('game-auth').hidden=!protectedGame;
     const q=qualityChoice.value==='auto'?(matchMedia('(pointer:coarse)').matches||innerWidth<800?'1k':'2k'):qualityChoice.value;
     renderer=new RoomRenderer(canvas,q,lightChoice.value,t=>status.textContent=t);
     await renderer.load(spec,objects);
