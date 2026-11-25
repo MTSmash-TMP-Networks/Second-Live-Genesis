@@ -55,7 +55,9 @@ def state(db):
         out.setdefault(t,[]).append([c,r,stage])
     return out
 
-def damage(db,target,point,normal):
+def damage(db,target,point,normal,step=1):
+    if type(step) is not int or not 1 <= step < REMOVED:
+        raise ValueError('Ungueltige Spielschadensstufe')
     wall=WALLS[target];c,r,other=hit_cell(wall,point,normal)
     def get(x,y):
         v=db.execute('SELECT stage FROM wall_cells WHERE target=? AND col=? AND row=?',(target,x,y)).fetchone()
@@ -64,6 +66,6 @@ def damage(db,target,point,normal):
     if other is not None and other!=(-1,-1) and get(*other)<REMOVED:
         raise ValueError('Bruchkante ist noch verdeckt')
     if old>=REMOVED: return {'target':target,'col':c,'row':r,'stage':REMOVED,'changed':False}
-    new=old+1
+    new=min(REMOVED,old+step)
     db.execute('INSERT INTO wall_cells VALUES (?,?,?,?) ON CONFLICT(target,col,row) DO UPDATE SET stage=excluded.stage',(target,c,r,new))
     return {'target':target,'col':c,'row':r,'stage':new,'changed':True}

@@ -10,18 +10,39 @@ let accountsEnabled=false,accountProfile=null,authMode='login',studioOpen=false,
 const weaponIds=['pistol','rifle','m16'];
 const weaponCycle=['none',...weaponIds];
 function nextWeapon(current,direction){const i=Math.max(0,weaponCycle.indexOf(current||'none'));return weaponCycle[(i+(direction>0?1:-1)+weaponCycle.length)%weaponCycle.length];}
-const clipSize={pistol:12,rifle:18,m16:24}; // fictional game balance, not real weapon specifications
+// Abstract, tunable game parameters, not real firearm specifications.
+const clipSize={pistol:12,rifle:1,m16:40};
 const ammo={...clipSize};let reloadLeft=0,reloadId=null;
-const RELOAD_TIME=1.05;
-// Fictional arcade cadence; wait for each server mutation before another.
+const RELOAD_TIME={pistol:1.05,rifle:1.65,m16:1.35};
+const FIRE_INTERVAL={pistol:.24,rifle:.45,m16:.08};
+const GAME_IMPULSE={pistol:1,m16:1.4,rifle:1.8};
 let triggerHeld=false,triggerPointer=null,fireCooldown=0;
-const AUTO_INTERVAL=.16;
 function releaseTrigger(){triggerHeld=false;triggerPointer=null;}
-function pressTrigger(){if(!canPlay()||posture)return;triggerHeld=equipped==='m16';fire();fireCooldown=AUTO_INTERVAL;}
-function stepTrigger(dt){fireCooldown=Math.max(0,fireCooldown-dt);if(!canPlay()||posture||equipped!=='m16'){releaseTrigger();return;}if(triggerHeld&&!reloadId&&!busy&&fireCooldown<=0){fire();fireCooldown=AUTO_INTERVAL;}}
-function updateAmmo(){const el=$('ammo');el.textContent=!equipped?'':reloadId?'Wird nachgeladen …':`${ammo[equipped]} / ${clipSize[equipped]} · T: Nachladen`;}
-function startReload(){if(!canPlay()||posture||!equipped||reloadId||ammo[equipped]===clipSize[equipped])return;setScopeZoom(false);reloadId=equipped;reloadLeft=RELOAD_TIME;audio.play('reload',null,0);updateAmmo();}
-function stepReload(dt){if(!reloadId)return;const before=reloadLeft;reloadLeft=Math.max(0,reloadLeft-dt);if(before>RELOAD_TIME*.48&&reloadLeft<=RELOAD_TIME*.48)audio.play('reload',null,1);renderer.reload?.(1-reloadLeft/RELOAD_TIME);if(reloadLeft===0){ammo[reloadId]=clipSize[reloadId];audio.play('click');reloadId=null;renderer.reload?.(0);updateAmmo();}}
+function pressTrigger(){
+ if(!canPlay()||posture||!equipped||lobbyState||lobbyTransition||reloadId)return;
+ triggerHeld=equipped==='m16';fire();
+}
+function stepTrigger(dt){
+ fireCooldown=Math.max(0,fireCooldown-dt);
+ if(!canPlay()||posture||equipped!=='m16'||lobbyState||lobbyTransition){releaseTrigger();return;}
+ if(triggerHeld&&!reloadId&&!busy&&fireCooldown<=0)fire();
+}
+function updateAmmo(){
+ const el=$('ammo');
+ el.textContent=!equipped?'':reloadId?'Wird nachgeladen …':ammo[equipped]===0?'Leer · T: Nachladen':`${ammo[equipped]} / ${clipSize[equipped]} · T: Nachladen`;
+}
+function startReload(){
+ if(!canPlay()||posture||!equipped||reloadId||ammo[equipped]===clipSize[equipped]||lobbyState||lobbyTransition)return;
+ releaseTrigger();setScopeZoom(false);reloadId=equipped;reloadLeft=RELOAD_TIME[reloadId];audio.play('reload',null,0);updateAmmo();
+}
+function stepReload(dt){
+ if(!reloadId)return;
+ const total=RELOAD_TIME[reloadId],before=reloadLeft;
+ reloadLeft=Math.max(0,reloadLeft-dt);
+ if(before>total*.48&&reloadLeft<=total*.48)audio.play('reload',null,1);
+ renderer.reload?.(1-reloadLeft/total);
+ if(reloadLeft===0){ammo[reloadId]=clipSize[reloadId];audio.play('click');reloadId=null;renderer.reload?.(0);updateAmmo();}
+}
 const rgb=h=>[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
 function mat(c){
   return c==='465a70'?'hotel_carpet':c==='464749'?'hotel_stripe':c==='d6cfc3'?'hotel_wall':c==='f1eae0'?'hotel_ceiling':['a58d72','aa8b67','b28f68'].includes(c)?'wooden_floor_01'
@@ -157,7 +178,7 @@ function setScopeZoom(on){
  document.body.classList.toggle('scope-zoom',scopeZoom);
 }
 function toggleScope(){if(equipped!=='rifle'||held||posture||reloadId||!canPlay()||renderer?.xrMode?.active)return;if(!first)first=true;setScopeZoom(!scopeZoom);}
-function chooseWeapon(id){if((held||posture||lobbyState||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Testmodus':equipped==='rifle'?'Gewehr · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer (Spielmodus)':'Unbewaffnet';}
+function chooseWeapon(id){if((held||posture||lobbyState||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Einzelfeuer':equipped==='rifle'?'Scharfschützengewehr · Einzelschuss · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer':'Unbewaffnet';}
 function arsenal(){if(lobbyState||lobbyTransition){$('notice').textContent='Der Hotelflur ist ein gemeinsamer, unbewaffneter Bereich.';return;}document.exitPointerLock?.();clearControls();active=false;$('arsenal').hidden=false;}
 $('closearsenal').onclick=()=>{$('arsenal').hidden=true;active=true;clearControls();};
 for(const id of [...weaponIds,'none'])$('equip-'+id).onclick=()=>{chooseWeapon(id);$('closearsenal').onclick();};
@@ -534,14 +555,22 @@ window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener(
 function part(p,s,c,r=0,q=null){draw({p,s,c:rgb(c),r,q,m:mat(c)});}
 function canPlay(){return started&&active&&$('phone').hidden&&$('arsenal').hidden&&$('updater').hidden;}
 function fire(ray=null){
-  if(!canPlay()||lobbyState||lobbyTransition||posture||!equipped||busy||reloadId)return;
-  if(ammo[equipped]<=0){startReload();return;}
+  if(!canPlay()||lobbyState||lobbyTransition||posture||!equipped||busy||reloadId||fireCooldown>0)return false;
+  const weapon=equipped;
+  if(ammo[weapon]<=0){releaseTrigger();$('notice').textContent='Leer – mit T nachladen';updateAmmo();return false;}
   const direction=ray?.direction||dir(),origin=ray?.origin||playerEye(),a=renderer.surfaceHit(origin,direction,held);
-  ammo[equipped]--;updateAmmo();
-  renderer.shot(equipped,{origin,direction,distance:Math.min(8,a.dist),impact:a.dist<=8});
-  audio.play('shot',null,weaponIds.indexOf(equipped));if(a.dist<=8)audio.play('impact',origin.map((v,i)=>v+direction[i]*a.dist));
+  ammo[weapon]--;fireCooldown=FIRE_INTERVAL[weapon];updateAmmo();
+  renderer.shot(weapon,{origin,direction,distance:Math.min(8,a.dist),impact:a.dist<=8});
+  audio.play('shot',null,weaponIds.indexOf(weapon));if(a.dist<=8)audio.play('impact',origin.map((v,i)=>v+direction[i]*a.dist));
   $('cross').classList.add('pulse');setTimeout(()=>$('cross').classList.remove('pulse'),100);
-  if(a.id&&state.objects[a.id]>0&&!movableDecor(a.id)){physicsWorld.impulse(a.id,direction);action('hit',a.id,a.mark);}else if(WALLS[a.id])action('damage_wall',a.id,a.mark);else if(DECOR_BOUNDS[a.id])action('damage_decor',a.id,a.mark);else if(a.id?.startsWith('surface_'))action('mark_surface',a.id,a.mark);else $('notice').textContent=a.dist<=8?'Oberfläche ohne Schadensspeicher':'Kein Objekt getroffen';
+  const extra={weapon};
+  if(a.id&&state.objects[a.id]>0&&!movableDecor(a.id)){physicsWorld.impulse(a.id,direction,GAME_IMPULSE[weapon]);action('hit',a.id,a.mark,extra);}
+  else if(WALLS[a.id])action('damage_wall',a.id,a.mark,extra);
+  else if(DECOR_BOUNDS[a.id])action('damage_decor',a.id,a.mark,extra);
+  else if(a.id?.startsWith('surface_'))action('mark_surface',a.id,a.mark,extra);
+  else $('notice').textContent=a.dist<=8?'Oberfläche ohne Schadensspeicher':'Kein Objekt getroffen';
+  if(ammo[weapon]===0)releaseTrigger();
+  return true;
 }
 function repairTarget(ray=null,surface=null){
   const {origin,direction}=interactionRay(ray);surface=surface||interactionTarget(ray);const a=Object.entries(spec).some(([id,o])=>!o.decor&&state.objects[id]===0)?aim(ray):{id:null,dist:Infinity};let wall=null,dist=3;

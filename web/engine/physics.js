@@ -22,7 +22,7 @@ export class RoomPhysics {
     return {body,col,held:false};
   }
   remove(entry){this.world.removeRigidBody(entry.body);}
-  impulse(id,d){const e=this.entries.get(id);if(e&&id!=='window'&&!this.spec[id].decor&&!e.held)e.body.applyImpulse(vector(d.map(x=>x*2.5)),true);}
+  impulse(id,d,strength=1){const e=this.entries.get(id),scale=Number.isFinite(strength)?Math.max(0,Math.min(2,strength)):1;if(e&&id!=='window'&&!this.spec[id].decor&&!e.held)e.body.applyImpulse(vector(d.map(x=>x*2.5*scale)),true);}
   read(e,b){b.p=array(e.body.translation());b.v=array(e.body.linvel());b.q=rotation(e.body.rotation());}
   syncWalls(walls={}){
     for(const [id,e] of this.wallColliders){const cells=walls[id]||[],signature=wallSignature(cells);if(signature===e.signature)continue;

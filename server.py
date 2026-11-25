@@ -159,6 +159,9 @@ class GameStore:
     CLUSTER_DISTANCE = 0.28
     CLUSTER_NORMAL_DOT = 0.82
     MAX_SEVERITY = 6
+    # Abstract game balance, not real weapon specifications.
+    # Object HP, wall/decor stage, mark severity.
+    WEAPON_DAMAGE = {"pistol": (25, 1, 1), "m16": (40, 2, 2), "rifle": (60, 3, 3)}
 
     @staticmethod
     def clean_mark(value):
@@ -174,7 +177,7 @@ class GameStore:
         if not .95 <= length <= 1.05: raise ValueError("Ungueltige Oberflaechennormale")
         return [round(x,5) for x in p], [round(x/length,5) for x in n]
 
-    def add_mark(self, db, target, mark):
+    def add_mark(self, db, target, mark, strength=1):
         p,n = self.clean_mark(mark)
         if target in self.SURFACES:
             best = None
@@ -203,7 +206,7 @@ class GameStore:
                 blended = [normal[i]*weight + n[i] for i in range(3)]
                 length = math.sqrt(sum(x*x for x in blended)) or 1.0
                 normal = [round(x/length, 5) for x in blended]
-                severity = min(self.MAX_SEVERITY, severity + 1)
+                severity = min(self.MAX_SEVERITY, severity + strength)
                 db.execute(
                     "UPDATE impact_marks SET point=?, normal=?, severity=? WHERE id=?",
                     (json.dumps(point), json.dumps(normal), severity, mid),
@@ -212,7 +215,7 @@ class GameStore:
         if (db.execute("SELECT count(*) FROM impact_marks WHERE target=?", (target,)).fetchone()[0] >= self.MARK_LIMIT
                 or db.execute("SELECT count(*) FROM impact_marks").fetchone()[0] >= self.TOTAL_MARK_LIMIT):
             return False # preserve existing damage instead of evicting old marks
-        db.execute("INSERT INTO impact_marks(target,point,normal,severity) VALUES (?,?,?,1)", (target,json.dumps(p),json.dumps(n)))
+        db.execute("INSERT INTO impact_marks(target,point,normal,severity) VALUES (?,?,?,?)", (target,json.dumps(p),json.dumps(n),min(self.MAX_SEVERITY,strength)))
         return True
 
     MAX_HP = {"crate": 60, "table": 100, "window": 35, "chair": 60, "sofa": 150, "coffee_table": 100}
@@ -285,6 +288,13 @@ class GameStore:
     def action(self, data, scans):
         if not isinstance(data, dict): raise ValueError("JSON object required")
         op = data.get("action")
+        object_damage, stage_damage, mark_strength = self.WEAPON_DAMAGE["pistol"]
+        if op in ("hit", "damage_wall", "damage_decor", "mark_surface"):
+            weapon = data.get("weapon", "pistol")
+            if not isinstance(weapon, str) or weapon not in self.WEAPON_DAMAGE:
+                raise ValueError("Unbekannte Spielwaffe")
+            # Damage values are defined by the server. Legacy clients retain original behavior.
+            object_damage, stage_damage, mark_strength = self.WEAPON_DAMAGE[weapon]
         mark_saved = None
         wall_result = None
         decor_result = None
@@ -320,8 +330,8 @@ class GameStore:
                     if "mark" in data:
                         self.clean_mark(data["mark"])
                         if db.execute("SELECT hp FROM objects WHERE id=?", (oid,)).fetchone()[0] > 0:
-                            mark_saved = self.add_mark(db,oid,data["mark"])
-                    db.execute("UPDATE objects SET hp=max(0,hp-25) WHERE id=?", (oid,))
+                            mark_saved = self.add_mark(db,oid,data["mark"],mark_strength)
+                    db.execute("UPDATE objects SET hp=max(0,hp-?) WHERE id=?", (object_damage,oid))
                 else:
                     db.execute("UPDATE objects SET hp=? WHERE id=?", (self.MAX_HP[oid],oid))
                     db.execute("DELETE FROM impact_marks WHERE target=?", (oid,))
@@ -329,24 +339,24 @@ class GameStore:
                 oid = data.get("id")
                 if not isinstance(oid,str) or oid not in wall_damage.WALLS: raise ValueError("Unbekannte Spielwand")
                 point,normal=self.clean_mark(data.get("mark"))
-                wall_result=wall_damage.damage(db,oid,point,normal)
+                wall_result=wall_damage.damage(db,oid,point,normal,stage_damage)
                 if wall_result["changed"]:
-                    mark_saved=self.add_mark(db,oid,data["mark"])
+                    mark_saved=self.add_mark(db,oid,data["mark"],mark_strength)
             elif op == "damage_decor":
                 oid = data.get("id")
                 if not isinstance(oid,str) or oid not in self.DECOR: raise ValueError("Unbekannte Einrichtung")
                 self.clean_mark(data.get("mark"))
                 row=db.execute("SELECT stage FROM decor_damage WHERE target=?",(oid,)).fetchone()
                 old=row[0] if row else 0
-                stage=min(wall_damage.REMOVED,old+1)
+                stage=min(wall_damage.REMOVED,old+stage_damage)
                 if stage!=old:
                     db.execute("INSERT INTO decor_damage VALUES (?,?) ON CONFLICT(target) DO UPDATE SET stage=excluded.stage",(oid,stage))
-                    mark_saved=self.add_mark(db,oid,data["mark"])
+                    mark_saved=self.add_mark(db,oid,data["mark"],mark_strength)
                 decor_result={"target":oid,"stage":stage,"changed":stage!=old}
             elif op in ("mark_surface", "repair_surface"):
                 oid = data.get("id")
                 if not isinstance(oid,str) or oid not in self.SURFACES: raise ValueError("Unbekannte Raumoberflaeche")
-                if op == "mark_surface": mark_saved = self.add_mark(db,oid,data.get("mark"))
+                if op == "mark_surface": mark_saved = self.add_mark(db,oid,data.get("mark"),mark_strength)
                 else:
                     db.execute("DELETE FROM impact_marks WHERE target=?", (oid,))
                     db.execute("DELETE FROM wall_cells WHERE target=?", (oid,))
@@ -372,7 +382,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.11.8"
+        server_version = "SecondLive/0.11.9"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -579,7 +589,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.11.8", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.11.9", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":

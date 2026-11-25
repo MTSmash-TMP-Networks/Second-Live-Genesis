@@ -344,6 +344,47 @@ class GameOnlyTest(unittest.TestCase):
             self.assertFalse(result['placements']);self.assertFalse(result['rotations']);self.assertEqual(result['objects']['crate'],hp)
 
 
+    def test_distinct_game_weapon_damage_and_legacy_compatibility(self):
+        from wall_damage import WALLS, REMOVED, axes, site
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            results={}
+            for weapon in ('pistol','m16','rifle'):
+                folder=root/weapon
+                folder.mkdir()
+                game=GameStore(folder)
+                wall='surface_6'
+                w=WALLS[wall]
+                u,v,b=axes(w)
+                point=[0.,0.,0.];point[u],point[v]=site(w,3,4);point[b]=w['s'][b]/2
+                normal=[0.,0.,0.];normal[b]=1
+                mark={'point':point,'normal':normal}
+                hit=game.action({'action':'damage_wall','id':wall,'mark':mark,'weapon':weapon,'damage':999},None)
+                stage=hit['wall_result']['stage']
+                severity=hit['marks'][0]['severity']
+                decor=game.action({'action':'damage_decor','id':'surface_picture','mark':{'point':[.1,.1,.1],'normal':[0,0,1]},'weapon':weapon},None)
+                obj=game.action({'action':'hit','id':'table','weapon':weapon,'damage':999},None)
+                results[weapon]=(stage,severity,decor['decor_result']['stage'],100-obj['objects']['table'])
+                self.assertEqual(GameStore(folder).state()['walls'][wall],[[3,4,stage]])
+                for _ in range(4):
+                    game.action({'action':'damage_wall','id':wall,'mark':mark,'weapon':weapon},None)
+                self.assertEqual(game.state()['walls'][wall],[[3,4,REMOVED]])
+                game.action({'action':'repair_surface','id':wall},None)
+                self.assertNotIn(wall,game.state()['walls'])
+                before=game.state()
+                for invalid in ('unknown',[],None):
+                    with self.assertRaises(ValueError):
+                        game.action({'action':'hit','id':'table','weapon':invalid},None)
+                self.assertEqual(game.state(),before)
+            for a,b in zip(results['pistol'],results['m16']):
+                self.assertLess(a,b)
+            for a,b in zip(results['m16'],results['rifle']):
+                self.assertLess(a,b)
+            folder=root/'legacy'
+            folder.mkdir()
+            legacy=GameStore(folder)
+            self.assertEqual(legacy.action({'action':'hit','id':'table'},None)['objects']['table'],75)
+
     def test_avatar_assets_and_health_share_get_handler(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

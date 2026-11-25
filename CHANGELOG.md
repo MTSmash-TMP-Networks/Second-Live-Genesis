@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.9 – Differentiated Game Physics
+- Pistole, M16 und Scharfschützengewehr besitzen getrennte, fiktive Spielschadensprofile für Objekte, Wandzellen, Einrichtung und Treffermarkierungen; Server entscheidet die Werte anhand der Waffen-ID.
+- Scharfschützengewehr: ein Schuss pro Ladezyklus, manuelles Nachladen. M16: höheres Spielmagazin und schnelleres Dauerfeuer beim Halten; Pistole: Einzelfeuer. Individuelle Ladezeiten und visuelle Rückmeldung.
+- Abgestufte virtuelle Objektimpulse und aktualisierte Inventarbeschreibung. Bestehende Spielstände, Reparaturen, Wandkollisionen und alte Clients bleiben kompatibel.
+- Neue Client- und Server-Regressionstests für Schadensreihenfolge, Nachladen, Dauerfeuer, Schadensgrenzen und ungültige Waffen-IDs. Keine realen ballistischen Kennwerte.
+
 ## 0.11.8 – Realistic Character Studio
 - Behebt ungültige Ara-Katalogparameter (unter anderem erzwungenes Solid-Muster bei T-Shirts). Profilvarianten werden gegen das Schema der installierten Bibliothek geprüft.
 - Docker erzeugt und validiert zwei echte texturierte GLB-Startermodelle mit Skelett und vier Animationen. Das neue Standardprofil und das frühere Standardprofil werden lokal vorgeladen.

@@ -517,7 +517,8 @@ export class RoomRenderer {
   equip(id,first){this.currentWeapon=id||null;this.weaponRoot.visible=!!id&&first&&!this.xrMode.active;for(const [key,g] of Object.entries(this.weaponModels))g.visible=key===id;for(const [key,g] of Object.entries(this.viewHands))g.visible=key===id;this.xrMode.equip(this.xrMode.active?id:null);}
   setLoop(fn){this.renderer.setAnimationLoop(fn);}
   shot(kind,ray){
-    this.kick=kind!=='pistol'?.085:.060;
+    // Distinct fictional viewmodel feedback, independent of real ballistics.
+    this.kick=({pistol:.060,m16:.078,rifle:.13})[kind]??.060;
     if(ray){
       let source=null,caseSource=null;
       if(this.weaponRoot.visible&&!this.xrMode.active){
