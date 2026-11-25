@@ -2,7 +2,7 @@
 FROM node:22-bookworm-slim AS renderer
 WORKDIR /build
 RUN npm install --no-audit --no-fund --save-exact three@0.170.0 esbuild@0.25.10 @dimforge/rapier3d-compat@0.17.3
-COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js ./
+COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js web/engine/portal_door.js ./
 COPY web/engine/wall_layout.json /build/wall_layout.json
 COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs ./
 COPY web/engine/capture-view.js ./capture-view.js
@@ -43,6 +43,10 @@ FROM hands AS gameprops
 COPY scripts/download_m16.py ./download_m16.py
 RUN python -u download_m16.py --output /build/polyhaven
 
+FROM gameprops AS door
+COPY scripts/download_door.py ./download_door.py
+RUN python -u download_door.py --output /build/polyhaven
+
 FROM renderer AS avatar-check
 COPY --from=hands /build/polyhaven/hands /build/hands
 COPY scripts/avatar_smoke.mjs ./avatar_smoke.mjs
@@ -61,7 +65,7 @@ COPY web/ /app/web/
 COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bundle.js
 COPY --from=renderer /build/capture-view.bundle.js /app/web/engine/capture-view.bundle.js
 COPY --from=renderer /build/THREE-LICENSE.txt /app/web/engine/THREE-LICENSE.txt
-COPY --from=gameprops /build/polyhaven /app/web/assets/polyhaven/
+COPY --from=door /build/polyhaven /app/web/assets/polyhaven/
 ARG SECOND_LIVE_REVISION=local
 LABEL org.opencontainers.image.revision=${SECOND_LIVE_REVISION}
 ENV SECOND_LIVE_REVISION=${SECOND_LIVE_REVISION}

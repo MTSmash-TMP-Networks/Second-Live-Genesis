@@ -1,8 +1,15 @@
 # Second Live – World Genesis
 
-**v0.7.0 · World Capture Engine / CPU-Testversion**
+**v0.7.1 · Immersive Phone & Audio / World Capture CPU-Testversion**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spieler sollen ihre gemeinsame Welt aus realen Aufnahmen erschaffen, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.7.1
+
+- Lokal erzeugte Spielgeräusche (Schuss, Nachladen, Treffer, Tür, Smartphone), Web Audio mit Lautstärkeregelung, räumlichen Treffergeräuschen und kurzem Raumhall. Kein Mikrofon und keine externe Audio-API.
+- Virtuelles Smartphone mit Glasrahmen, Statusleiste, App-Raster und funktionierenden Welt-, Inventar-, Audio- und System-Menüs. Die Statussymbole sind reine Spielgrafik.
+- Optionale CC0-Kassettentür von tevy (GLB v1, LOD0/1) mit lokalem Ersatzmodell. Bestehende Scan-Freigabe und Spielstände bleiben unverändert. Die Originaldatei wird beim Build heruntergeladen, die Eignung zur Darstellung zusätzlich im Client geprüft. Im freigeschalteten Legacy-Testbereich wird die lokale offene Tür verwendet.
+- Update via System-App im Smartphone; keine Änderungen am Host-Updater.
 
 ## Schnellstart
 

@@ -15,6 +15,8 @@ import { inspectHand, poseContactHand } from './avatar_hands.js';
 export { WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported } from './wall_layout.js';
 import { isolateDisplayProp } from './display_prop.js';
 import { buildRoomDecor } from './room_decor.js';
+import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
+export { PORTAL_SIDES };
 export { DECOR } from './room_decor.js';
 
 const BASE='/assets/polyhaven/';
@@ -377,6 +379,7 @@ export class RoomRenderer {
     }
     buildArchitecture(this,spec);
     await buildRoomDecor(this,manifest,path,loader);
+    this.portalDoor=await buildPortalDoor(this,manifest,path,loader);
     // Keep the crate in its own stable scene root instead of the reusable box pool.
     const c=spec.crate,crate=new THREE.Group(),crateMat=this.textured.oak_veneer_01.clone();
     const crateMesh=new THREE.Mesh(this.geometry({s:c.s,p:c.p,m:'oak_veneer_01'}),crateMat);
@@ -427,6 +430,7 @@ export class RoomRenderer {
   }
 
   place(mesh,o){mesh.position.set(...o.p);if(o.q)mesh.quaternion.set(...o.q);else mesh.rotation.set(0,o.r||0,0);}
+  setDoorOpen(open){this.portalDoor?.setOpen(open);}
   begin(){this.cursor=0;for(const m of Object.values(this.models))m.root.visible=false;for(const m of Object.values(this.contactShadows))m.visible=false;}
   chipGeometry(variant){
     const k=(variant||0)%4;if(!this.chipGeometries.has(k)){

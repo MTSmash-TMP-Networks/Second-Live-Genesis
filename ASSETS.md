@@ -72,3 +72,9 @@ Die ausgewählten Poly-Haven-IDs `residential_garden`, `service_pistol` und `bol
 - Depth Anything V2 Small: https://github.com/DepthAnything/Depth-Anything-V2 (Apache 2.0 für Small), ONNX-Konvertierung https://huggingface.co/onnx-community/depth-anything-v2-small. Modell-URL und SHA256 in capture_compute.py fixiert.
 - SegFormer B0 ADE20K: https://huggingface.co/Xenova/segformer-b0-finetuned-ade-512-512 und https://huggingface.co/nvidia/segformer-b0-finetuned-ade-512-512. Nichtkommerzielle Forschung/Evaluation, ausdrücklich optional und standardmäßig deaktiviert. Vor kommerzieller Nutzung durch ein entsprechend lizenziertes Modell ersetzen.
 - Modelle werden nicht im Git-Repository verteilt, sondern vom lokalen Worker bei Bedarf heruntergeladen und geprüft. Bilddaten bleiben im lokalen Datenvolume.
+
+## v0.7.1 – Tür und Audio
+
+- Wooden Interior Door (tevy), CC0 1.0, https://tevy.dev/models/wooden-interior-door – gepinnte GLB-Version v1 (LOD0 und LOD1). Optionaler Download beim Docker-Build; externe Originaldateien konnten in der Entwicklungsumgebung nicht abgerufen werden. Keine Pflichtabhängigkeit.
+- Spielgeräusche: eigene prozedurale Spiel-Soundeffekte in web/audio.js; keine Originalaufnahmen realer Waffen, keine externen Audiodateien.
+- Virtuelles Smartphone: eigenes UI, keine Apple-Grafikdateien.

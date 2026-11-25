@@ -1,0 +1,26 @@
+// Fictional game sound design; no microphone or remote service.
+const clamp=v=>Math.max(0,Math.min(1,Number.isFinite(+v)?+v:.55));
+function rand(seed){return()=>{seed=(Math.imul(1664525,seed)+1013904223)>>>0;return seed/4294967296*2-1;};}
+export function soundWave(kind,rate,variant=0){
+  const duration={shot:.32,click:.07,reload:.15,impact:.19,phone:.10,door:.44}[kind]||.1;
+  const out=new Float32Array(Math.ceil(rate*duration)),noise=rand(7641+variant*7919+kind.length*71);let low=0;
+  for(let i=0;i<out.length;i++){
+    const t=i/rate,n=noise();low=.86*low+.14*n;let v;
+    if(kind==='shot')v=(.56*n*Math.exp(-t*72)+.61*low*Math.exp(-t*18)+.25*Math.sin(2*Math.PI*(85+variant*8)*t)*Math.exp(-t*32));
+    else if(kind==='reload')v=(.48*(n-low)+.16*Math.sin(2*Math.PI*870*t))*Math.exp(-t*36)+.17*low*Math.exp(-Math.abs(t-.065)*110);
+    else if(kind==='impact')v=(.45*low+.22*n)*Math.exp(-t*27);
+    else if(kind==='door')v=(.24*low+.10*Math.sin(2*Math.PI*(118+30*t)*t))*Math.sin(Math.PI*t/duration)*Math.exp(-t*2);
+    else if(kind==='phone')v=.19*Math.sin(2*Math.PI*(660+variant*90)*t)*Math.exp(-t*47);
+    else v=(.37*n+.11*Math.sin(2*Math.PI*1200*t))*Math.exp(-t*86);
+    out[i]=Math.max(-.85,Math.min(.85,v))*Math.min(1,t/.001,(duration-t)/.012);
+  }return out;
+}
+export class GameAudio {
+  constructor(){this.ctx=null;this.buffers=new Map();this.sources=new Set();this.enabled=true;this.volume=.55;this.variant=0;try{const saved=JSON.parse(localStorage.getItem('sl_audio_v1')||'null');if(saved){this.enabled=saved.enabled!==false;this.volume=clamp(saved.volume);}}catch{}}
+  configure(enabled,volume){this.enabled=!!enabled;this.volume=clamp(volume);try{localStorage.setItem('sl_audio_v1',JSON.stringify({enabled:this.enabled,volume:this.volume}));}catch{}this.applyVolume();if(!this.enabled)this.stopAll();}
+  applyVolume(){if(this.master)this.master.gain.setTargetAtTime(this.enabled?this.volume*.55:0,this.ctx.currentTime,.02);}
+  async unlock(){try{if(!this.ctx){const C=globalThis.AudioContext||globalThis.webkitAudioContext;if(!C)return false;this.ctx=new C();const c=this.ctx;this.master=c.createGain();this.master.gain.value=this.enabled?this.volume*.55:0;const limiter=c.createDynamicsCompressor();limiter.threshold.value=-19;limiter.knee.value=14;limiter.ratio.value=12;limiter.attack.value=.003;limiter.release.value=.18;this.master.connect(limiter).connect(c.destination);this.reverb=c.createConvolver();const ir=c.createBuffer(2,Math.ceil(c.sampleRate*.37),c.sampleRate);for(let ch=0;ch<2;ch++){const a=ir.getChannelData(ch),r=rand(1105+ch*71);for(let i=0;i<a.length;i++)a[i]=r()*Math.pow(1-i/a.length,3)*.21;}this.reverb.buffer=ir;const wet=c.createGain();wet.gain.value=.18;this.reverb.connect(wet).connect(this.master);}if(this.ctx.state!=='running')await this.ctx.resume();return this.ctx.state==='running';}catch{return false;}}
+  listener(eye,dir){const l=this.ctx?.listener;if(!l)return;try{if(l.positionX){l.positionX.value=eye[0];l.positionY.value=eye[1];l.positionZ.value=eye[2];l.forwardX.value=dir[0];l.forwardY.value=dir[1];l.forwardZ.value=dir[2];l.upX.value=0;l.upY.value=1;l.upZ.value=0;}else{l.setPosition(...eye);l.setOrientation(...dir,0,1,0);}}catch{}}
+  play(kind,position=null,variant=null){const c=this.ctx;if(!this.enabled||!c||c.state!=='running'||this.sources.size>=28)return false;try{const v=variant??this.variant++%4,key=kind+':'+v;let buffer=this.buffers.get(key);if(!buffer){const wave=soundWave(kind,c.sampleRate,v);buffer=c.createBuffer(1,wave.length,c.sampleRate);buffer.copyToChannel(wave,0);this.buffers.set(key,buffer);}const source=c.createBufferSource(),level=c.createGain();source.buffer=buffer;level.gain.value=kind==='shot'?.82:kind==='impact'?.48:.55;source.connect(level);let node=level,panner=null;if(position&&position.every(Number.isFinite)&&c.createPanner){panner=c.createPanner();panner.panningModel='HRTF';panner.distanceModel='inverse';panner.refDistance=1.2;panner.maxDistance=20;panner.rolloffFactor=.8;if(panner.positionX){panner.positionX.value=position[0];panner.positionY.value=position[1];panner.positionZ.value=position[2];}else panner.setPosition(...position);level.connect(panner);node=panner;}node.connect(this.master);if(kind==='shot'||kind==='impact'||kind==='door')node.connect(this.reverb);this.sources.add(source);source.onended=()=>{this.sources.delete(source);source.disconnect();level.disconnect();panner?.disconnect();};source.start();return true;}catch{return false;}}
+  stopAll(){for(const s of [...this.sources]){try{s.stop();}catch{}}}
+}

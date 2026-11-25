@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1 – Immersive Phone & Audio
+- Web Audio mit lokal erzeugten Spieleffekten, Hall, räumlichen Treffern, Lautstärke und Stummschaltung.
+- Interaktiver iPhone-inspirierter Smartphone-Startbildschirm, Einstellungen und bestehende Scan-/Update-Apps.
+- Optionaler CC0-GLB-Türimport mit geprüfter Dateistruktur, detailliertem Ersatzmodell und passender Portalgeometrie.
+- World Capture CPU und bisherige Spielstände unverändert.
+
 ## 0.7.0 – World Capture Engine (CPU-Prototyp)
 - Individuelle persistente Gastidentität, private Starträume, freiwilliger geografischer Anker, exklusive Scanaufträge und QR-Kopplung.
 - Automatische qualitätsgeführte Kameraaufnahme, Fotoauswahl, Aufnahme-/Verarbeitungsstatus, lokale Bildanalyse.

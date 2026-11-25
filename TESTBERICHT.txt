@@ -1,18 +1,10 @@
-Second Live v0.7.0 - World Capture CPU
-
-Lokal: 93 Python-Tests und 13 Subtests erfolgreich.
-Einschliesslich persoenlicher Spielstaende, GPS-Anker, Scanreservierung,
-Foto-Review und Loeschen, Zugriffsschutz, QR-Kopplung, Job-Recovery,
-Tiefenprojektion und bestehender Spiel-/Update-Tests.
-Node: Capture-Qualitaetsheuristik, simulierte Desktop-/Mobile-Clients,
-11 Bruchflaechen, Legacy-Handmesh, JS-Syntax erfolgreich.
-Echter lokaler Worker-Prozess: JPEG mit OpenCV analysiert.
-
-NICHT geprueft: Docker-Build (Docker fehlt), echte Downloads und
-ONNX-Inferenz (externe Downloads/Runtime hier nicht verfuegbar), echter
-COLMAP-Mehrbildlauf (COLMAP fehlt), WebGL und mobiler Kameralauf
-(Chromium-Lokalzugriff durch Administratorrichtlinie blockiert), VR,
-native AR, CUDA. Kein begehbarer rekonstruierter Raum. GPU-Provider
-vorbereitet; CPU-Image ohne CUDA-Runtime. SegFormer nur optionale
-nichtkommerzielle Evaluation. Kein oeffentlicher Produktivbetrieb.
-UPDATE_PROTOCOL und Host-Updater unveraendert. Alte globale DB erhalten.
+Second Live v0.7.1 - Immersive Phone & Audio
+Basis v0.7.0. 95 Python-Tests und 13 Subtests erfolgreich (pytest).
+Desktop-/Touch-Client-Simulation inklusive Audio-Aufrufen, Reload und Smartphone-Einstellungen erfolgreich.
+Node Soundgenerator, Lautstaerkegrenzen und fehlendes AudioContext erfolgreich.
+Capture-Qualitaets-Test erfolgreich; JS-Syntax und eindeutige HTML-IDs geprueft.
+Door-Downloader: GLB-Validierung, optionaler Ausfall und Manifest getestet.
+Three.js-Geometrietest im Docker-Build ergaenzt; hier nicht ausgefuehrt.
+Kein echter Docker-, WebGL-, VR- oder Hoertest in dieser Umgebung. Browser-Screenshot fehlgeschlagen/Timeout; DNS-Zugriff auf GLB-Quelle nicht verfuegbar.
+Originaltuer wird beim Build optional geladen; lokale modellierte Kassettentuer bleibt immer verfuegbar.
+Audio ist prozedurales Spielsounddesign; keine Originalaufnahmen.
