@@ -1,8 +1,14 @@
 # Second Live – World Genesis
 
-**v0.9.1 · World Foundation / Game-only**
+**v0.9.2 · Hotel Room / World Foundation**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.9.2 – Hotelzimmer
+
+Das Startzimmer ist nach der Hotelzimmer-Bildvorlage neu gestaltet: vertikal strukturierte dunkle Akzentwand, schwarzes gepolstertes Doppelbett, weiße Satinbettwäsche, senfgelber Bettläufer, Kissen und gefaltete Handtücher, offene Garderobe mit Fernseher, Nachttisch mit Telefon, Minibarregal, Schreibtisch und goldgelber Stuhl. Bodenbelag, Vorhänge, reale Beleuchtung und ein modelliertes Fenstergeländer ergänzen die Einrichtung. Die neuen Möbel sind echte lokale 3D-Geometrie; der bisherige fotografische Ausblick bleibt erhalten.
+
+Das vorhandene 10 × 10 m Raumgerüst, die Tür, das Fenster, Objekt- und Schadens-IDs sowie die bisherigen Kollisionsabmessungen bleiben aus Kompatibilitätsgründen erhalten. Neue Standardpositionen liegen in `web/engine/hotel_layout.json`; Server und Client verwenden dieselbe Quelle. Bereits ausdrücklich gespeicherte Möbelpositionen werden nicht überschrieben und können deshalb vom neuen Standardarrangement abweichen. Maße und verdeckte Ansichten sind anhand der Fotovorlage angenähert, keine Vermessung. Die App „Meine Welt“ bleibt erhalten.
 
 ## Neu in 0.7.5
 
