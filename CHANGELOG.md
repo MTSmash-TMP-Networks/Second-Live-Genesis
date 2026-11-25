@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.2 – Hotel Room
+- Neues Hotelzimmer-Design nach der freigegebenen Fotovorlage: dunkle strukturierte Akzentwand, weißes Doppelbett mit modellierten Stofflagen und goldgelbem Läufer, Handtücher, Kissen, Garderobe mit Fernseher, Minibar, schwarzer Nachttisch und Schreibtisch, senfgelber Stuhl.
+- Blau-grauer Teppich, deckenhohe Stoffvorhänge, modelliertes Fenstergeländer und warmes indirektes Licht; Lichtschalter und bestehende Schadensmechanik bleiben aktiv.
+- Eigenständige lokale Möbelmeshes und Materialtexturen; gemeinsames metrisches Layout für Client und Server, unveränderte Kollisionsabmessungen und persistente Objekt-IDs. Gespeicherte Benutzerplatzierungen bleiben erhalten.
+- Neue Standardpositionen und Spawnrichtung; bisheriges Raumgerüst und Fotofensterausblick bleiben unverändert. Keine Änderung am Host-Updater oder an der App Meine Welt.
+- Geometrie- und Layoutprüfungen im Docker-Build; praktische Grafikabnahme erforderlich.
+
 ## 0.9.1 – World Foundation
 - Kamera-, Foto-, GPS- und Scanoberflächen aus Spiel und virtuellem Smartphone entfernt; alte Scanner-, Panorama- und Foto-API-Routen im Spielbetrieb deaktiviert.
 - Persönliche Spielidentität und gespeicherte Räume vom Aufnahmefeature entkoppelt. Bestehende Möbel-, Schadens- und Fortschrittsdaten sowie archivierte Aufnahmen bleiben erhalten.
