@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { LOBBY_LAYOUT as L, LOBBY_CAPACITY, lobbyDoor } from './lobby_layout.js';
+import { createCharacter, animateCharacter, disposeCharacter, normalizeCharacter } from './character.js';
 
 const mat=(color,roughness=.82,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
-const cube=new THREE.BoxGeometry(1,1,1),sphere=new THREE.SphereGeometry(1,20,14),capsule=new THREE.CapsuleGeometry(.5,1,5,12);
+const cube=new THREE.BoxGeometry(1,1,1);
 function mesh(g,geo,p,s,m){
  const o=new THREE.Mesh(geo,m);o.position.set(...p);o.scale.set(...s);g.add(o);return o;
 }
@@ -11,34 +12,17 @@ function labelTexture(value){
  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=96;
  const ctx=canvas.getContext('2d');ctx.fillStyle='#23292d';ctx.fillRect(0,0,256,96);
  ctx.strokeStyle='#ae9665';ctx.lineWidth=3;ctx.strokeRect(3,3,250,90);
- ctx.font='500 48px sans-serif';ctx.fillStyle='#f7e8cb';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(value,128,51);
+ ctx.font='500 '+(String(value).length>18?22:String(value).length>12?30:48)+'px sans-serif';ctx.fillStyle='#f7e8cb';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(value,128,51);
  const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;return tex;
 }
 function plaque(g,text,p,yaw,w=.33,h=.124){
  const tex=labelTexture(text),m=new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide});
  const o=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m);o.position.set(...p);o.rotation.y=yaw;g.add(o);return o;
 }
-function avatar(slot){
- const g=new THREE.Group(),skin=mat([0xcba58a,0x9b7056,0xe1bc9b,0x805b45][slot%4]),hair=mat([0x352b25,0x25252a,0x513b2b][slot%3]),jacket=mat([0x344b5a,0x655d48,0x42635b,0x5a485d,0x6b6962][slot%5]),shirt=mat(0xe4dfd4),pants=mat(0x343b42),shoe=mat(0x242426);
- mesh(g,capsule,[0,1.21,0],[.43,.30,.25],jacket);
- box(g,[0,1.30,-.128],[.13,.28,.022],shirt);
- mesh(g,sphere,[0,1.65,0],[.125,.16,.115],skin);
- mesh(g,sphere,[0,1.725,.017],[.131,.091,.121],hair);
- for(const side of [-1,1]){mesh(g,sphere,[side*.12,1.64,0],[.028,.046,.034],skin);mesh(g,sphere,[side*.046,1.674,-.106],[.012,.008,.007],hair);}
- mesh(g,sphere,[0,1.643,-.116],[.021,.026,.025],skin);
- mesh(g,capsule,[0,1.49,0],[.075,.065,.075],skin);
- const arms=[],legs=[];
- for(const side of [-1,1]){
-  const a=new THREE.Group();a.position.set(side*.235,1.42,0);g.add(a);arms.push(a);
-  mesh(a,capsule,[side*.025,-.165,0],[.115,.19,.115],jacket);
-  mesh(a,sphere,[side*.029,-.365,-.006],[.049,.075,.043],skin);
-  const l=new THREE.Group();l.position.set(side*.112,.95,0);g.add(l);legs.push(l);
-  mesh(l,capsule,[0,-.39,0],[.18,.36,.19],pants);
-  mesh(l,sphere,[0,-.875,-.047],[.097,.065,.165],shoe);
- }
- const nameMap=labelTexture('Gast '+lobbyDoor(slot).number);
- const tag=new THREE.Sprite(new THREE.SpriteMaterial({map:nameMap,depthTest:true,transparent:true}));tag.position.set(0,2.0,0);tag.scale.set(.72,.27,1);g.add(tag);
- g.userData={arms,legs,phase:0,slot};return g;
+function avatar(slot,profile){
+ const g=createCharacter(profile?.avatar),name=profile?.nickname||'Gast '+lobbyDoor(slot).number;
+ const nameMap=labelTexture(name),tag=new THREE.Sprite(new THREE.SpriteMaterial({map:nameMap,depthTest:true,transparent:true}));tag.position.set(0,2.03*g.userData.height,0);tag.scale.set(.83,.31,1);g.add(tag);
+ return g;
 }
 export class HotelLobbyView{
  constructor(renderer){
@@ -63,7 +47,7 @@ export class HotelLobbyView{
    box(root,[0,1.35,z-Math.sign(z)*.10],[2.8,1.95,.08],wood);
    plaque(root,'HOTEL',[0,1.65,z-Math.sign(z)*.15],z<0?0:Math.PI,1.05,.39);
   }
-  this.signs=[];
+  this.signs=[];this.nameplates=[];this.roomNames=new Map();
   for(let slot=0;slot<LOBBY_CAPACITY;slot++){
    const d=lobbyDoor(slot),s=d.side,x=d.x-s*.045,z=d.z;
    box(root,[x,1.1,z],[.095,2.20,1.27],trim);
@@ -74,6 +58,7 @@ export class HotelLobbyView{
    const marker=box(root,[x-s*.075,1.47,z+.79],[.04,.06,.06],mat(0x393b38,.6));
    this.signs.push(marker);
    plaque(root,String(d.number),[x-s*.075,1.66,z+.83],-s*Math.PI/2,.32,.12);
+   this.nameplates.push(plaque(root,'Frei',[x-s*.10,1.86,z],-s*Math.PI/2,.88,.29));
    // Repeating warm wall sconces above the room-number panels.
    box(root,[x-s*.05,2.25,z+1.02],[.12,.36,.15],brass);
    box(root,[x-s*.115,2.25,z+1.02],[.09,.26,.13],lightmat);
@@ -86,22 +71,27 @@ export class HotelLobbyView{
   for(let z=-18;z<=18;z+=6){const l=new THREE.PointLight(0xffdfb6,17,8,2);l.position.set(0,2.57,z);this.scene.add(l);}
   this.local=null;
  }
- setOwn(slot){
-  this.own=slot;
+ setOwn(slot,profile=null){
+  this.own=slot;this.profile=profile;
   for(let i=0;i<this.signs.length;i++){const m=this.signs[i].material;m.color.set(i===slot?0x71e0b4:0x393b38);m.emissive.set(i===slot?0x1c8663:0x000000);}
   if(this.local){this.disposeAvatar(this.local);this.local=null;}
  }
- disposeAvatar(g){
-  g.removeFromParent();const materials=new Set(),textures=new Set();
-  g.traverse(o=>{if(o.material){materials.add(o.material);if(o.material.map)textures.add(o.material.map);}});
-  for(const t of textures)t.dispose();for(const m of materials)m.dispose();
+ disposeAvatar(g){disposeCharacter(g);}
+ setRooms(rooms){
+  const next=new Map((Array.isArray(rooms)?rooms:[]).filter(r=>lobbyDoor(r.slot)&&typeof r.nickname==='string').map(r=>[r.slot,r.nickname.slice(0,24)]));
+  for(let slot=0;slot<this.nameplates.length;slot++){
+   const old=this.roomNames.get(slot)||'Frei',name=next.get(slot)||'Frei';if(old===name)continue;
+   const m=this.nameplates[slot].material;m.map.dispose();m.map=labelTexture(name);m.needsUpdate=true;
+  }
+  this.roomNames=next;
  }
  sync(peers){
   const seen=new Set();
   for(const p of peers){
    if(!lobbyDoor(p.slot)||p.slot===this.own||!Array.isArray(p.position)||p.position.length!==3||!p.position.every(Number.isFinite)||!Number.isFinite(p.yaw))continue;
-   seen.add(p.slot);let a=this.peers.get(p.slot);
-   if(!a){const g=avatar(p.slot);g.position.set(...p.position);g.rotation.y=p.yaw;this.scene.add(g);a={g};this.peers.set(p.slot,a);}
+   seen.add(p.slot);let a=this.peers.get(p.slot);const signature=JSON.stringify([p.nickname,normalizeCharacter(p.avatar)]);
+   if(a&&a.signature!==signature){this.disposeAvatar(a.g);a=null;}
+   if(!a){const g=avatar(p.slot,p);g.position.set(...p.position);g.rotation.y=p.yaw;this.scene.add(g);a={g,signature};this.peers.set(p.slot,a);}
    a.position=p.position;a.yaw=p.yaw;
   }
   for(const [slot,a] of this.peers)if(!seen.has(slot)){this.disposeAvatar(a.g);this.peers.delete(slot);}
@@ -110,14 +100,10 @@ export class HotelLobbyView{
   for(const a of this.peers.values()){
    const g=a.g,d=Math.hypot(a.position[0]-g.position.x,a.position[2]-g.position.z),t=1-Math.exp(-dt*12);
    g.position.lerp(new THREE.Vector3(...a.position),t);const diff=Math.atan2(Math.sin(a.yaw-g.rotation.y),Math.cos(a.yaw-g.rotation.y));g.rotation.y+=diff*t;
-   this.animate(g,dt,d>.035);
+   animateCharacter(g,dt,d>.035);
   }
-  if(third&&this.own!==null){if(!this.local){this.local=avatar(this.own);this.scene.add(this.local);}this.local.visible=true;this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=player.yaw;}
+  if(third&&this.own!==null){if(!this.local){this.local=avatar(this.own,this.profile);this.scene.add(this.local);}this.local.visible=true;this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=player.yaw;}
   else if(this.local)this.local.visible=false;
  }
- animate(g,dt,moving){
-  const u=g.userData;u.phase+=dt*9;const v=moving?Math.sin(u.phase)*.45:0;
-  for(let i=0;i<2;i++){u.arms[i].rotation.x+=(v*(i?1:-1)-u.arms[i].rotation.x)*Math.min(1,dt*15);u.legs[i].rotation.x+=(-v*(i?1:-1)-u.legs[i].rotation.x)*Math.min(1,dt*15);}
- }
- clear(){this.sync([]);this.setOwn(null);}
+ clear(){this.sync([]);this.setOwn(null);this.setRooms([]);}
 }
