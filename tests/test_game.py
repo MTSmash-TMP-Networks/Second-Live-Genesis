@@ -35,7 +35,7 @@ class GameTest(unittest.TestCase):
                 if path.endswith('.jpg'): self.assertTrue(body.startswith(b'\xff\xd8'))
                 if path=='/': self.assertIn(b'id="stick"',body)
     def test_furniture_rotation_and_persistence(self):
-        for oid,pos,angle in [('surface_bed',[0,.6,2.8],90),('surface_wardrobe',[0,1.4,-2.7],270),('table',[2.3,.39,-.9],180)]:
+        for oid,pos,angle in [('surface_bed',[0,.6,2.8],90),('surface_wardrobe',[0,1.4,-2.7],270),('table',[2.25,.39,1.6],180)]:
             result=self.req('/api/game',{'action':'place_object','id':oid,'position':pos,'rotation':angle})
             self.assertEqual(result['placements'][oid],pos)
             self.assertEqual(result['rotations'][oid],angle)
