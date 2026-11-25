@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.8 – Live 3D World Capture
+- Automatische räumliche SfM-Vorschau ab vier Fotos, gebündelte Updates während laufender Kameraaufnahme.
+- Vergrößerbare echte 3D-Punktwolke, Kamerapositionen und Anzahl räumlich verbundener Fotos; keine simulierte Geometrie oder Abdeckungsprozentwerte.
+- Begrenzter CPU-Live-Worker, Finalaufträge mit Vorrang, private Snapshot-Daten und Invalidierung bei Löschung.
+- Korrektur der statischen Route für capture-flow.js; CSP, Host-Updater und bestehende Spielstände unverändert.
+- Tests für Status, Berechtigungen, Datenlöschung und Punktwolkenformat im Docker-Build.
+
 ## 0.7.7 – Guided Mobile World Capture
 - Smartphone-orientierter Ablauf mit vier Schritten, grossen Bedienelementen, konkreten Aufnahmehinweisen und sichtbarer Fotozahl.
 - Aufnahme pausieren, Fotos pruefen und entfernen; Galerie-/native Kamera-Alternativen und technische Optionen getrennt.
