@@ -1,8 +1,14 @@
 # Second Live – World Genesis
 
-**v0.11.3 · Shared Wall Openings**
+**v0.11.4 · Hotel Service & Movement**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.11.4 – KI-Hotelservice, Sprinten und Ducken
+
+Ein erster NPC im Stil eines digitalen Hotelmitarbeiters läuft in eigener roter Uniform mit goldenen Details und Mütze durch den gemeinsamen Hotelflur. Seine Patrouille wird serverseitig berechnet, alle Gäste sehen denselben NPC. Bei einer Begegnung in etwa 2,4 m Abstand sagt er „Hallo!“ mit einer kurzen animierten Geste. Ein Untertitel erscheint auch bei ausgeschaltetem Ton. Die deutschsprachige Begrüßung wurde offline mit eSpeak erzeugt und lokal als MP3 in die bestehende räumliche Audio-Engine integriert; keine externe KI, keine fremden Serienaufnahmen und keine nachgeahmte Schauspielerstimme. Die Begegnungslogik ist zunächst skriptgesteuert, kein Chatmodell. Nach Trennung und kurzer Abklingzeit ist eine neue Begrüßung möglich. Die Patrouille ist auch durch vorhandene Fluröffnungen sichtbar; begrüßt wird nur im Flur.
+
+Shift halten: Sprinten (5,8 m/s). Strg oder C halten: Ducken (1,65 m/s); normales Gehen 3,4 m/s. Die Kamera senkt sich sanft, die Kollisionshöhe wird reduziert; unter einem Hindernis bleibt der Spieler geduckt. Sprint ist beim Tragen oder im Zoom gesperrt, Ducken hat Vorrang und verhindert Sprünge. Auf Touch-Geräten gibt es Umschalttasten. Die Bewegungsart wird in der Lobby synchronisiert und mit eigenen Lauf- und Duckbewegungen dargestellt. Keine Änderung an Konten, Zimmern, Adminfreigabe oder bestehenden Spielständen. VR behält seine bisherige Bewegungssteuerung.
 
 ## Neu in 0.11.3 – Beidseitige Wandöffnungen
 
