@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.0 – Accounts & Character Studio
+- Registrierung mit Spitzname, E-Mail und Passwort; Login, Logout und separate Konto-Sitzung. Passwörter gesalzen und mit PBKDF2 gehasht, begrenzte Anmeldeversuche.
+- Additive Migration: gültige bisherige Gast-Sitzung kann einmalig das persönliche Zimmer übernehmen. Konten erhalten feste Zimmernummern 101–124; maximal 24 Konten im aktuellen Hotel.
+- Türschilder zeigen dauerhaft die Spitznamen der registrierten Bewohner, auch offline. Flur-API liefert keine privaten Kontaktdaten oder Zimmerinhalte.
+- Eigene stilisierte 3D-Charaktermodelle mit Gesichtsdetails, modularer Kleidung, Frisuren und beweglichen Gelenken. Drehbare Vorschau, 14 Auswahlkategorien, persistenter Charakter im Flur und der Third-Person-Ansicht. Editor auch über Smartphone-Einstellungen.
+- E-Mail-Verifizierung, Passwortwiederherstellung, weitere Etagen und professionelle Skinning-/Animationsassets folgen separat; HTTPS für echten Kontobetrieb erforderlich.
+
 ## 0.10.0 – Shared Hotel Lobby
 - Gemeinsamer 42 m langer Hotelflur mit 24 nummerierten Türen, modellierter Hotelgestaltung, Teppich und Beleuchtung.
 - E an der Zimmertür wechselt in den Flur; E an der eigenen grün markierten Tür kehrt ins private Zimmer zurück. Getrennte Szenen, Türnummern für die Dauer eines Besuchs zugewiesen.
