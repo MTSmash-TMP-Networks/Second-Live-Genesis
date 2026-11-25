@@ -152,7 +152,7 @@ class CaptureStore:
             result['id']=row['id']; result['evaluation']=bool(row['evaluation'])
             result['frames']=[{'id':f['id'],'status':f['status'],'analysis':json.loads(f['result']) if f['result'] else None} for f in db.execute('SELECT id,status,result FROM frames WHERE scan=? ORDER BY created',(row['id'],))]
             if row['status']=='capturing':
-                live=db.execute('SELECT state,attempted,revision,registered,source_count,point_count,message,json_extract(result,'$.registered_ids') AS registered_ids,json_extract(result,'$.frame_ids') AS frame_ids FROM live_previews WHERE scan=?',(row['id'],)).fetchone()
+                live=db.execute("SELECT state,attempted,revision,registered,source_count,point_count,message,json_extract(result,'$.registered_ids') AS registered_ids,json_extract(result,'$.frame_ids') AS frame_ids FROM live_previews WHERE scan=?",(row['id'],)).fetchone()
                 result['live']=dict(live) if live else {'state':'waiting','attempted':0,'revision':None,'registered':0,'source_count':0,'point_count':0,'message':''}
                 for k in ('registered_ids','frame_ids'):result['live'][k]=json.loads(result['live'].get(k) or '[]')
         elif row['status']=='published': result['id']=row['id']
