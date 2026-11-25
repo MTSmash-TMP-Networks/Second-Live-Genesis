@@ -1,0 +1,192 @@
+{
+  "repository": "memoriesrohit/avatar-studio",
+  "revision": "2fd9ec82fbe1613d40ae38aadcca3f410725f740",
+  "models": [
+    {
+      "id": "ryan",
+      "label": "Ryan",
+      "outfit": "smart",
+      "path": "models/ryan_smart.glb",
+      "file": "ryan_smart.glb",
+      "size": 13017120,
+      "sha": "ab32a209e38d5b126fd7071f6b86b689743242d4"
+    },
+    {
+      "id": "ethan",
+      "label": "Ethan",
+      "outfit": "casual",
+      "path": "models/ethan_casual.glb",
+      "file": "ethan_casual.glb",
+      "size": 13101540,
+      "sha": "c91c29eb512d6b459547432de81937d42ef1132c"
+    },
+    {
+      "id": "noah",
+      "label": "Noah",
+      "outfit": "smart",
+      "path": "models/noah_smart.glb",
+      "file": "noah_smart.glb",
+      "size": 12909748,
+      "sha": "510f197dc3822b0aab597ca83ddedd4af209071f"
+    },
+    {
+      "id": "leo",
+      "label": "Leo",
+      "outfit": "smart",
+      "path": "models/leo_smart.glb",
+      "file": "leo_smart.glb",
+      "size": 13533956,
+      "sha": "6afcf21d260eb379eeabbdbb13c2a4a10248bfc4"
+    },
+    {
+      "id": "luca",
+      "label": "Luca",
+      "outfit": "smart",
+      "path": "models/luca_smart.glb",
+      "file": "luca_smart.glb",
+      "size": 11840808,
+      "sha": "4100319677cbff48b58ae45496e77dcc8ebf51c9"
+    },
+    {
+      "id": "carlos",
+      "label": "Carlos",
+      "outfit": "casual",
+      "path": "models/carlos_casual.glb",
+      "file": "carlos_casual.glb",
+      "size": 14054220,
+      "sha": "5bc9eaed86a50c256b55beb8d16216635710dddc"
+    },
+    {
+      "id": "andre",
+      "label": "Andre",
+      "outfit": "casual",
+      "path": "models/andre_casual.glb",
+      "file": "andre_casual.glb",
+      "size": 12701036,
+      "sha": "a57449352255ecdf995c92310ae61a4439b618f8"
+    },
+    {
+      "id": "arjun",
+      "label": "Arjun",
+      "outfit": "smart",
+      "path": "models/arjun_smart.glb",
+      "file": "arjun_smart.glb",
+      "size": 10984616,
+      "sha": "ff072e481798bc84a8e4b5f95cac23c9e86e3f68"
+    },
+    {
+      "id": "daniel",
+      "label": "Daniel",
+      "outfit": "formal",
+      "path": "models/daniel_formal.glb",
+      "file": "daniel_formal.glb",
+      "size": 12089988,
+      "sha": "8ef0dab613030fef266fc6a19521298e6f4f246e"
+    },
+    {
+      "id": "marcus",
+      "label": "Marcus",
+      "outfit": "formal",
+      "path": "models/marcus_formal.glb",
+      "file": "marcus_formal.glb",
+      "size": 11536204,
+      "sha": "56b163e40516dc9a0df7d58d1436f03ed5a1f532"
+    },
+    {
+      "id": "james",
+      "label": "James",
+      "outfit": "formal",
+      "path": "models/james_formal.glb",
+      "file": "james_formal.glb",
+      "size": 11187732,
+      "sha": "4193e51d3d783a6cb109fe70c1951b4071818751"
+    },
+    {
+      "id": "kenji",
+      "label": "Kenji",
+      "outfit": "formal",
+      "path": "models/kenji_formal.glb",
+      "file": "kenji_formal.glb",
+      "size": 11636840,
+      "sha": "bebf307ff66941eb08c0d1d64f222818fb6cb1ce"
+    },
+    {
+      "id": "emma",
+      "label": "Emma",
+      "outfit": "casual",
+      "path": "models/emma_casual.glb",
+      "file": "emma_casual.glb",
+      "size": 12722000,
+      "sha": "17f922a84643c38dee8771f9613d6c883672f539"
+    },
+    {
+      "id": "mia",
+      "label": "Mia",
+      "outfit": "smart",
+      "path": "models/mia_smart.glb",
+      "file": "mia_smart.glb",
+      "size": 14081240,
+      "sha": "3fb31dc5e5bb4535fb75ee5d888a60c524811685"
+    },
+    {
+      "id": "priya",
+      "label": "Priya",
+      "outfit": "casual",
+      "path": "models/priya_casual.glb",
+      "file": "priya_casual.glb",
+      "size": 13471776,
+      "sha": "defe171ce8c1918b007c9e3ae06b2ae39f31de4c"
+    },
+    {
+      "id": "hannah",
+      "label": "Hannah",
+      "outfit": "casual",
+      "path": "models/hannah_casual.glb",
+      "file": "hannah_casual.glb",
+      "size": 12124784,
+      "sha": "e56f8d1ea659326e5652df6b3a7dd08aef5c3ece"
+    },
+    {
+      "id": "mei",
+      "label": "Mei",
+      "outfit": "casual",
+      "path": "models/mei_casual.glb",
+      "file": "mei_casual.glb",
+      "size": 13817888,
+      "sha": "47230652f59a875e5c8e4113a2dcbc8a0c8b9cef"
+    },
+    {
+      "id": "olivia",
+      "label": "Olivia",
+      "outfit": "smart",
+      "path": "models/olivia_smart.glb",
+      "file": "olivia_smart.glb",
+      "size": 13332100,
+      "sha": "12075ff9330974ad5379478b7697f3ea336ecc5f"
+    },
+    {
+      "id": "aisha",
+      "label": "Aisha",
+      "outfit": "formal",
+      "path": "models/aisha_formal.glb",
+      "file": "aisha_formal.glb",
+      "size": 12651176,
+      "sha": "1fde220aca28826ec08183c8bd680f84633223ca"
+    },
+    {
+      "id": "sophia",
+      "label": "Sophia",
+      "outfit": "formal",
+      "path": "models/sophia_formal.glb",
+      "file": "sophia_formal.glb",
+      "size": 11097332,
+      "sha": "6301b282f68fd1f95f2e461313666647db3cd56a"
+    }
+  ],
+  "lighting": {
+    "path": "assets/studio_small_09_1k.hdr",
+    "file": "studio_small_09_1k.hdr",
+    "size": 1615248,
+    "sha": "e9a2d2272ceee33041dbfefaff72f510d86a164c"
+  }
+}

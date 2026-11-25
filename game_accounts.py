@@ -17,8 +17,9 @@ EMAIL=re.compile(r'^[A-Za-z0-9.!#$%&\'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0
 DUMMY_SALT=bytes.fromhex('08fae223bb47fa85f27293a91b93d00c')
 
 def clean_avatar(value):
-    if not isinstance(value,dict) or set(value)!=set(OPTIONS):
+    if not isinstance(value,dict) or set(value) not in (set(OPTIONS),set(OPTIONS)-{'model'}):
         raise CaptureError('Unvollstaendiges Charakterprofil',400)
+    value={'model':DEFAULT_AVATAR['model'],**value}
     for k,v in value.items():
         if type(v) is not int or not 0<=v<len(OPTIONS[k]['values']):
             raise CaptureError('Ungueltige Charakterauswahl',400)
@@ -132,7 +133,9 @@ class AccountStore:
         with self.capture.tx(False) as db:
             r=db.execute('SELECT nickname,room_slot,avatar FROM game_accounts WHERE player=?',(player,)).fetchone()
         if not r:raise CaptureError('Bitte anmelden',401)
-        return {'nickname':r['nickname'],'slot':r['room_slot'],'avatar':json.loads(r['avatar'])}
+        avatar=json.loads(r['avatar'])
+        avatar.setdefault('model',DEFAULT_AVATAR['model'])
+        return {'nickname':r['nickname'],'slot':r['room_slot'],'avatar':avatar}
     def is_update_admin(self,player):
         if not self.admin_email or not player:return False
         with self.capture.tx(False) as db:

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.0 – Rocketbox Characters & Automatic Reload
+- 20 fertige Microsoft-Rocketbox-GLB-Menschenmodelle aus Avatar Studio ersetzen die bisherige Ara/MakeHuman-Erzeugung. Lokale Originaltexturen, Skelett und native Bewegungsclips; Build prüft jede fest gepinnte Datei.
+- Charakterstudio: echte Grundmodelle, austauschbare Original-/Business-/Hemd-/T-Shirt-Outfits, realistische Größenanpassung und getrennte Stofffarben bei Hemd/T-Shirt. Lokales HDR-Studiolicht und weichere Schatten. Keine irreführenden Regler für fest modellierte Gesichter oder Haare; alte Werte bleiben gespeichert.
+- Automatisches Nachladen bei leerem Spielmagazin, beim Scharfschützengewehr nach jedem Einzelschuss. M16 setzt gehaltenes Dauerfeuer nach dem Nachladen fort; Loslassen oder Menü unterbricht es.
+- Erhöhte fiktive Trefferwirkung des Scharfschützengewehrs: eine virtuelle Wandzelle kann bereits beim ersten Treffer entfernt werden. Unveränderte Kollisions-, Reparatur- und Sicherheitsgrenzen.
+- Alte Konten und Profilwerte werden weiter gelesen; neuer optionaler Grundmodellindex. Native Lauf-/Duck-Clips sind noch nicht Bestandteil des Rocketbox-Pakets.
+
 ## 0.11.9 – Differentiated Game Physics
 - Pistole, M16 und Scharfschützengewehr besitzen getrennte, fiktive Spielschadensprofile für Objekte, Wandzellen, Einrichtung und Treffermarkierungen; Server entscheidet die Werte anhand der Waffen-ID.
 - Scharfschützengewehr: ein Schuss pro Ladezyklus, manuelles Nachladen. M16: höheres Spielmagazin und schnelleres Dauerfeuer beim Halten; Pistole: Einzelfeuer. Individuelle Ladezeiten und visuelle Rückmeldung.

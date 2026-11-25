@@ -24,16 +24,19 @@ function pressTrigger(){
 }
 function stepTrigger(dt){
  fireCooldown=Math.max(0,fireCooldown-dt);
- if(!canPlay()||posture||equipped!=='m16'||lobbyState||lobbyTransition){releaseTrigger();return;}
+ if(!canPlay()||posture||!equipped||lobbyState||lobbyTransition){releaseTrigger();return;}
+ if(!reloadId&&ammo[equipped]===0)startReload(true);
+ if(equipped!=='m16'){releaseTrigger();return;}
  if(triggerHeld&&!reloadId&&!busy&&fireCooldown<=0)fire();
 }
 function updateAmmo(){
  const el=$('ammo');
- el.textContent=!equipped?'':reloadId?'Wird nachgeladen …':ammo[equipped]===0?'Leer · T: Nachladen':`${ammo[equipped]} / ${clipSize[equipped]} · T: Nachladen`;
+ el.textContent=!equipped?'':reloadId?'Wird nachgeladen …':ammo[equipped]===0?'Leer · Automatisches Nachladen':`${ammo[equipped]} / ${clipSize[equipped]} · T: Nachladen`;
 }
-function startReload(){
+function startReload(automatic=false){
  if(!canPlay()||posture||!equipped||reloadId||ammo[equipped]===clipSize[equipped]||lobbyState||lobbyTransition)return;
- releaseTrigger();setScopeZoom(false);reloadId=equipped;reloadLeft=RELOAD_TIME[reloadId];audio.play('reload',null,0);updateAmmo();
+ if(automatic!==true||equipped!=='m16')releaseTrigger();
+ setScopeZoom(false);reloadId=equipped;reloadLeft=RELOAD_TIME[reloadId];audio.play('reload',null,0);updateAmmo();
 }
 function stepReload(dt){
  if(!reloadId)return;
@@ -468,18 +471,28 @@ function updateAvatarModelStatus(){
  const studio=renderer?.studio,u=studio?.root?.userData,status=u?.realisticStatus;
  const node=$('character-model-status'),retry=$('character-model-retry');
  const previous=studio?.previous?' Die letzte fertige Vorschau bleibt sichtbar.':'';
- const message=status==='ready'?'Realistisches 3D-Modell bereit':status==='loading'?'Realistisches 3D-Modell wird geladen …'+previous:status==='fallback'?'Modell konnte nicht geladen werden. '+(u.realisticError||'')+previous:'';
+ const message=status==='ready'?'Rocketbox · '+(u.realistic?.look.model.label||'')+' · 3D-Modell bereit':status==='loading'?'3D-Charakter wird geladen …'+previous:status==='fallback'?'Modell konnte nicht geladen werden. '+(u.realisticError||'')+previous:'';
  if(node&&node.textContent!==message)node.textContent=message;
  if(retry)retry.hidden=status!=='fallback';
 }
+// Rocketbox identities carry their own face, skin, hair and shoe meshes.
+const studioFields=['model','height','top','topColor','trousersColor'];
 function renderCharacterFields(){
  const area=$('character-fields');area.replaceChildren();
- for(const [key,entry] of Object.entries(CHARACTER_OPTIONS)){
+ for(const key of studioFields){
+  const entry=CHARACTER_OPTIONS[key];
   const label=document.createElement('label');label.textContent=entry.label;
+  if(key==='model')label.className='character-model-field';
+  if(key==='trousersColor'&&![0,2].includes(characterDraft.top))label.hidden=true;
   const select=document.createElement('select');select.dataset.character=key;
   for(const [index,name] of entry.values.entries()){const o=document.createElement('option');o.value=String(index);o.textContent=name;select.append(o);}
-  select.value=String(characterDraft[key]);select.onchange=()=>{characterDraft[key]=Number(select.value);renderer.studio.set(characterDraft);};label.append(select);area.append(label);
+  select.value=String(characterDraft[key]);select.onchange=()=>{
+   characterDraft[key]=Number(select.value);
+   if(key==='top')renderCharacterFields();
+   renderer.studio.set(characterDraft);
+  };label.append(select);area.append(label);
  }
+ $('character-outfit-note').textContent=[0,2].includes(characterDraft.top)?'Oberteil und Hose lassen sich getrennt färben.':'Original-Outfit und Anzug sind zusammenhängende Kleidungsmodelle; die Farbe wirkt auf das gesamte Outfit.';
 }
 function closeStudio(){
  studioOpen=false;renderer?.studio?.clear();$('character-editor').hidden=true;document.body.classList.remove('character-editing');clearControls();
@@ -518,7 +531,7 @@ $('auth-login').onclick=()=>setAuthMode('login');$('auth-register').onclick=()=>
 $('account-form').onsubmit=e=>{e.preventDefault();authenticate();};$('account-continue').onclick=()=>openStudio();
 $('account-switch').onclick=async()=>{if(accountBusy)return;accountBusy=true;authButtons();try{await api('/api/account',{action:'logout'});accountProfile=null;$('account-phone').hidden=true;window.dispatchEvent(new Event('sl-account-change'));setAuthMode('login');}catch(e){$('loginerror').textContent=e.message;}finally{accountBusy=false;authButtons();}};
 $('character-left').onclick=()=>renderer.studio.turn(-Math.PI/6);$('character-right').onclick=()=>renderer.studio.turn(Math.PI/6);
-$('character-random').onclick=()=>{for(const [k,v] of Object.entries(CHARACTER_OPTIONS))characterDraft[k]=Math.floor(Math.random()*v.values.length);renderCharacterFields();renderer.studio.set(characterDraft);};
+$('character-random').onclick=()=>{for(const k of studioFields){const v=CHARACTER_OPTIONS[k];characterDraft[k]=k==='model'?1+Math.floor(Math.random()*(v.values.length-1)):Math.floor(Math.random()*v.values.length);}renderCharacterFields();renderer.studio.set(characterDraft);};
 $('character-model-retry').onclick=()=>{if(studioOpen&&characterDraft)renderer.studio.set(characterDraft);};
 $('character-cancel').onclick=()=>{if(!accountBusy)closeStudio();};
 $('character-save').onclick=async()=>{if(accountBusy||!studioOpen)return;accountBusy=true;$('character-save').disabled=true;$('character-error').textContent='';
@@ -557,7 +570,7 @@ function canPlay(){return started&&active&&$('phone').hidden&&$('arsenal').hidde
 function fire(ray=null){
   if(!canPlay()||lobbyState||lobbyTransition||posture||!equipped||busy||reloadId||fireCooldown>0)return false;
   const weapon=equipped;
-  if(ammo[weapon]<=0){releaseTrigger();$('notice').textContent='Leer – mit T nachladen';updateAmmo();return false;}
+  if(ammo[weapon]<=0){startReload(true);return false;}
   const direction=ray?.direction||dir(),origin=ray?.origin||playerEye(),a=renderer.surfaceHit(origin,direction,held);
   ammo[weapon]--;fireCooldown=FIRE_INTERVAL[weapon];updateAmmo();
   renderer.shot(weapon,{origin,direction,distance:Math.min(8,a.dist),impact:a.dist<=8});
@@ -569,7 +582,7 @@ function fire(ray=null){
   else if(DECOR_BOUNDS[a.id])action('damage_decor',a.id,a.mark,extra);
   else if(a.id?.startsWith('surface_'))action('mark_surface',a.id,a.mark,extra);
   else $('notice').textContent=a.dist<=8?'Oberfläche ohne Schadensspeicher':'Kein Objekt getroffen';
-  if(ammo[weapon]===0)releaseTrigger();
+  if(ammo[weapon]===0)startReload(true);
   return true;
 }
 function repairTarget(ray=null,surface=null){

@@ -98,12 +98,12 @@
     "default": 0
   },
   "top": {
-    "label": "Oberteil",
+    "label": "Kleidung",
     "values": [
       "T-Shirt",
-      "Pullover",
+      "Business-Anzug",
       "Hemd",
-      "Jacke"
+      "Original-Outfit"
     ],
     "default": 3
   },
@@ -117,7 +117,8 @@
       "Bordeaux",
       "Ocker",
       "Rosé",
-      "Grau"
+      "Grau",
+      "Originalfarbe"
     ],
     "colors": [
       "e6ddd0",
@@ -127,9 +128,10 @@
       "833f50",
       "c7a044",
       "c48b90",
-      "85878d"
+      "85878d",
+      "ffffff"
     ],
-    "default": 1
+    "default": 8
   },
   "trousers": {
     "label": "Hose",
@@ -182,6 +184,33 @@
       "Keine",
       "Rund",
       "Eckig"
+    ],
+    "default": 0
+  },
+  "model": {
+    "label": "Grundmodell",
+    "values": [
+      "Automatisch (Standardfigur)",
+      "Ryan · Freizeit / Smart Casual",
+      "Ethan · Freizeit",
+      "Noah · Freizeit / Smart Casual",
+      "Leo · Freizeit / Smart Casual",
+      "Luca · Freizeit / Smart Casual",
+      "Carlos · Freizeit",
+      "Andre · Freizeit",
+      "Arjun · Freizeit / Smart Casual",
+      "Daniel · Business",
+      "Marcus · Business",
+      "James · Business",
+      "Kenji · Business",
+      "Emma · Freizeit",
+      "Mia · Freizeit / Smart Casual",
+      "Priya · Freizeit",
+      "Hannah · Freizeit",
+      "Mei · Freizeit",
+      "Olivia · Freizeit / Smart Casual",
+      "Aisha · Business",
+      "Sophia · Business"
     ],
     "default": 0
   }

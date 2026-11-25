@@ -218,7 +218,7 @@ import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,c
 console.log('Shared lobby: layout, named doors, avatar interpolation and cleanup OK');
 {
  const assertCharacter=(profile)=>{const g=createCharacter(profile);g.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(g);assert.ok(bounds.max.y>1.55&&bounds.max.y<2.15);assert.ok(bounds.min.y>-.13&&bounds.min.y<.13);assert.equal(g.userData.arms.length,2);assert.equal(g.userData.knees.length,2);let meshes=0;g.traverse(o=>{if(o.isMesh){meshes++;assert.ok(o.geometry.attributes.position.count>0);assert.ok([...o.geometry.attributes.position.array].every(Number.isFinite));}});assert.ok(meshes>25);animateCharacter(g,.2,true);assert.notEqual(g.userData.legs[0].rotation.x,0);disposeCharacter(g);};
- assert.equal(Object.keys(CHARACTER_OPTIONS).length,14);assert.equal(normalizeCharacter({hair:999}).hair,DEFAULT_CHARACTER.hair);
+ assert.equal(Object.keys(CHARACTER_OPTIONS).length,15);assert.equal(normalizeCharacter({hair:999}).hair,DEFAULT_CHARACTER.hair);
  for(const [key,opt] of Object.entries(CHARACTER_OPTIONS))for(let i=0;i<opt.values.length;i++)assertCharacter({...DEFAULT_CHARACTER,[key]:i});
  const mesh=sculptedMesh([[0,.1,.1],[1,.1,.1]],12);const normal=mesh.attributes.normal;assert.ok(normal.getZ(0)>0);mesh.dispose();
  const studio=new CharacterStudio();studio.set(DEFAULT_CHARACTER);const old=studio.root;studio.set({...DEFAULT_CHARACTER,skin:0});assert.notEqual(studio.root,old);studio.turn(.3);let renders=0;studio.render({render(scene,camera){assert.equal(scene,studio.scene);assert.equal(camera,studio.camera);renders++;}},1.8,.016);studio.render({render(){renders++;}},.6,.016);assert.equal(renders,2);disposeCharacter(studio.root);

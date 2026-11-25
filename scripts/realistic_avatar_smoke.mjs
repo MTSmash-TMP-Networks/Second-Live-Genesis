@@ -1,20 +1,26 @@
 import assert from 'node:assert/strict';
 import options from './character_options.json';
-import {avatarRecipe} from './avatar_recipe.js';
+import {ROCKETBOX_CATALOG,resolveRocketboxLook,outfitParts} from './rocketbox_look.js';
 const defaults=Object.fromEntries(Object.entries(options).map(([k,v])=>[k,v.default]));
-const base=avatarRecipe(defaults,options);
-assert.equal(base.params.jacket,'racing_jacket_long');
-assert.equal(base.colors.top,'#85878d');assert.equal(base.colors.jacket,'#272a2e');
-assert.equal(base.colors.bottom,'#24262a');assert.equal(base.colors.shoes,'#eeeeea');
-for(const [key,opt] of Object.entries(options)){
- const results=new Set();
- for(let i=0;i<opt.values.length;i++){
-  const r=avatarRecipe({...defaults,[key]:i},options);
-  const s=JSON.stringify(r);assert.ok(!s.includes('undefined')&&!s.includes('null'));
-  assert.notEqual(r.params.top,'none');assert.notEqual(r.params.bottom,'none');
-  assert.notEqual(r.params.shoes,'none');assert.equal(r.params.underwear,true);assert.equal(r.params.rig,'game');
-  results.add(s);
- }
- assert.equal(results.size,opt.values.length,'Unmapped option: '+key);
+assert.equal(ROCKETBOX_CATALOG.models.length,20);
+assert.equal(options.model.values.length,21);
+assert.equal(resolveRocketboxLook(defaults,options).model.id,'ryan');
+assert.equal(resolveRocketboxLook({...defaults,body:3},options).model.id,'emma');
+const chosen=new Set();
+for(let model=1;model<options.model.values.length;model++){
+ const look=resolveRocketboxLook({...defaults,model},options);
+ assert.match(look.model.file,/^[a-z]+_(formal|casual|smart)\.glb$/);
+ assert.match(look.model.sha,/^[a-f0-9]{40}$/);
+ assert.ok(look.model.size>1000000);chosen.add(look.model.file);
 }
-console.log('Realistic avatar: all stored profile categories mapped and standard outfit validated');
+assert.equal(chosen.size,20);
+for(const key of ['height','top','topColor','trousersColor']){
+ const results=new Set();
+ for(let i=0;i<options[key].values.length;i++)results.add(JSON.stringify(resolveRocketboxLook({...defaults,[key]:i},options)));
+ assert.equal(results.size,options[key].values.length,key);
+}
+const parts=new Set(['Outfit_original','Skin_original','Outfit_formal','Skin_formal','Top_shirt','Skin_shirt','Top_tee','Skin_tee','Trousers','Shoes']);
+assert.deepEqual([...outfitParts('tee',parts).visible],['Top_tee','Skin_tee','Trousers','Shoes']);
+assert.deepEqual([...outfitParts('formal',parts).visible],['Outfit_formal','Skin_formal']);
+parts.delete('Outfit_formal');assert.equal(outfitParts('formal',parts).top,'original');
+console.log('Rocketbox: 20 identities, supported outfit controls and old profile mapping validated');

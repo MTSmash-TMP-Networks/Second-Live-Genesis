@@ -177,6 +177,9 @@ class GameOnlyTest(unittest.TestCase):
             with self.assertRaises(CaptureError):accounts.login({**data,'password':'wrong-password'},'one')
             avatar={**DEFAULT_AVATAR,'hair':(DEFAULT_AVATAR['hair']+1)%len(OPTIONS['hair']['values'])}
             self.assertEqual(accounts.save_avatar(legacy,avatar)['avatar'],avatar)
+            older={k:v for k,v in avatar.items() if k!='model'}
+            self.assertEqual(clean_avatar(older),avatar)
+            self.assertEqual(accounts.save_avatar(legacy,older)['avatar'],avatar)
             with self.assertRaises(CaptureError):accounts.save_avatar(legacy,{**avatar,'hair':999})
             restored=AccountStore(capture);p2,k2=restored.login({**data,'email':'A@EXAMPLE.INVALID'},'two')
             self.assertEqual(p2['slot'],0);self.assertEqual(p2['avatar'],avatar)
@@ -361,6 +364,7 @@ class GameOnlyTest(unittest.TestCase):
                 mark={'point':point,'normal':normal}
                 hit=game.action({'action':'damage_wall','id':wall,'mark':mark,'weapon':weapon,'damage':999},None)
                 stage=hit['wall_result']['stage']
+                if weapon=='rifle':self.assertEqual(stage,REMOVED)
                 severity=hit['marks'][0]['severity']
                 decor=game.action({'action':'damage_decor','id':'surface_picture','mark':{'point':[.1,.1,.1],'normal':[0,0,1]},'weapon':weapon},None)
                 obj=game.action({'action':'hit','id':'table','weapon':weapon,'damage':999},None)

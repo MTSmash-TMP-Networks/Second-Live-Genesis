@@ -56,7 +56,7 @@ def state(db):
     return out
 
 def damage(db,target,point,normal,step=1):
-    if type(step) is not int or not 1 <= step < REMOVED:
+    if type(step) is not int or not 1 <= step <= REMOVED:
         raise ValueError('Ungueltige Spielschadensstufe')
     wall=WALLS[target];c,r,other=hit_cell(wall,point,normal)
     def get(x,y):

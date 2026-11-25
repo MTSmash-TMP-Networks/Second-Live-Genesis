@@ -1,20 +1,23 @@
-# Realistic player characters
+# Rocketbox player characters
 
-Second Live uses Ara 3D Gen 0.16.0 and its matching locally served MakeHuman character dataset. The original 14 stored appearance settings remain valid. The default for new profiles is short dark hair, stubble, a dark jacket, grey shirt, dark jeans and light sneakers. Existing profiles keep their choices. Some clothing and glasses choices are approximations of the original editor labels.
+Second Live uses the 20 prepared Microsoft Rocketbox characters from [Avatar Studio](https://github.com/memoriesrohit/avatar-studio) at revision `2fd9ec82fbe1613d40ae38aadcca3f410725f740`. They carry professionally modelled faces, textured clothing, rigged meshes, facial morph targets and native idle/walk motion capture. They are downloaded only at Docker build time, with each original Git blob hash, size, rig, embedded textures, outfit parts and animation clips verified.
 
-The player model is generated locally in a background browser worker; no account identifiers or external avatar service are involved. Rigged GLB models are loaded with the existing Three.js loader. Idle, walk, run and crouch-idle animations play in place; crouched movement currently uses the crouch-idle pose. The concierge retains its legacy uniform and greeting rig. If generation fails in the game, the procedural emergency model remains available. The character studio never displays the old procedural fallback in the browser: it retains only the last completed realistic preview while the new one is loading, with a retry button and the actual error message on failure.
+The same local GLB loader serves the character studio, the player's third-person view and other guests. The studio uses the original Poly Haven studio HDRI, neutral lighting and soft shadows. Selecting an outfit or colour on the same model updates the already loaded materials, without downloading the model again. The browser caches at most four GLB byte buffers.
 
-The npm generator and matching data are isolated in their own Docker stage; the existing CSP, account storage, movement and update mechanisms remain unchanged. The provider is loaded only when a browser needs a player character. Generation is queued, identical requests share their result, and the cache holds four generated GLBs. No external CDN requests are required at runtime.
+## Profile compatibility
+
+Existing 14 numeric appearance fields are preserved in stored profiles; a new optional model index defaults to the standard identity (Ryan, or Emma for the old curvy body preset). The server accepts both old and new profile shapes. The studio exposes the 20 actual identities, height, original outfit, business suit, shirt, T-shirt and fabric colours. Hair, face, skin, eyes, beard, glasses and shoes are part of the chosen identity rather than independent sliders. Trousers can be separately tinted with shirt or T-shirt; the original and business outfits are combined garments. Older appearance values remain stored but do not all affect the new identity.
+
+Native idle and walk clips are used; the supplied GLBs do not include dedicated run and crouch motion capture. Sprint uses faster walk playback, and crouch uses a slower walk or idle until dedicated clips are added. Gameplay movement and collision states are unchanged. The concierge remains on its existing separate uniform rig.
 
 ## Verification
 
-The normal Docker build checks the old avatar tests, all existing scene tests, the profile mapping against the pinned upstream schema and the upstream animation catalog. It also exports two genuine textured starter GLBs (current default and pre-0.11.6 default), validating their rig, embedded textures and all four animation clips. Both are served locally and bypass browser generation for the matching profiles. To test the real GLB in a running browser install Playwright and Chromium, then run:
+Docker checks the pinned assets and all existing server/client smoke tests. To test browser GLB loading and outfit changes in a built server, install Playwright and Chromium and run:
 
     node scripts/realistic_avatar_browser_smoke.mjs http://127.0.0.1:8765
 
-Verify both front/back views in the character studio, profile changes, two guests in the hotel and third-person walking, running and crouching. The browser smoke test checks the rig, animation count and absence of cross-origin HTTP requests.
+Verify both studio views, actual colour rendering, multiplayer avatars and mobile performance in a real browser. The old procedural avatar is retained only as a game emergency fallback, never as the studio preview.
 
-## Licences
+## Licenses
 
-See AVATAR-LICENSE.txt. Upstream: https://github.com/olatunde85/3d-gen
-Library guide: https://ara3dgen.com/docs/library/
+See AVATAR-LICENSE.txt (Rohit Biradar MIT, Microsoft Rocketbox MIT, Poly Haven CC0). The prior Ara/MakeHuman generator is no longer built or used.

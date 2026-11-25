@@ -2,7 +2,8 @@
 // facial features and clothing. Same model factory for editor and multiplayer.
 import * as THREE from 'three';
 import options from './character_options.json';
-import {prepareRealistic,animateRealistic,disposeRealistic} from './realistic_character.js';
+import {prepareRealistic,animateRealistic,disposeRealistic,updateRealistic} from './realistic_character.js';
+import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 export const CHARACTER_OPTIONS=options;
 export const DEFAULT_CHARACTER=Object.freeze(Object.fromEntries(Object.entries(options).map(([k,v])=>[k,v.default])));
 export function normalizeCharacter(value){
@@ -138,7 +139,7 @@ export function createCharacter(value,{legacyOnly=false,studio=false}={}){
  body.scale.set(1,height,1);root.userData={character:a,body,head,arms,elbows,legs,knees,phase:0,height};
  // Never show the procedural fallback as the real studio preview in the browser.
  if(studio&&typeof window!=='undefined')body.visible=false;
- if(!legacyOnly)prepareRealistic(root,a,options);
+ if(!legacyOnly)prepareRealistic(root,a,options,studio);
  return root;
 }
 // Original concierge character inspired by classic red hotel uniforms.
@@ -188,24 +189,41 @@ export function disposeCharacter(root){
 }
 export class CharacterStudio{
  constructor(){
-  this.scene=new THREE.Scene();this.scene.background=new THREE.Color(0x263845);
+  this.scene=new THREE.Scene();this.scene.background=new THREE.Color(0x202e3c);
   this.camera=new THREE.OrthographicCamera(-1.5,1.5,1.35,-1.35,.1,20);
-  this.scene.add(new THREE.HemisphereLight(0xf5f2eb,0x838895,2.2));
-  for(const [x,y,z,c,p] of [[-3,4,-4,0xffe5c8,3.1],[3,2,1,0xb8d9ff,2.4]]){const light=new THREE.DirectionalLight(c,p);light.position.set(x,y,z);this.scene.add(light);}
-  const plinth=new THREE.Mesh(new THREE.CylinderGeometry(.72,.79,.1,64),material(0x657e84,.68));plinth.position.y=-.06;this.scene.add(plinth);
+  this.scene.environmentIntensity=.75;
+  this.scene.add(new THREE.HemisphereLight(0xf3f5ff,0x88919b,.55));
+  const key=new THREE.DirectionalLight(0xfff3e6,1.8);key.position.set(-2.2,3.8,-3.4);key.castShadow=true;
+  key.shadow.mapSize.set(2048,2048);key.shadow.camera.left=-1.4;key.shadow.camera.right=1.4;
+  key.shadow.camera.top=2.2;key.shadow.camera.bottom=-1.4;key.shadow.normalBias=.015;key.shadow.bias=-.0003;
+  this.scene.add(key);this.scene.add(key.target);
+  for(const [x,y,z,c,p] of [[3,2,-2,0xe7efff,.65],[-1,2.5,3,0xd6e5ff,.9]]){const light=new THREE.DirectionalLight(c,p);light.position.set(x,y,z);this.scene.add(light);}
+  const plinth=new THREE.Mesh(new THREE.CylinderGeometry(.66,.75,.09,64),material(0x657783,.8));plinth.position.y=-.055;plinth.receiveShadow=true;this.scene.add(plinth);
   this.root=null;this.previous=null;this.angle=.25;
  }
  set(value){
+  const a=normalizeCharacter(value);
+  if(updateRealistic(this.root,a,options))return;
   if(this.root){
    if(this.root.userData.realisticStatus==='ready'){
     if(this.previous)disposeCharacter(this.previous);this.previous=this.root;
    }else disposeCharacter(this.root);
   }
-  this.root=createCharacter(value,{studio:true});this.scene.add(this.root);
+  this.root=createCharacter(a,{studio:true});this.scene.add(this.root);
  }
  clear(){if(this.root)disposeCharacter(this.root);if(this.previous)disposeCharacter(this.previous);this.root=null;this.previous=null;}
  turn(angle){this.angle+=angle;}
+ loadLighting(renderer){
+  if(this.lightingRequested||!renderer.isWebGLRenderer||typeof window==='undefined')return;
+  this.lightingRequested=true;
+  new RGBELoader().loadAsync('/assets/avatars/data/studio_small_09_1k.hdr?v=0.12.0').then(hdr=>{
+   const pmrem=new THREE.PMREMGenerator(renderer);
+   try{this.environmentTarget=pmrem.fromEquirectangular(hdr);this.scene.environment=this.environmentTarget.texture;}
+   finally{hdr.dispose();pmrem.dispose();}
+  }).catch(e=>console.warn('Studio HDR:',e.message));
+ }
  render(renderer,aspect,dt){
+  this.loadLighting(renderer);
   if(!this.root)this.set(DEFAULT_CHARACTER);
   if(this.root.userData.realisticStatus==='ready'&&this.previous){disposeCharacter(this.previous);this.previous=null;}
   this.root.rotation.y=this.angle;animateCharacter(this.root,dt,false);
@@ -213,6 +231,10 @@ export class CharacterStudio{
   const mobile=aspect<1.15,hh=mobile?2.65:1.27,hw=hh*aspect;
   this.camera.left=-hw;this.camera.right=hw;this.camera.top=hh;this.camera.bottom=-hh;
   const x=mobile?0:-hw*.45,y=mobile?-.48:.98;
-  this.camera.position.set(x,y+.1,-4);this.camera.lookAt(x,y,0);this.camera.updateProjectionMatrix();renderer.render(this.scene,this.camera);
+  this.camera.position.set(x,y+.1,-4);this.camera.lookAt(x,y,0);this.camera.updateProjectionMatrix();
+  if(!renderer.isWebGLRenderer){renderer.render(this.scene,this.camera);return;}
+  const tone=renderer.toneMapping,exposure=renderer.toneMappingExposure;
+  try{renderer.toneMapping=THREE.NeutralToneMapping??THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1;renderer.render(this.scene,this.camera);}
+  finally{renderer.toneMapping=tone;renderer.toneMappingExposure=exposure;}
  }
 }
