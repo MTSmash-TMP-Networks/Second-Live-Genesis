@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.9.4 · Hotel Realism / Door Wall Fix**
+**v0.9.5 · Hotel Interactions**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.9.5 – Vorhänge und Objektaktionen
+
+Die Vorhänge lassen sich mit E (Touch: kontextabhängige Aktionstaste) öffnen und schließen, wenn Vorhang oder Fenster in Reichweite anvisiert werden. Beide Stoffbahnen bewegen sich animiert auf der Schiene; die direkte Fensterausleuchtung passt sich an. Der Zustand wird separat je persönlichem Zimmer gespeichert. Die neue dezente Anzeige unter dem Fadenkreuz zeigt Objektname und tatsächlich verfügbare Aktionen, einschließlich Aufheben, Abstellen, Drehen, Licht und Reparatur bei Schäden. Die Tür bleibt bis zur Welterweiterung geschlossen. Im WebXR-Modus kann der Controller bei abgelegter Testwaffe Vorhang und Lichtschalter bedienen; die neue HUD-Anzeige gilt für Desktop und Touch.
 
 ## Neu in 0.9.4 – Wandabschluss an der Tür
 
