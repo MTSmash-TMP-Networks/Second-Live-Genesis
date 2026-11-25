@@ -127,6 +127,30 @@ class GameOnlyTest(unittest.TestCase):
                 pb2,cb2=req('','/api/account',{'action':'login','email':'b@example.invalid','password':'Test-password-456'},True)
                 self.assertEqual(pb2['slot'],pb['slot']);self.assertEqual(pb2['avatar'],custom)
                 self.assertEqual(req(ca,'/api/game'),before_a);self.assertEqual(req(cb2,'/api/game'),before_b)
+                # Read-only observation does not create a lobby lease.
+                observed=req(cb2,'/api/hotel/view',{'action':'hall'})
+                self.assertEqual(observed['online'],1)
+                self.assertEqual(observed['peers'][0]['nickname'],'Alpha')
+                self.assertNotIn('lease',observed)
+                # Only a physical opening in the paired wall permits a snapshot.
+                self.assertEqual(req(ca,'/api/hotel/view',{'action':'neighbor'}),{'room':None})
+                import sqlite3
+                with sqlite3.connect(game_a.path) as db:
+                    db.execute("INSERT INTO wall_cells VALUES ('surface_6',4,3,3)")
+                self.assertEqual(req(ca,'/api/hotel/view',{'action':'neighbor'}),{'room':None})
+                with sqlite3.connect(game_a.path) as db:
+                    db.execute("UPDATE wall_cells SET stage=4 WHERE target='surface_6'")
+                game_b.action({'action':'place_object','id':'surface_rug','position':[2.95,.009,-2.0],'rotation':90},None)
+                view=req(ca,'/api/hotel/view',{'action':'neighbor','slot':23,'player':'ignored'})['room']
+                self.assertEqual(set(view),{'placements','rotations','objects','decor','lights_on','curtains_closed'})
+                self.assertEqual(view['placements']['surface_rug'],[2.95,.009,-2.0])
+                self.assertEqual(view['rotations']['surface_rug'],90)
+                self.assertEqual(view['lights_on'],before_b['lights_on'])
+                self.assertEqual(req(cb2,'/api/hotel/view',{'action':'neighbor'}),{'room':None})
+                with self.assertRaises(urllib.error.HTTPError) as e:req('','/api/hotel/view',{'action':'neighbor'})
+                self.assertEqual(e.exception.code,401)
+                game_a.action({'action':'repair_surface','id':'surface_6'},None)
+                self.assertEqual(req(ca,'/api/hotel/view',{'action':'neighbor'}),{'room':None})
             finally:
                 srv.shutdown();srv.server_close();thread.join(timeout=5)
 
