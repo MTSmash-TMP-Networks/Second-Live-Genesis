@@ -44,8 +44,11 @@ def password_hash(password,salt):
     return hashlib.pbkdf2_hmac('sha256',password.encode('utf8'),salt,ITERATIONS)
 
 class AccountStore:
-    def __init__(self,capture):
+    def __init__(self,capture,admin_email=''):
         self.capture=capture
+        self.admin_email=admin_email.strip().lower()
+        if self.admin_email and (len(self.admin_email)>254 or not EMAIL.fullmatch(self.admin_email)):
+            raise ValueError('SECOND_LIVE_UPDATE_ADMIN_EMAIL ist ungueltig')
         self.rate_lock=threading.Lock();self.attempts={};self.kdf=threading.BoundedSemaphore(3)
         with capture.tx() as db:
             db.execute("""CREATE TABLE IF NOT EXISTS game_accounts(
@@ -58,6 +61,10 @@ class AccountStore:
               secret TEXT PRIMARY KEY,player TEXT NOT NULL REFERENCES game_accounts(player),
               created REAL NOT NULL,expires REAL NOT NULL)""")
             db.execute('CREATE INDEX IF NOT EXISTS game_account_sessions_player ON game_account_sessions(player)')
+            db.execute('''CREATE TABLE IF NOT EXISTS game_update_admin (
+                id INTEGER PRIMARY KEY CHECK(id=1),
+                player TEXT NOT NULL REFERENCES game_accounts(player),
+                email TEXT NOT NULL)''')
     def limit(self,ip):
         now=time.monotonic()
         with self.rate_lock:
@@ -77,8 +84,12 @@ class AccountStore:
         db.execute('DELETE FROM game_account_sessions WHERE player=? AND secret NOT IN (SELECT secret FROM game_account_sessions WHERE player=? ORDER BY created DESC LIMIT 7)',(player,player))
         db.execute('INSERT INTO game_account_sessions VALUES(?,?,?,?)',(digest(key),player,now,now+SESSION_TTL))
         return key
-    def register(self,data,guest,ip):
+    def register(self,data,guest,ip,provision_admin=False):
         self.limit(ip);email,password=credentials(data.get('email'),data.get('password'),True)
+        if provision_admin and (not self.admin_email or email!=self.admin_email):
+            raise CaptureError('Ungueltige lokale Admin-Einrichtung',403)
+        if self.admin_email and email==self.admin_email and not provision_admin:
+            raise CaptureError('Diese Adresse ist fuer die lokale Serververwaltung reserviert',403)
         name,namekey=nickname(data.get('nickname'))
         old=self.capture.identify(guest)
         salt=secrets.token_bytes(16);pw=self.derive(password,salt)
@@ -122,6 +133,30 @@ class AccountStore:
             r=db.execute('SELECT nickname,room_slot,avatar FROM game_accounts WHERE player=?',(player,)).fetchone()
         if not r:raise CaptureError('Bitte anmelden',401)
         return {'nickname':r['nickname'],'slot':r['room_slot'],'avatar':json.loads(r['avatar'])}
+    def is_update_admin(self,player):
+        if not self.admin_email or not player:return False
+        with self.capture.tx(False) as db:
+            return db.execute('''SELECT 1 FROM game_update_admin AS u
+                JOIN game_accounts AS a ON a.player=u.player
+                WHERE u.id=1 AND a.player=? AND a.email=? AND u.email=?''',
+                (player,self.admin_email,self.admin_email)).fetchone() is not None
+    def admin_account_exists(self):
+        if not self.admin_email:return False
+        with self.capture.tx(False) as db:
+            return db.execute('SELECT 1 FROM game_accounts WHERE email=?',(self.admin_email,)).fetchone() is not None
+    def activate_update_admin(self,password):
+        # Local CLI only. No HTTP route may invoke this operation.
+        if not self.admin_email:raise CaptureError('Admin-E-Mail in .env fehlt',403)
+        _,password=credentials(self.admin_email,password)
+        with self.capture.tx(False) as db:
+            row=db.execute('SELECT player,salt,password_hash FROM game_accounts WHERE email=?',(self.admin_email,)).fetchone()
+        if not row or not hmac.compare_digest(self.derive(password,row['salt']),row['password_hash']):
+            raise CaptureError('Admin-Konto oder Passwort ungueltig',401)
+        with self.capture.tx() as db:
+            if not db.execute('SELECT 1 FROM game_accounts WHERE player=? AND email=?',(row['player'],self.admin_email)).fetchone():
+                raise CaptureError('Konto wurde geaendert',409)
+            db.execute('INSERT INTO game_update_admin VALUES (1,?,?) ON CONFLICT(id) DO UPDATE SET player=excluded.player,email=excluded.email',(row['player'],self.admin_email))
+        return self.profile(row['player'])
     def directory(self):
         with self.capture.tx(False) as db:
             return [{'slot':r[0],'nickname':r[1]} for r in db.execute('SELECT room_slot,nickname FROM game_accounts ORDER BY room_slot')]
@@ -136,3 +171,33 @@ class AccountStore:
         avatar=clean_avatar(value)
         with self.capture.tx() as db:db.execute('UPDATE game_accounts SET avatar=? WHERE player=?',(json.dumps(avatar,separators=(',',':')),player))
         return self.profile(player)
+
+def main():
+    """Host operator command; reads the password without echo or argv exposure."""
+    import argparse, getpass, os
+    from world_capture import CaptureStore
+    p=argparse.ArgumentParser(description='Lokale System-Update-Administration')
+    p.add_argument('--activate-update-admin',action='store_true',required=True)
+    p.parse_args()
+    if not os.isatty(0) or not os.isatty(1):
+        p.exit(1,'Interaktives Terminal erforderlich. Docker compose exec ohne -T verwenden.\n')
+    try:
+        email=os.getenv('SECOND_LIVE_UPDATE_ADMIN_EMAIL','').strip()
+        if not email:raise CaptureError('SECOND_LIVE_UPDATE_ADMIN_EMAIL fehlt im Container',403)
+        store=AccountStore(CaptureStore(Path(os.getenv('SECOND_LIVE_DATA_DIR',str(Path(__file__).resolve().parent/'data')))),email)
+        if not store.admin_account_exists():
+            print('Das konfigurierte Admin-Konto existiert noch nicht.')
+            name=input('Spitzname fuer das neue Admin-Konto: ')
+            password=getpass.getpass('Neues Konto-Passwort (mindestens 10 Zeichen): ')
+            if password!=getpass.getpass('Passwort wiederholen: '):raise CaptureError('Passwoerter stimmen nicht ueberein',400)
+            _,key=store.register({'email':email,'nickname':name,'password':password},None,'local-admin',provision_admin=True)
+            store.logout(key)
+        else:
+            password=getpass.getpass('Passwort des bestehenden Admin-Kontos: ')
+        profile=store.activate_update_admin(password)
+        print('System-Update freigeschaltet fuer '+profile['nickname']+'. Normale Spielanmeldung genuegt.')
+    except (CaptureError,ValueError,EOFError,KeyboardInterrupt) as exc:
+        p.exit(1,'Admin-Freigabe fehlgeschlagen: '+str(exc)+'\n')
+
+if __name__=='__main__':
+    main()
