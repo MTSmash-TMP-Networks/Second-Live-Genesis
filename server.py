@@ -268,6 +268,9 @@ class GameStore:
             wall_damage.create_schema(db)
             db.execute("CREATE TABLE IF NOT EXISTS room_settings (id INTEGER PRIMARY KEY CHECK(id=1), lights_on INTEGER NOT NULL)")
             db.execute("INSERT OR IGNORE INTO room_settings VALUES (1,1)")
+            # Separate additive table: older binaries still understand room_settings.
+            db.execute("CREATE TABLE IF NOT EXISTS curtain_settings (id INTEGER PRIMARY KEY CHECK(id=1), closed INTEGER NOT NULL DEFAULT 0 CHECK(closed IN (0,1)))")
+            db.execute("INSERT OR IGNORE INTO curtain_settings VALUES (1,0)")
             db.execute("CREATE TABLE IF NOT EXISTS placements (id TEXT PRIMARY KEY, position TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS placement_rotations (id TEXT PRIMARY KEY, rotation INTEGER NOT NULL DEFAULT 0 CHECK(rotation IN (0,90,180,270)))")
             db.execute("INSERT OR IGNORE INTO progress VALUES (1,0)")
@@ -275,7 +278,7 @@ class GameStore:
     def state(self):
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("BEGIN")
-            return {"lights_on": bool(db.execute("SELECT lights_on FROM room_settings WHERE id=1").fetchone()[0]), "placements": {k:json.loads(v) for k,v in db.execute("SELECT id,position FROM placements")}, "rotations": dict(db.execute("SELECT id,rotation FROM placement_rotations")), "objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0]), "walls": wall_damage.state(db), "decor": dict(db.execute("SELECT target,stage FROM decor_damage")), "marks": [{"id":i,"target":t,"point":json.loads(p),"normal":json.loads(n),"severity":max(1,int(s or 1))} for i,t,p,n,s in db.execute("SELECT id,target,point,normal,severity FROM impact_marks ORDER BY id")]}
+            return {"lights_on": bool(db.execute("SELECT lights_on FROM room_settings WHERE id=1").fetchone()[0]), "curtains_closed": bool(db.execute("SELECT closed FROM curtain_settings WHERE id=1").fetchone()[0]), "placements": {k:json.loads(v) for k,v in db.execute("SELECT id,position FROM placements")}, "rotations": dict(db.execute("SELECT id,rotation FROM placement_rotations")), "objects": dict(db.execute("SELECT id,hp FROM objects")), "unlocked": bool(db.execute("SELECT unlocked FROM progress WHERE id=1").fetchone()[0]), "walls": wall_damage.state(db), "decor": dict(db.execute("SELECT target,stage FROM decor_damage")), "marks": [{"id":i,"target":t,"point":json.loads(p),"normal":json.loads(n),"severity":max(1,int(s or 1))} for i,t,p,n,s in db.execute("SELECT id,target,point,normal,severity FROM impact_marks ORDER BY id")]}
     def action(self, data, scans):
         if not isinstance(data, dict): raise ValueError("JSON object required")
         op = data.get("action")
@@ -292,6 +295,13 @@ class GameStore:
                 row=db.execute("SELECT stage FROM decor_damage WHERE target='surface_switch'").fetchone()
                 if row and row[0]>=wall_damage.REMOVED:raise ValueError("Lichtschalter zerstoert; zuerst reparieren")
                 db.execute("UPDATE room_settings SET lights_on=1-lights_on WHERE id=1")
+            elif op == "toggle_curtains":
+                if data.get("id") not in ("surface_curtain_l","surface_curtain_r","surface_curtainrod","surface_windowframe","window"):
+                    raise ValueError("Unbekannter Vorhang")
+                damage=dict(db.execute("SELECT target,stage FROM decor_damage WHERE target IN ('surface_curtain_l','surface_curtain_r','surface_curtainrod')"))
+                if damage.get("surface_curtainrod",0)>=wall_damage.REMOVED or all(damage.get(k,0)>=wall_damage.REMOVED for k in ("surface_curtain_l","surface_curtain_r")):
+                    raise ValueError("Vorhaenge oder Vorhangstange zuerst reparieren")
+                db.execute("UPDATE curtain_settings SET closed=1-closed WHERE id=1")
             elif op == "place_object":
                 self.placement(db,data.get("id"),data.get("position"),data.get("rotation",0))
             elif op == "reset_hotel_layout":
@@ -356,7 +366,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.9.4"
+        server_version = "SecondLive/0.9.5"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -532,7 +542,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.9.4", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.9.5", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
