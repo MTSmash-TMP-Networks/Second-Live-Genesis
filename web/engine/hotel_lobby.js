@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LOBBY_LAYOUT as L, LOBBY_CAPACITY, lobbyDoor } from './lobby_layout.js';
+import { LOBBY_LAYOUT as L, LOBBY_CAPACITY, lobbyDoor, roomHallTransform } from './lobby_layout.js';
 import { createCharacter, animateCharacter, disposeCharacter, normalizeCharacter } from './character.js';
 
 const mat=(color,roughness=.82,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
@@ -28,7 +28,7 @@ export class HotelLobbyView{
  constructor(renderer){
   this.scene=new THREE.Scene();this.scene.background=new THREE.Color(0x706c66);this.scene.fog=new THREE.Fog(0x706c66,27,55);
   this.scene.add(new THREE.HemisphereLight(0xfff0d9,0x72685a,1.65));
-  const root=new THREE.Group();this.scene.add(root);this.root=root;this.peers=new Map();this.own=null;
+  const root=new THREE.Group();this.scene.add(root);this.root=root;this.guestRoot=new THREE.Group();this.scene.add(this.guestRoot);this.peers=new Map();this.own=null;this.wallSections=[];this.doorSections=[];this.projectedSlot=null;this.plaques=[];
   const carpet=renderer.textured.hotel_carpet.clone();carpet.color.set(0x8d9aa5);
   if(carpet.map){carpet.map=carpet.map.clone();carpet.map.repeat.set(2,16);carpet.map.needsUpdate=true;}
   const wall=renderer.textured.hotel_wall,wood=mat(0x40342d,.65),panel=mat(0x786d60,.89),trim=mat(0x282a2a,.67),brass=mat(0xbca36d,.32,.68),door=mat(0x514438,.62),ceiling=renderer.textured.hotel_ceiling,lightmat=new THREE.MeshStandardMaterial({color:0xffebce,emissive:0xffd49a,emissiveIntensity:1.9,roughness:.6});
@@ -37,38 +37,51 @@ export class HotelLobbyView{
   box(root,[0,L.height+.06,0],[L.halfWidth*2,.12,len],ceiling);
   for(const side of [-1,1]){
    const x=side*(L.halfWidth+.085),face=side*(L.halfWidth-.025);
-   box(root,[x,L.height/2,0],[.17,L.height,len],wall);
-   box(root,[face,.07,0],[.04,.14,len],trim);
-   box(root,[face,2.77,0],[.045,.09,len],wood);
-   box(root,[face,2.67,0],[.028,.018,len],brass);
+   // The wall behind each room is its shared physical partition. Hide only
+   // that section in the room projection, never the opposite wall.
+   const segment=(a,b,slot=null)=>{
+    if(b-a<.0001)return;
+    const g=new THREE.Group();root.add(g);const z=(a+b)/2,n=b-a;
+    box(g,[x,L.height/2,z],[.17,L.height,n],wall);
+    box(g,[face,.07,z],[.04,.14,n],trim);
+    box(g,[face,2.92,z],[.045,.09,n],wood);
+    box(g,[face,2.82,z],[.028,.018,n],brass);
+    if(slot!==null)this.wallSections[slot]=g;
+   };
+   let end=-L.halfLength;
+   for(let i=0;i<L.roomsPerSide;i++){
+    const slot=i+(side===1?L.roomsPerSide:0),d=lobbyDoor(slot),a=d.z-L.doorSpacing/2,b=d.z+L.doorSpacing/2;
+    segment(end,a);segment(a,b,slot);end=b;
+   }
+   segment(end,L.halfLength);
   }
   for(const z of [-L.halfLength,L.halfLength]){
    box(root,[0,L.height/2,z],[L.halfWidth*2,L.height,.16],wall);
    box(root,[0,1.35,z-Math.sign(z)*.10],[2.8,1.95,.08],wood);
-   plaque(root,'HOTEL',[0,1.65,z-Math.sign(z)*.15],z<0?0:Math.PI,1.05,.39);
+   this.plaques.push(plaque(root,'HOTEL',[0,1.65,z-Math.sign(z)*.15],z<0?0:Math.PI,1.05,.39));
   }
   this.signs=[];this.nameplates=[];this.roomNames=new Map();
   for(let slot=0;slot<LOBBY_CAPACITY;slot++){
-   const d=lobbyDoor(slot),s=d.side,x=d.x-s*.045,z=d.z;
-   box(root,[x,1.1,z],[.095,2.20,1.27],trim);
-   box(root,[x-s*.058,1.085,z],[.05,2.10,1.07],door);
-   for(const zz of [z-.39,z+.39])box(root,[x-s*.09,1.08,zz],[.022,1.98,.015],wood);
-   box(root,[x-s*.09,1.08,z+.36],[.035,.16,.055],brass);
-   box(root,[x-s*.122,1.12,z+.29],[.048,.03,.16],brass);
-   const marker=box(root,[x-s*.075,1.47,z+.79],[.04,.06,.06],mat(0x393b38,.6));
+   const d=lobbyDoor(slot),s=d.side,x=d.x-s*.045,z=d.z,g=new THREE.Group();root.add(g);this.doorSections[slot]=g;
+   box(g,[x,1.1,z],[.095,2.20,1.27],trim);
+   box(g,[x-s*.058,1.085,z],[.05,2.10,1.07],door);
+   for(const zz of [z-.39,z+.39])box(g,[x-s*.09,1.08,zz],[.022,1.98,.015],wood);
+   box(g,[x-s*.09,1.08,z+.36],[.035,.16,.055],brass);
+   box(g,[x-s*.122,1.12,z+.29],[.048,.03,.16],brass);
+   const marker=box(g,[x-s*.075,1.47,z+.79],[.04,.06,.06],mat(0x393b38,.6));
    this.signs.push(marker);
-   plaque(root,String(d.number),[x-s*.075,1.66,z+.83],-s*Math.PI/2,.32,.12);
-   this.nameplates.push(plaque(root,'Frei',[x-s*.10,1.86,z],-s*Math.PI/2,.88,.29));
+   this.plaques.push(plaque(g,String(d.number),[x-s*.075,1.66,z+.83],-s*Math.PI/2,.32,.12));
+   this.nameplates.push(plaque(g,'Frei',[x-s*.10,1.86,z],-s*Math.PI/2,.88,.29));
    // Repeating warm wall sconces above the room-number panels.
-   box(root,[x-s*.05,2.25,z+1.02],[.12,.36,.15],brass);
-   box(root,[x-s*.115,2.25,z+1.02],[.09,.26,.13],lightmat);
+   box(g,[x-s*.05,2.25,z+1.02],[.12,.36,.15],brass);
+   box(g,[x-s*.115,2.25,z+1.02],[.09,.26,.13],lightmat);
   }
-  for(let z=-18;z<=18;z+=3){
-   box(root,[0,2.817,z],[.54,.025,.20],lightmat);
-   box(root,[0,2.835,z],[.64,.035,.30],trim);
+  for(let z=-L.halfLength+3;z<L.halfLength;z+=3){
+   box(root,[0,L.height-.033,z],[.54,.025,.20],lightmat);
+   box(root,[0,L.height-.015,z],[.64,.035,.30],trim);
   }
   // Bounded number of lights; no shadow-map cost in the public area.
-  for(let z=-18;z<=18;z+=6){const l=new THREE.PointLight(0xffdfb6,17,8,2);l.position.set(0,2.57,z);this.scene.add(l);}
+  this.lights=[];for(let i=0;i<7;i++){const l=new THREE.PointLight(0xffdfb6,17,8,2);l.position.set(0,2.72,(i-3)*6);this.scene.add(l);this.lights.push(l);}
   this.local=null;
  }
  setOwn(slot,profile=null){
@@ -91,19 +104,39 @@ export class HotelLobbyView{
    if(!lobbyDoor(p.slot)||p.slot===this.own||!Array.isArray(p.position)||p.position.length!==3||!p.position.every(Number.isFinite)||!Number.isFinite(p.yaw))continue;
    seen.add(p.slot);let a=this.peers.get(p.slot);const signature=JSON.stringify([p.nickname,normalizeCharacter(p.avatar)]);
    if(a&&a.signature!==signature){this.disposeAvatar(a.g);a=null;}
-   if(!a){const g=avatar(p.slot,p);g.position.set(...p.position);g.rotation.y=p.yaw;this.scene.add(g);a={g,signature};this.peers.set(p.slot,a);}
+   if(!a){const g=avatar(p.slot,p);g.position.set(...p.position);g.rotation.y=p.yaw;this.guestRoot.add(g);a={g,signature};this.peers.set(p.slot,a);}
    a.position=p.position;a.yaw=p.yaw;
   }
   for(const [slot,a] of this.peers)if(!seen.has(slot)){this.disposeAvatar(a.g);this.peers.delete(slot);}
  }
  step(dt,player,third=false){
+  if(player&&this.projectedSlot===null){const center=Math.round(player.z/6)*6;this.lights.forEach((l,i)=>l.position.z=center+(i-3)*6);}
   for(const a of this.peers.values()){
    const g=a.g,d=Math.hypot(a.position[0]-g.position.x,a.position[2]-g.position.z),t=1-Math.exp(-dt*12);
    g.position.lerp(new THREE.Vector3(...a.position),t);const diff=Math.atan2(Math.sin(a.yaw-g.rotation.y),Math.cos(a.yaw-g.rotation.y));g.rotation.y+=diff*t;
    animateCharacter(g,dt,d>.035);
   }
-  if(third&&this.own!==null){if(!this.local){this.local=avatar(this.own,this.profile);this.scene.add(this.local);}this.local.visible=true;const moving=Math.hypot(this.local.position.x-player.x,this.local.position.z-player.z)>.005;this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=player.yaw;animateCharacter(this.local,dt,moving);}
+  if(third&&this.own!==null){if(!this.local){this.local=avatar(this.own,this.profile);this.guestRoot.add(this.local);}this.local.visible=true;const moving=Math.hypot(this.local.position.x-player.x,this.local.position.z-player.z)>.005;this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=player.yaw;animateCharacter(this.local,dt,moving);}
   else if(this.local)this.local.visible=false;
  }
- clear(){this.sync([]);this.setOwn(null);this.setRooms([]);}
+ // Share the exact corridor geometry and avatars between both scenes, not
+ // a second approximation. Its own wall section is replaced by the room wall.
+ projectInto(parent,slot){
+  if(this.projectedSlot===slot&&this.root.parent===parent)return;
+  this.restoreProjection();const t=roomHallTransform(slot);if(!t)return;
+  this.projectedSlot=slot;
+  for(const g of [this.root,this.guestRoot]){
+   parent.add(g);g.position.set(...t.p);g.rotation.y=t.rotation;g.scale.set(1,1,t.mirror);
+  }
+  this.wallSections[slot].visible=false;this.doorSections[slot].visible=false;
+  for(const p of [...this.plaques,...this.nameplates])p.scale.x=t.mirror;
+  if(this.local)this.local.visible=false;
+ }
+ restoreProjection(){
+  if(this.projectedSlot!==null){this.wallSections[this.projectedSlot].visible=true;this.doorSections[this.projectedSlot].visible=true;}
+  for(const g of [this.root,this.guestRoot]){if(g.parent!==this.scene)this.scene.add(g);g.position.set(0,0,0);g.rotation.set(0,0,0);g.scale.set(1,1,1);}
+  for(const p of [...this.plaques,...this.nameplates])p.scale.x=1;
+  this.projectedSlot=null;
+ }
+ clear(){this.restoreProjection();this.sync([]);this.setOwn(null);this.setRooms([]);}
 }
