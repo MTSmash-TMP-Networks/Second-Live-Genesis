@@ -223,7 +223,7 @@ def reconstruct_live(store,job,threads):
     if not shutil.which('colmap'):raise RuntimeError('COLMAP fehlt')
     deadline=time.monotonic()+100
     # Temporary workspaces live outside the scan directory and never become public assets.
-    with tempfile.TemporaryDirectory(prefix='live-sfm-') as tmp:
+    with tempfile.TemporaryDirectory(prefix='.live-sfm-',dir=store.files) as tmp:
         t=Path(tmp);images=t/'images';images.mkdir();models=t/'sparse';models.mkdir()
         if not store.snapshot_live(job,images):raise LiveInterrupted()
         db=t/'database.db';log=t/'colmap.log'
@@ -250,7 +250,8 @@ def live_worker(store,threads):
             result=reconstruct_live(store,job,threads)
             store.finish_live(job,result,'Räumliche Vorschau aktualisiert')
         except LiveInterrupted:store.finish_live(job,interrupted=True)
-        except Exception as e:store.finish_live(job,message=str(e)[:250])
+        except ValueError as e:store.finish_live(job,message=str(e)[:250])
+        except Exception as e:store.finish_live(job,message=str(e)[:250],error=True)
 
 def reconstruct(store,scan,inference):
     import numpy as np
@@ -279,6 +280,9 @@ def reconstruct(store,scan,inference):
 def main(root):
     from world_capture import CaptureStore
     store=CaptureStore(root);engine=Inference(store.files/'models');store.recover_worker()
+    # The previous worker may have been terminated during a live preview.
+    for p in store.files.glob('.live-sfm-*'):
+        if p.is_dir() and not p.is_symlink():shutil.rmtree(p,ignore_errors=True)
     def beat():
         while True:
             try:store.heartbeat(engine.device+' (angefordert: '+engine.requested+')')
