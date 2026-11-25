@@ -20,8 +20,8 @@ for(const [name,len] of [['wall',963],['carpet',1537],['gold',757]]){
  const b=Buffer.from(REFERENCE_TEXTURES[name],'base64');assert.equal(b.length,len);assert.equal(b.readUInt16BE(0),0xffd8);assert.equal(b.readUInt16BE(b.length-2),0xffd9);
 }
 const plush=upholsteredGeometry(.7,.20,.80,5);assert.ok(plush.attributes.position.count>1200);assert.ok([...plush.attributes.normal.array].every(Number.isFinite));
-const drape=hotelDrape(1.56,2.14,.744);const a=drape.attributes.position;
-for(let i=0;i<a.count;i++)if(Math.abs(a.getX(i))<.68&&a.getZ(i)>-.84&&a.getZ(i)<.80)assert.ok(a.getY(i)>.66,'Duvet clips through top of mattress');
+const drape=hotelDrape(1.56,2.14,.744);const drapePos=drape.attributes.position;
+for(let i=0;i<drapePos.count;i++)if(Math.abs(drapePos.getX(i))<.68&&drapePos.getZ(i)>-.84&&drapePos.getZ(i)<.80)assert.ok(drapePos.getY(i)>.66,'Duvet clips through top of mattress');
 
 for(const id of ['surface_wardrobe','table','chair','sofa','coffee_table','crate']){
  const g=createHotelModel(r,id);g.updateMatrixWorld(true);
