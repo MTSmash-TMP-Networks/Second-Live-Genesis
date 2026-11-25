@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.3 – Shared Wall Openings
+- Eingangswandöffnungen werden anhand der vorhandenen gespeicherten Wandzellen auf beiden Seiten mit identischer Bruchgeometrie dargestellt.
+- Flurgäste erhalten dieselben Öffnungen und Reparaturen über den authentifizierten Präsenzabgleich; ein Sekunden-Cache begrenzt die Datenbanklast.
+- Eigene Einrichtung durch die Öffnung sichtbar, fremde Räume mit Standardansicht; keine Übertragung fremder privater Einrichtung, Spielerpositionen oder zusätzlicher Kontodaten. Bestehende Konten, Adminfreigabe und Spielstände bleiben erhalten.
+
 ## 0.11.2 – Account Admin Update
 - Update-Status und Check-/Installations-API ausschließlich für das lokal bestätigte Admin-Konto; keine Berechtigung durch alten Schlüssel, Spitznamen oder vom Client behauptete Rollen.
 - System-App nur für Administratoren sichtbar, normale Spielersitzung statt separatem Update-Login.
