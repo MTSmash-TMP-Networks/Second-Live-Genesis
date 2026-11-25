@@ -1,4 +1,3 @@
-import {locationFix} from './device-access.js';
 import { RoomRenderer, RoomPhysics, DECOR, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
@@ -102,7 +101,7 @@ function turnHeld(delta){if(!canPlay()||busy||!held)return;heldAngle=quarter(hel
 let mobile=matchMedia('(pointer:coarse)').matches, touchMove=[0,0], look=null;
 function clearControls(){releaseTrigger();keys.clear();touchMove=[0,0];look=null;$('stick').classList.remove('moving');$('stick').style.removeProperty('--jx');$('stick').style.removeProperty('--jy');}
 function setMode(v){mobile=v;document.body.classList.toggle('mobile',v);$('mode').textContent=v?'Desktop-Modus':'Touch-Modus';clearControls();if(v)document.exitPointerLock?.();}
-let token=sessionStorage.getItem('second_live_token')||'';let protectedGame=false,personalCapture=false,personalProfile=null; $('token').value=token;
+let token=sessionStorage.getItem('second_live_token')||'';let protectedGame=false,personalWorld=false; $('token').value=token;
 const api=async(path,data)=>{let r=await fetch(path,{headers:{...(protectedGame?{'X-SecondLive-Token':token}:{}),'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});let j=await r.json();if(!r.ok)throw Error(j.error||r.status);return j;};
 function syncWallState(next){
   for(const [id,w] of Object.entries(WALLS)){
@@ -143,7 +142,7 @@ function sync(s){
     }
   }
   syncWallState(s.walls||{});syncDecorState(s.decor||{});renderer?.setRoomLight?.(s.lights_on!==false,s.decor||{});
-  const wasOpen=state.unlocked;state=s;renderer?.setDoorOpen?.(s.unlocked);if(started&&wasOpen!==s.unlocked)audio.play('door',[0,1.1,-4.95]); $('worldstate').textContent=personalCapture?'Privater Startraum'+(personalProfile?.region?' · '+personalProfile.region:''):s.unlocked?'Testbereich freigeschaltet':'Welt noch nicht erschlossen';
+  const wasOpen=state.unlocked;state=s;renderer?.setDoorOpen?.(s.unlocked);if(started&&wasOpen!==s.unlocked)audio.play('door',[0,1.1,-4.95]); $('worldstate').textContent=personalWorld?'Privater Startraum':s.unlocked?'Testbereich freigeschaltet':'Startraum';
 }
 let mutationVersion=0;async function refresh(){const v=mutationVersion;let s=await api('/api/game');if(!busy&&v===mutationVersion)sync(s);}
 async function action(action,id,mark,extra={}){if(busy)return false;busy=true;mutationVersion++;try{const result=await api('/api/game',{action,id,...(mark?{mark}:{}),...extra});sync(result);$('notice').textContent=action==='toggle_light'?(result.lights_on?'Licht eingeschaltet':'Licht ausgeschaltet'):action==='place_object'?'Gegenstand abgestellt und gespeichert':action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';return true;}catch(e){$('notice').textContent=e.message;return false;}finally{busy=false;}}
@@ -177,12 +176,12 @@ function placementPoint(id){
 async function interact(){if(!canPlay()||busy)return;if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
   const a=interactionTarget();if(a.id==='surface_switch'){if((state.decor?.surface_switch||0)>=REMOVED){$('notice').textContent='Schalter zuerst reparieren';return;}audio.play('click');await action('toggle_light','surface_switch');return;}
   if(movable(a.id)){chooseWeapon('none');held=a.id;heldAngle=yawAngle(bodies[held].q);$('notice').textContent='Gegenstand aufgenommen · Q/F: drehen · E: abstellen';return;}
-  if(Math.abs(player.x)<1.3&&player.z<-3.2&&!state.unlocked)phone();
+  if(Math.abs(player.x)<1.3&&player.z<-3.2&&!state.unlocked)$('notice').textContent='Hinter dieser Tür entsteht die nächste Spielwelt.';
 }
 function groundAt(x,z){if(z<-5&&state.unlocked)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
 function coll(x,z){if(Math.abs(x)>4.65||z>4.65||z<(state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+1.6&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,.85,1.45].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&state.objects[id]>0&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+1.6&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
-let enteringGame=false;async function enterGame(useGPS=false){if(!graphicsReady||enteringGame)return;enteringGame=true;void audio.unlock();if(protectedGame)token=$('token').value;try{if(personalCapture){personalProfile=await api('/api/session',{});if(useGPS&&!personalProfile.region){try{const location=await locationFix();personalProfile=await api('/api/capture/locate',{location});}catch(e){$('notice').textContent='GPS nicht verfügbar – privater Raum. '+(e.message||'');}}}await refresh();if(protectedGame)sessionStorage.setItem('second_live_token',token);$('welcome').hidden=true;started=true;active=true;document.body.classList.add('playing');if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});}catch(e){$('loginerror').textContent=e.message;}finally{enteringGame=false;}}
-$('start').onclick=()=>enterGame(false);if($('start-gps'))$('start-gps').onclick=()=>enterGame(true);
+let enteringGame=false;async function enterGame(){if(!graphicsReady||enteringGame)return;enteringGame=true;void audio.unlock();if(protectedGame)token=$('token').value;try{if(personalWorld)await api('/api/session',{});await refresh();if(protectedGame)sessionStorage.setItem('second_live_token',token);$('welcome').hidden=true;started=true;active=true;document.body.classList.add('playing');if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});}catch(e){$('loginerror').textContent=e.message;}finally{enteringGame=false;}}
+$('start').onclick=()=>enterGame();
 const phonePages=['home','world','settings'];
 function showPhonePage(page){for(const key of phonePages)$('phone-page-'+key).hidden=page!==key;}
 function updatePhone(){const now=new Date();$('phone-clock').textContent=now.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});$('phone-date').textContent=now.toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'});$('phone-worldstate').textContent=$('worldstate').textContent;$('phone-volume').value=String(Math.round(audio.volume*100));$('phone-sound').checked=audio.enabled;$('phone-volume-label').textContent=Math.round(audio.volume*100)+' %';}
@@ -191,7 +190,7 @@ $('phone-sound').onchange=()=>{audio.configure($('phone-sound').checked,Number($
 setInterval(()=>{if(!$('phone').hidden)updatePhone();},15000);
 window.addEventListener('keydown',e=>{if(e.code==='Escape'&&!$('phone').hidden&&$('updater').hidden){$('closephone').onclick();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)audio.stopAll();});
-$('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('unlock').onclick=()=>{if(personalCapture){location.href='/panorama.html';return;}action('unlock');};$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';updatePhone();}catch(e){$('notice').textContent=e.message;}};
+$('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';updatePhone();}catch(e){$('notice').textContent=e.message;}};
 canvas.onclick=()=>{if(mobile||!canPlay())return;void audio.unlock();if(document.pointerLockElement!==canvas){canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;}};
 canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.pointerLockElement===canvas&&canPlay())pressTrigger();});
 window.addEventListener('pointerup',e=>{if(triggerPointer===null||triggerPointer===e.pointerId)releaseTrigger();});
@@ -235,7 +234,7 @@ function frame(now,xrFrame){
     if(vr)player.yaw+=xrInput.turn;
     let f=vr?xrInput.move[1]:Number(keys.has('KeyW'))-Number(keys.has('KeyS'))+touchMove[1],s=vr?xrInput.move[0]:Number(keys.has('KeyD'))-Number(keys.has('KeyA'))+touchMove[0],a=player.yaw+(vr?xrInput.headYaw:0),m=(vr?1.6:3.4)*dt/Math.max(1,Math.hypot(f,s)),dx=(-Math.sin(a)*f+Math.cos(a)*s)*m,dz=(-Math.cos(a)*f-Math.sin(a)*s)*m;
     if(!coll(player.x+dx,player.z))player.x+=dx;
-    if(!coll(player.x,player.z+dz))player.z+=dz;else if(dz<0&&Math.abs(player.x)<.75&&player.z<-4.3&&!state.unlocked)phone();
+    if(!coll(player.x,player.z+dz))player.z+=dz;
     const ground=groundAt(player.x,player.z);
     if(!vr&&keys.has('Space')&&Math.abs(player.y-ground)<1e-5)player.vy=4.2;
     player.vy-=9.81*dt;player.y=Math.max(ground,player.y+player.vy*dt);if(player.y===ground)player.vy=0;
@@ -260,7 +259,7 @@ function frame(now,xrFrame){
   if(!first&&!vr&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5){part([player.x,player.y+1,player.z],[.5,1.1,.32],'354d65');part([player.x,player.y+1.7,player.z],[.32,.34,.32],'cba384');}
   renderer.syncMarks(state.marks||[]);
   if(started&&active)audio.listener(eye,d);renderer.equip(equipped,first&&started);renderer.render(canvas,eye,target,mobile,dt,player);
-  if(!started||performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();$('touchRotateLeft').hidden=$('touchRotateRight').hidden=!held;let a=started?interactionTarget():{id:null};$('hint').textContent=held?(placementPoint(held)?'E: Abstellen · Q/F: drehen · Stellplatz frei':'Stellplatz blockiert · Q/F: drehen oder weiter bewegen'):a.id==='surface_switch'?'E: Licht '+(state.lights_on!==false?'ausschalten':'einschalten'):movable(a.id)?'E: Aufheben · R: Reparieren':Math.abs(player.x)<1.3&&player.z<-3.2&&!state.unlocked?'E: Tür / Smartphone':'R: Oberfläche reparieren · P: Smartphone · I: Inventar';}
+  if(!started||performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();$('touchRotateLeft').hidden=$('touchRotateRight').hidden=!held;let a=started?interactionTarget():{id:null};$('hint').textContent=held?(placementPoint(held)?'E: Abstellen · Q/F: drehen · Stellplatz frei':'Stellplatz blockiert · Q/F: drehen oder weiter bewegen'):a.id==='surface_switch'?'E: Licht '+(state.lights_on!==false?'ausschalten':'einschalten'):movable(a.id)?'E: Aufheben · R: Reparieren':Math.abs(player.x)<1.3&&player.z<-3.2&&!state.unlocked?'Tür · nächste Welterweiterung':'R: Oberfläche reparieren · P: Smartphone · I: Inventar';}
 }
 setInterval(()=>{if(started&&!busy)refresh().catch(()=>{});},3000);
 
@@ -273,7 +272,7 @@ async function setupXR(){
   hint.textContent=supported?'VR bereit – nach dem Login starten':globalThis.isSecureContext?'Kein immersives WebXR erkannt':'VR benötigt HTTPS';
   if(!supported)return;
   mode.onEnd=()=>{xrEntering=false;first=xrReturnFirst;player.y=0;player.vy=0;clearControls();document.body.classList.remove('xr-playing');button.textContent='VR starten';button.disabled=false;active=$('phone').hidden&&$('arsenal').hidden;};
-  mode.onAction=(type,ray)=>{if(!canPlay())return;if(type==='repair'){repair(ray);return;}if(!state.unlocked&&Math.abs(player.x)<1.5&&player.z<-3.25){phone();return;}fire(ray);};
+  mode.onAction=(type,ray)=>{if(!canPlay())return;if(type==='repair'){repair(ray);return;}if(!state.unlocked&&Math.abs(player.x)<1.5&&player.z<-3.25){$('notice').textContent='Hinter dieser Tür entsteht die nächste Spielwelt.';return;}fire(ray);};
   button.onclick=async()=>{
     if(xrEntering||!started||!canPlay())return;
     if(mode.active){await mode.end();return;}
@@ -291,7 +290,7 @@ function changeProfile(){sessionStorage.setItem('sl_quality',qualityChoice.value
 qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListener('change',changeProfile);
 (async()=>{
   try{
-    const health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());protectedGame=health.requires_game_token===true; personalCapture=health.world_capture===true; $('game-auth').hidden=!protectedGame;if(personalCapture){$('start').textContent='Privat ohne GPS starten';if($('start-gps'))$('start-gps').hidden=false;$('unlock').textContent='Scanauftrag / 3D-Vorschau öffnen';}
+    const health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());protectedGame=health.requires_game_token===true; personalWorld=health.personal_world===true; $('game-auth').hidden=!protectedGame;
     const q=qualityChoice.value==='auto'?(matchMedia('(pointer:coarse)').matches||innerWidth<800?'1k':'2k'):qualityChoice.value;
     renderer=new RoomRenderer(canvas,q,lightChoice.value,t=>status.textContent=t);
     await renderer.load(spec,objects);
@@ -305,7 +304,7 @@ qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListe
     status.textContent='Rapier-Physik wird geladen …';
     physicsWorld=await RoomPhysics.create(room.filter(o=>!movableDecor(o.surfaceId)),spec);
     status.textContent='Fotomaterialien und Rapier-Physik bereit';
-    graphicsReady=true;$('start').disabled=false;if($('start-gps'))$('start-gps').disabled=false;
+    graphicsReady=true;$('start').disabled=false;
     prev=performance.now();renderer.setLoop(frame);setupXR();
   }catch(e){console.error(e);status.textContent='Grafik konnte nicht geladen werden: '+e.message;$('error').hidden=false;$('error').textContent='WebGL 2 oder lokale Grafikdateien fehlen. Bitte Docker-Build und Browser prüfen.';}
 })();
