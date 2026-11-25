@@ -294,6 +294,12 @@ class GameStore:
                 db.execute("UPDATE room_settings SET lights_on=1-lights_on WHERE id=1")
             elif op == "place_object":
                 self.placement(db,data.get("id"),data.get("position"),data.get("rotation",0))
+            elif op == "reset_hotel_layout":
+                # Explicit opt-in: restore furniture positions only; no damage or progress reset.
+                if data.get('confirm') is not True:raise ValueError('Bestaetigung erforderlich')
+                ids=tuple({**self.MOVABLE,**self.MOVABLE_DECOR})
+                db.executemany('DELETE FROM placements WHERE id=?',[(x,) for x in ids])
+                db.executemany('DELETE FROM placement_rotations WHERE id=?',[(x,) for x in ids])
             elif op in ("hit", "repair"):
                 oid = data.get("id")
                 if not isinstance(oid,str) or oid not in self.MAX_HP: raise ValueError("Unbekanntes Objekt")
