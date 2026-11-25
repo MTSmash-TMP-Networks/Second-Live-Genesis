@@ -24,6 +24,7 @@ from updater_api import UpdateBridge
 import wall_damage
 from http.cookies import SimpleCookie, CookieError
 from world_capture import CaptureStore, CaptureError
+from hotel_lobby import HotelLobby
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -361,13 +362,14 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     updater = updater or UpdateBridge(None, "")
     game = GameStore(store.path) # preserve the original legacy world unchanged in personal mode
     capture = CaptureStore(store.path) if world_capture else None
+    lobby = HotelLobby() if capture and not legacy_capture else None
     # Keep the original player/cookie/home database, independent of image capture.
     panorama = None
     if legacy_capture and capture:
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.9.6"
+        server_version = "SecondLive/0.10.0"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -543,7 +545,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.9.6", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.10.0", "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
@@ -573,6 +575,12 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             path=urlsplit(self.path).path
             if not legacy_capture and (path in ('/api/scans','/api/world','/api/session/pair','/api/capture') or path.startswith(('/api/capture/','/api/scans/','/media/'))):
                 self.send_json(404,{'error':'Aufnahmefunktion eingestellt'});return
+            if path=="/api/lobby":
+                if not lobby:
+                    self.send_json(404,{"error":"Hotelflur nicht verfuegbar"});return
+                if self.require_game():
+                    self.capture_reply(lambda:lobby.request(self.player(),self.read_capture_body()))
+                return
             if capture and path in ("/api/session","/api/session/pair","/api/capture/locate","/api/capture"):
                 self.capture_post(path);return
             if urlsplit(self.path).path == "/api/update":
