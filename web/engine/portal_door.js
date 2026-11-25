@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { withAssetDeadline } from './optional_asset.js';
+import { hotelMaterials } from './hotel_room.js';
 // Existing 2 m scan portal retains its wall layout and legacy damage IDs.
 export const DOOR_WIDTH=1.12, DOOR_HEIGHT=2.2;
 export const PORTAL_SIDES=[-.78,.78].map(x=>({p:[x,1.1,-5],s:[.44,2.2,.2]}));
@@ -30,9 +31,15 @@ function localDoor(renderer){
   return {frame,pivot};
 }
 export async function buildPortalDoor(renderer,manifest,path,loader){
-  const fixed=new THREE.Group();fixed.name='Scan portal side panels';renderer.staticGroup.add(fixed);
-  const plaster=renderer.textured?.white_plaster_02||new THREE.MeshStandardMaterial({color:0xd9d4c9,roughness:.82});
-  for(const side of PORTAL_SIDES)box(fixed,side.s,side.p,plaster,.002);
+  const fixed=new THREE.Group();fixed.name='Door wall infill';renderer.staticGroup.add(fixed);
+  // The infill is part of the painted room wall, not a separate plaster surround.
+  // Reuse the exact wall material and planar geometry so the coplanar front
+  // faces and their normals match the neighbouring wall slabs.
+  const paint=renderer.textured?.hotel_wall||hotelMaterials(renderer).wall;
+  for(const side of PORTAL_SIDES){
+    const panel=new THREE.Mesh(new THREE.BoxGeometry(...side.s),paint);
+    panel.position.set(...side.p);panel.castShadow=true;panel.receiveShadow=true;fixed.add(panel);
+  }
   const {frame,pivot}=localDoor(renderer);renderer.staticGroup.add(frame);let original=null;
   const url=manifest.door_models?.[renderer.quality]||manifest.door_models?.['1k']||manifest.door_models?.['2k'];
   if(url)try{const gltf=await withAssetDeadline(()=>loader.loadAsync(path(url)));original=fitDoor(gltf.scene);renderer.staticGroup.add(original);}catch(e){console.warn('Original door not usable; local panel door active',e);}
