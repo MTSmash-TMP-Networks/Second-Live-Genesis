@@ -47,3 +47,20 @@ body.character-editing header,body.character-editing footer,body.character-editi
 @media (max-aspect-ratio:23/20){.character-panel{top:auto;bottom:8px;right:8px;left:8px;width:auto;max-height:55dvh;padding:13px;border-radius:15px}.character-panel h1{font-size:23px;margin:4px 0}.character-panel>small{font-size:9px}#character-fields{gap:7px 10px;margin:9px 0}.character-turn button,.character-buttons button{margin-top:5px}.character-panel p{font-size:11px}}
 
 #character-fields .character-model-field{grid-column:1/-1}#character-model-status{color:#a8ddd1}.character-panel .account-note{font-size:12px;line-height:1.45;color:#adbfcc}#character-outfit-note{min-height:30px}
+
+/* Private-room model manager in the existing virtual phone. */
+#phone .models{background:linear-gradient(145deg,#96a5d3,#53639d)}
+#phone .sl-model-link{display:block;box-sizing:border-box;width:100%;margin:9px 0;padding:10px;font-size:12px;line-height:1.3;background:#ffffff13;color:#cceee9;border:1px solid #ffffff22;border-radius:9px;text-align:left}
+#phone .sl-model-help{margin-top:12px;font-size:12px;color:#d0dce5}
+#phone .sl-model-help summary{cursor:pointer;font-weight:600}
+#phone .sl-model-file-label{display:block;margin:12px 0 5px;font-size:11px;color:#bcd0db}
+#phone #room-model-file,#phone #room-model-select,#phone .sl-model-form input[type=number]{box-sizing:border-box;display:block;width:100%;min-width:0;margin:0;padding:8px;color:#f1f6fb;background:#172b3b;border:1px solid #ffffff30;border-radius:8px;font-size:12px}
+#phone #room-model-file{font-size:11px;padding:7px}
+#phone #room-model-file::file-selector-button{font:inherit;padding:6px;color:#d9e8f2;background:#334b61;border:0;border-radius:5px}
+#phone .sl-model-form{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+#phone .sl-model-form label{font-size:10px;color:#bcd0db;min-width:0;display:flex;flex-direction:column;gap:4px}
+#phone .sl-model-form .sl-model-collision{display:flex;flex-direction:row;align-items:center;align-self:end;padding-bottom:8px;gap:6px}
+#phone .sl-model-collision input{width:18px;height:18px;margin:0;padding:0;accent-color:#6ae2c9}
+#phone .sl-model-delete{color:#ffd0d0;border-color:#985c63;background:#7b272744}
+#phone #room-model-message{color:#a5e3d5;overflow-wrap:anywhere;min-height:14px}
+#phone #room-model-render{color:#c5d7e4;overflow-wrap:anywhere}

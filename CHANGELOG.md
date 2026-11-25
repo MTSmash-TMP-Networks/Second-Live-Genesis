@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.2 – Personal Room Builder & Smooth Hotel Patrol
+- Gerahmter Echtzeitspiegel mit planarer Raumreflexion und sichtbarem eigenem Charakter auch in der Ego-Perspektive; kein Spiegel-Renderpass in WebXR.
+- Neue Smartphone-App „3D-Modelle“ mit Poly Haven/Sketchfab, Anleitung, lokalem GLB-Upload, privatem Inventar und gespeicherter Platzierung (Position, Höhe, Größe, Drehung, optionale feste Kollision).
+- Authentifizierter, kontogetrennter Modellspeicher im bestehenden Datenvolume; eingebettete statische GLB-Dateien werden serverseitig auf Format, Ressourcen und Umfang geprüft. Keine externen Modellressourcen oder URL-Importe. Anfangslimits: 8 Modelle pro Konto, 16 MiB je Datei.
+- Gleichmäßige KI-Patrouille über gemeinsamen Zeitparameter, sanfte Netzkorrekturen, ruhiger Richtungswechsel an den Flurenden und Stabilisierung der horizontalen Skelettbewegung. Keine Rückschritte an der Gehschleife.
+- Neue HTTP-, Speicher-, UI-, Modell-, Spiegel- und Patrouillen-Regressionstests. Vorhandene Konten, Spielstände und Sicherheitsregeln bleiben erhalten.
+
 ## 0.12.1 – Rocketbox Hotel Staff
 - KI-Hotelservice verwendet das festgelegte, texturierte Rocketbox-Grundmodell Daniel im Business-Anzug statt der bisherigen künstlichen Figur.
 - Native Stand- und Gehbewegung sowie überblendete Wave-Begrüßung nur für den Oberkörper; Laufroute, Begrüßungston und gemeinsamer Hotelflur bleiben unverändert.

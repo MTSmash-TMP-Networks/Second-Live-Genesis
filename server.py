@@ -18,7 +18,7 @@ import re
 import secrets
 import sqlite3
 import threading
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, parse_qs
 import uuid
 from updater_api import UpdateBridge
 import wall_damage
@@ -26,6 +26,7 @@ from http.cookies import SimpleCookie, CookieError
 from world_capture import CaptureStore, CaptureError
 from hotel_lobby import HotelLobby, FacadeDirectory
 from game_accounts import AccountStore, SESSION_TTL
+from room_models import RoomModelStore, MAX_FILE as MAX_MODEL_FILE
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -376,13 +377,14 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     accounts = AccountStore(capture,os.getenv('SECOND_LIVE_UPDATE_ADMIN_EMAIL','')) if capture and not legacy_capture else None
     lobby = HotelLobby() if accounts else None
     facades = FacadeDirectory(accounts) if accounts else None
+    room_models = RoomModelStore(store.path) if accounts else None
     # Keep the original player/cookie/home database, independent of image capture.
     panorama = None
     if legacy_capture and capture:
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.12.1"
+        server_version = "SecondLive/0.12.2"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -589,9 +591,22 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.12.1", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.12.2", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
+            elif path == "/api/room-models" or path.startswith("/api/room-models/"):
+                if not room_models:
+                    self.send_json(404,{"error":"Modellimport nur mit Benutzerkonto"});return
+                if not self.require_game():return
+                if path == "/api/room-models":
+                    self.capture_reply(lambda:room_models.list(self.player()));return
+                identifier=path.removeprefix("/api/room-models/")
+                try:
+                    owner=self.player()
+                    if not ID_RE.fullmatch(identifier):raise CaptureError('Modell nicht gefunden',404)
+                    self.send_data(200,room_models.get(owner,identifier),'model/gltf-binary')
+                except CaptureError as e:self.send_json(e.status,{'error':str(e)})
+                except (OSError,sqlite3.Error):self.send_json(503,{'error':'Modellspeicher nicht verfuegbar'})
             elif path == "/api/game":
                 if self.require_game(): self.capture_reply(lambda:self.personal_game().state())
             elif path == "/api/scans":
@@ -619,6 +634,29 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             path=urlsplit(self.path).path
             if not legacy_capture and (path in ('/api/scans','/api/world','/api/session/pair','/api/capture') or path.startswith(('/api/capture/','/api/scans/','/media/'))):
                 self.send_json(404,{'error':'Aufnahmefunktion eingestellt'});return
+            if path in ("/api/room-models","/api/room-models/upload"):
+                # Uploads and model mutations are authenticated, same-origin and private.
+                self.close_connection=True
+                if not room_models:
+                    self.send_json(404,{"error":"Modellimport nur mit Benutzerkonto"});return
+                if not self.require_game():return
+                def model_action():
+                    owner=self.player()
+                    if path=="/api/room-models":return room_models.action(owner,self.read_capture_body())
+                    if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Type','').split(';')[0].strip()!='model/gltf-binary':
+                        raise CaptureError('GLB-Datei erwartet',415)
+                    try:n=int(self.headers.get('Content-Length','0'))
+                    except ValueError:n=0
+                    if not 0<n<=MAX_MODEL_FILE:raise CaptureError('GLB-Datei maximal 16 MiB',413)
+                    if not room_models.upload_slots.acquire(blocking=False):raise CaptureError('Modellimport ausgelastet',503)
+                    try:
+                        self.connection.settimeout(25)
+                        name=parse_qs(urlsplit(self.path).query).get('name',['model.glb'])[0]
+                        blob=self.rfile.read(n)
+                        if len(blob)!=n:raise CaptureError('Unvollstaendiger Modellupload',400)
+                        return room_models.add(owner,name,blob)
+                    finally:room_models.upload_slots.release()
+                self.capture_reply(model_action);return
             if path=="/api/account":
                 if not accounts:
                     self.send_json(404,{"error":"Benutzerkonten nicht verfuegbar"});return

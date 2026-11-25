@@ -10,7 +10,10 @@ for(const obsolete of ['phone-app-capture','start-gps','/scanner.html','/panoram
 assert.ok(game.includes('health.personal_world===true'));
 assert.ok(game.includes("api('/api/session',{})"));
 assert.ok(ids.includes('phone-app-world')&&ids.includes('phone-page-world')&&ids.includes('update-open-phone'));
-assert.ok(html.includes('Eigene Welten')&&html.includes('Weltimport'));
+assert.ok(html.includes('Eigene Welten')&&html.includes('3D-Modelle importieren'));
+assert.ok(ids.includes('phone-app-models')&&ids.includes('phone-page-models')&&ids.includes('room-model-file')&&ids.includes('room-model-save'));
+assert.ok(html.includes('https://polyhaven.com/models/furniture'));
+assert.ok(game.includes("fetch('/api/room-models/upload?name="));
 // Run the actual pure interaction-selection functions with a minimal room state.
 // Function construction is test-only, never delivered to the browser.
 const start=game.indexOf('const CURTAIN_TARGETS='),end=game.indexOf('function updateInteractionHint(',start);
@@ -45,6 +48,16 @@ testState.objects.surface_rug=0;assert.equal(options.primaryInteraction(hit('sur
 testState.objects.sofa=0;assert.equal(options.primaryInteraction(hit('sofa')),null);
 
 const getPart=(a,b)=>{const i=game.indexOf(a),j=game.indexOf(b,i+a.length);assert.ok(i>=0&&j>i,a);return game.slice(i,j);};
+const modelFront=new Function(getPart("function modelFrontPlacement(","function readRoomModelPlacement(")+"return modelFrontPlacement;")();
+for(const size of [.1,.8,2.4])for(const yaw of [0,Math.PI/2,Math.PI,Math.PI*1.5]){
+ const p=modelFront({x:4.6,z:4.6,yaw},size);
+ assert.ok(Math.abs(p.x)+size*Math.SQRT2/2<=4.72);
+ assert.ok(Math.abs(p.z)+size*Math.SQRT2/2<=4.72);
+ assert.equal(p.y,0);assert.equal(p.solid,false);
+}
+const ahead=modelFront({x:0,z:0,yaw:0},.8);
+assert.equal(ahead.x,0);assert.ok(ahead.z< -1);
+console.log('Room model placement and phone UI checks passed');
 const cycle=new Function(getPart("const weaponIds=","const clipSize=")+"return nextWeapon;")();
 assert.equal(cycle(null,1),'pistol');assert.equal(cycle('pistol',1),'rifle');
 assert.equal(cycle('rifle',1),'m16');assert.equal(cycle('m16',1),'none');

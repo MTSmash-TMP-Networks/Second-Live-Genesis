@@ -8,7 +8,7 @@ export class RoomPhysics {
   constructor(room,spec){
     this.world=new RAPIER.World({x:0,y:-9.81,z:0});this.spec=spec;this.entries=new Map();this.fragments=new Map();this.acc=0;
     this.world.timestep=1/60;
-    this.wallColliders=new Map();this.decorColliders=new Map();
+    this.wallColliders=new Map();this.decorColliders=new Map();this.importColliders=new Map();
     for(const o of room){const collider=this.fixed(o.p,o.s);if(o.surfaceId&&WALLS[o.surfaceId])this.wallColliders.set(o.surfaceId,{signature:'',colliders:[collider]});else if(o.surfaceId)this.decorColliders.set(o.surfaceId,collider);}
     this.door=this.fixed([0,1.1,-4.95],[1.85,2.2,.18]);
     this.extension=[this.fixed([0,-.12,-10],[10,.24,10]),this.fixed([-4.8,1.4,-10],[.2,2.8,10]),this.fixed([4.8,1.4,-10],[.2,2.8,10]),this.fixed([0,1.4,-15],[10,2.8,.2])];
@@ -33,6 +33,14 @@ export class RoomPhysics {
     }
   }
   syncDecor(decor={}){for(const [id,c] of this.decorColliders)c.setEnabled((decor[id]||0)<4);}
+  syncImported(boxes=[]){
+    const wanted=new Map(boxes.map(b=>[b.id,b]));
+    for(const [id,e] of this.importColliders){if(!wanted.has(id)){this.world.removeCollider(e.collider,true);this.importColliders.delete(id);}}
+    for(const b of boxes){const signature=JSON.stringify([b.p,b.s]),old=this.importColliders.get(b.id);if(old?.signature===signature)continue;
+      if(old)this.world.removeCollider(old.collider,true);
+      this.importColliders.set(b.id,{signature,collider:this.fixed(b.p,b.s)});
+    }
+  }
   step(dt,bodies,state,held,holdPoint,debris,holdRotation=[0,0,0,1]){
     this.syncWalls(state.walls||{});this.syncDecor(state.decor||{});
     if(this.unlocked!==state.unlocked){this.unlocked=state.unlocked;this.door.setEnabled(!this.unlocked);for(const c of this.extension)c.setEnabled(this.unlocked);}

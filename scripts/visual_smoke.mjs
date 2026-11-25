@@ -303,3 +303,27 @@ console.log('Connected hotel: 24 aligned rooms, corridor rays, visibility, mirro
  }finally{if(savedDocument===undefined)delete globalThis.document;else globalThis.document=savedDocument;}
 }
 console.log('Shared facade: matching bidirectional holes in all 24 rooms, immediate own repair and remote repair');
+
+import {patrolPose,advancePatrolClock,LOBBY_LAYOUT as patrolLayout} from './lobby_layout.js';
+import {stabilizePatrolClip} from './realistic_character.js';
+{
+ let clock=0,phase=0,age=0,prev=patrolPose(0).position[2];
+ for(let i=1;i<=900;i++){
+  const dt=1/60;age+=dt;
+  if(i%15===0){phase=i*dt-(i%30===0?.08:0);age=0;}
+  const next=advancePatrolClock(clock,phase,age,dt);
+  assert.ok(next>=clock);const z=patrolPose(next).position[2];
+  assert.ok(z>=prev&&z-prev<.05,'Continuous forward patrol without backwards steps');
+  clock=next;prev=z;
+ }
+ const edge=patrolLayout.halfLength-2,turn=(2*edge-4)/patrolLayout.npcSpeed;
+ assert.equal(patrolPose(turn+patrolLayout.npcTurnSeconds/2).walking,false);
+ assert.ok(Math.abs(patrolPose(turn+patrolLayout.npcTurnSeconds/2).yaw-Math.PI*1.5)<1e-8);
+ assert.ok(patrolPose(turn+patrolLayout.npcTurnSeconds+.2).position[2]<edge);
+ const model=new THREE.Group(),hip=new THREE.Bone();hip.name='mixamorigHips';hip.position.set(0,1,0);model.add(hip);
+ const track=new THREE.VectorKeyframeTrack('mixamorigHips.position',[0,.5,1],[0,1,0,.1,1.1,.4,.2,1.03,.9]);
+ const clip=new THREE.AnimationClip('Walk',1,[track]),fixed=stabilizePatrolClip(clip,model).tracks[0].values;
+ for(let i=0;i<3;i++){assert.ok(Math.abs(fixed[i*3])<1e-6);assert.ok(Math.abs(fixed[i*3+2])<1e-6);}
+ assert.ok(Math.abs(fixed[1]-fixed[7])<1e-6);assert.ok(fixed[4]>fixed[1]);assert.ok(track.values[8]>.8);
+}
+console.log('Hotel patrol: steady route clock, stationary turns and horizontal root-motion removal verified');

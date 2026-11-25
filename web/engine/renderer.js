@@ -25,6 +25,7 @@ import { HotelLobbyView } from './hotel_lobby.js';
 import { NeighborRoomView, HallFacadeViews, hotelOpenings } from './hotel_connections.js';
 export { hotelOpenings } from './hotel_connections.js';
 import { CharacterStudio, createCharacter, animateCharacter, disposeCharacter } from './character.js';
+import { RoomModels, buildRoomMirror } from './room_customization.js';
 export { CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, CharacterStudio, createHotelNpc, animateCharacter, disposeCharacter } from './character.js';
 export { LOBBY_LAYOUT, LOBBY_CAPACITY, lobbyDoor, lobbyWalkable, lobbyDoorAt } from './lobby_layout.js';
 export { PORTAL_SIDES };
@@ -417,6 +418,8 @@ export class RoomRenderer {
     for(const x of [-2.5,2.5]){const light=new THREE.PointLight(0xffe0ba,10,4.5,2);light.position.set(x,2.7,-7.05);this.hotelHallLights.add(light);}
     this.neighborView=new NeighborRoomView(this,spec);
     this.hallFacades=new HallFacadeViews(this,spec);
+    // Do not clone live mirrors or private models into adjacent rooms.
+    this.roomModels=new RoomModels(this.scene);this.roomMirror=buildRoomMirror(this);
     this.hotelSlot=null;this.hotelHallOpen=false;
     this.status('Fotomaterialien und 3D-Modelle bereit · '+this.quality.toUpperCase());
   }
@@ -508,7 +511,7 @@ export class RoomRenderer {
     root.quaternion.copy(rot);root.visible=visible;
     root.traverse(o=>{if(o.userData.floorShadow)o.visible=!held&&Math.abs(p[1]-s[1]/2)<.04&&floorSupported(WALLS.surface_0,this.wallState?.surface_0||[],p[0],p[2]);});
   }
-  surfaceHit(origin,direction,held){this.scene.updateMatrixWorld(true);return this.impacts.cast(origin,direction,[this.staticGroup,this.dynamicGroup],held);}
+  surfaceHit(origin,direction,held){this.scene.updateMatrixWorld(true);return this.impacts.cast(origin,direction,[this.staticGroup,this.dynamicGroup,this.roomModels?.root,this.roomMirror?.root].filter(Boolean),held);}
   syncWalls(walls){this.walls.sync(walls);this.wallState=walls||{};this.staticGroup.updateMatrixWorld(true);this.staticGroup.traverse(o=>{if(o.userData.floorShadow){const p=o.getWorldPosition(new THREE.Vector3());o.visible=floorSupported(WALLS.surface_0,this.wallState.surface_0||[],p.x,p.z);}});}
   syncDecor(decor={}){
     for(const [id,target] of this.impacts.targets){if(!id.startsWith('surface_')||this.walls.entries.has(id))continue;const visible=(decor[id]||0)<4;if(target.root.visible!==visible){target.root.visible=visible;this.impacts.invalidateTarget(id);}}
@@ -550,7 +553,7 @@ export class RoomRenderer {
     if(this.localCharacter)disposeCharacter(this.localCharacter);
     this.localCharacter=createCharacter(profile.avatar);this.localCharacter.visible=false;this.scene.add(this.localCharacter);
   }
-  showCharacter(player,visible,dt,moving=false){if(!this.localCharacter)return;const root=this.localCharacter;root.visible=visible;if(visible){root.position.set(player.x,player.y,player.z);root.rotation.y=player.yaw;animateCharacter(root,dt,moving,player.stance);}}
+  showCharacter(player,visible,dt,moving=false,reflect=false){this.reflectPlayer=reflect;if(!this.localCharacter)return;const root=this.localCharacter;root.visible=visible;if(visible||reflect){root.position.set(player.x,player.y,player.z);root.rotation.y=player.yaw;animateCharacter(root,dt,moving,player.stance);}}
   renderStudio(canvas,dt){
     const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),dpr=Math.min(devicePixelRatio||1,1.5);
     if(w!==this.width||h!==this.height||dpr!==this.dpr){this.width=w;this.height=h;this.dpr=dpr;this.renderer.setPixelRatio(dpr);this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
@@ -558,6 +561,7 @@ export class RoomRenderer {
   }
   render(canvas,eye,target,mobile,dt=1/60,player=null,scopeZoom=false,inLobby=false){
     const scene=inLobby?this.lobby.scene:this.scene;
+    if(this.roomMirror)this.roomMirror.reflector.visible=!this.xrMode.active;
     this.swayTime+=dt;
     const idle=Math.sin(this.swayTime*1.4)*.004;
     this.weaponRoot.position.x=.23+idle;

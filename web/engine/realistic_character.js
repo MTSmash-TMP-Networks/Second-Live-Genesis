@@ -96,6 +96,29 @@ function applyAppearance(r,look){
 }
 const clipKey=name=>name.toLowerCase().replace(/[^a-z0-9]+/g,'');
 function findClip(animations,id){return animations.find(c=>clipKey(c.name)===id);}
+// The route controls world translation. Keep vertical hip motion and skeletal
+// rotations, but remove horizontal root/hip displacement and its loop seam.
+export function stabilizePatrolClip(source,model){
+ const clip=source.clone();model.updateMatrixWorld(true);
+ for(const track of clip.tracks){
+  if(!track.name.endsWith('.position')||track.getValueSize()!==3)continue;
+  const name=track.name.slice(0,-9),node=THREE.PropertyBinding.findNode(model,name);
+  if(!node||!(node===model||/(?:hips?|pelvis|root|armature)$/i.test(node.name)))continue;
+  const matrix=new THREE.Matrix3().setFromMatrix4(node.parent?.matrixWorld||new THREE.Matrix4());
+  if(Math.abs(matrix.determinant())<1e-12)continue;
+  const inverse=matrix.clone().invert(),base=node.position.clone(),v=new THREE.Vector3();
+  const values=track.values,first=new THREE.Vector3().fromArray(values,0).sub(base).applyMatrix3(matrix);
+  const last=new THREE.Vector3().fromArray(values,values.length-3).sub(base).applyMatrix3(matrix);
+  const span=track.times[track.times.length-1]-track.times[0];
+  for(let i=0;i<track.times.length;i++){
+   v.fromArray(values,i*3).sub(base).applyMatrix3(matrix);
+   const phase=span>0?(track.times[i]-track.times[0])/span:0;
+   v.set(0,v.y-(last.y-first.y)*phase,0).applyMatrix3(inverse).add(base).toArray(values,i*3);
+  }
+ }
+ return clip;
+}
+
 export function updateRealistic(root,a,options){
  const r=root?.userData?.realistic;if(!r)return false;
  const look=resolveRocketboxLook(a,options);if(look.model.file!==r.look.model.file)return false;
@@ -112,8 +135,9 @@ export function prepareRealistic(root,a,options,studio=false){
    const gltf=await new GLTFLoader().parseAsync(bytes.slice(0),'');model=gltf.scene;
    if(u.disposed){releaseScene(model);model=null;return;}
    const {parts,morphMeshes}=prepareMaterials(model);
-   const idle=findClip(gltf.animations,'idle'),walk=findClip(gltf.animations,'walk');
+   let idle=findClip(gltf.animations,'idle'),walk=findClip(gltf.animations,'walk');
    if(!idle||!walk)throw Error('Bewegungsanimationen fehlen');
+   if(u.hotelNpc){idle=stabilizePatrolClip(idle,model);walk=stabilizePatrolClip(walk,model);}
    const mixer=new THREE.AnimationMixer(model),actions={idle:mixer.clipAction(idle),walk:mixer.clipAction(walk)};
    for(const id of ['run','crouch','crouchwalk']){const clip=findClip(gltf.animations,id);if(clip)actions[id]=mixer.clipAction(clip);}
    if(u.hotelNpc){
@@ -132,8 +156,8 @@ export function prepareRealistic(root,a,options,studio=false){
    const bounds=new THREE.Box3().setFromObject(model,true),size=bounds.getSize(new THREE.Vector3());
    if(bounds.isEmpty()||!Number.isFinite(size.y)||size.y<1.1||size.y>2.5)throw Error('Ungültige Modellgröße');
    const center=bounds.getCenter(new THREE.Vector3());
-   model.position.x-=center.x;model.position.y-=bounds.min.y;model.position.z-=center.z;
-   const pivot=new THREE.Group();pivot.rotation.y=Math.PI;pivot.add(model);
+   const offset=new THREE.Group();offset.position.set(-center.x,-bounds.min.y,-center.z);offset.add(model);
+   const pivot=new THREE.Group();pivot.rotation.y=Math.PI;pivot.add(offset);
    const r={pivot,model,mixer,actions,current:actions.idle,parts,morphMeshes,nativeHeight:size.y,height:size.y,look,time:0,greetingActive:false};
    applyAppearance(r,look);root.add(pivot);u.realistic=r;model=null;
    u.body.visible=false;u.body.traverse(o=>{if(o.isMesh)o.raycast=()=>{};});
@@ -151,7 +175,7 @@ export function animateRealistic(root,dt,moving,stance){
  const crouch=stance==='crouch',sprint=stance==='sprint'&&moving;
  const action=crouch?(moving?(r.actions.crouchwalk||r.actions.crouch||r.actions.walk):(r.actions.crouch||r.actions.idle)):moving?(sprint?(r.actions.run||r.actions.walk):r.actions.walk):r.actions.idle;
  if(action!==r.current){action.reset().setEffectiveWeight(1).play().crossFadeFrom(r.current,.22,false);r.current=action;}
- action.setEffectiveTimeScale(action===r.actions.walk?(sprint?1.6:crouch?.65:1):1);
+ action.setEffectiveTimeScale(action===r.actions.walk?(u.hotelNpc?(u.patrolPlayback||1):sprint?1.6:crouch?.65:1):1);
  const delta=Math.max(0,Math.min(dt,.1));
  // A separately weighted upper-body wave leaves the native walk cycle running.
  const greeting=r.actions.greeting,remaining=u.hotelGreeting||0;

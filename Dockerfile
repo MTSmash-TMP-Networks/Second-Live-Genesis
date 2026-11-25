@@ -2,9 +2,9 @@
 FROM node:22-bookworm-slim AS renderer
 WORKDIR /build
 RUN npm install --no-audit --no-fund --save-exact three@0.170.0 esbuild@0.25.10 @dimforge/rapier3d-compat@0.17.3
-COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/hotel_room.js web/engine/hotel_layout.json web/engine/hotel_reference.json web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js web/engine/portal_door.js web/engine/optional_asset.js web/engine/hotel_lobby.js web/engine/lobby_layout.js web/engine/lobby_layout.json web/engine/hotel_connections.js web/engine/character.js web/engine/character_options.json web/engine/realistic_character.js web/engine/rocketbox_look.js web/engine/rocketbox_manifest.json ./
+COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/hotel_room.js web/engine/hotel_layout.json web/engine/hotel_reference.json web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js web/engine/portal_door.js web/engine/optional_asset.js web/engine/hotel_lobby.js web/engine/lobby_layout.js web/engine/lobby_layout.json web/engine/hotel_connections.js web/engine/character.js web/engine/character_options.json web/engine/realistic_character.js web/engine/rocketbox_look.js web/engine/rocketbox_manifest.json web/engine/room_customization.js ./
 COPY web/engine/wall_layout.json /build/wall_layout.json
-COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs scripts/realistic_avatar_smoke.mjs ./
+COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs scripts/realistic_avatar_smoke.mjs scripts/room_customization_smoke.mjs ./
 COPY web/game.js web/index.html web/updater.js scripts/game_only_smoke.mjs ./
 RUN node --check game.js && node --check updater.js && node game_only_smoke.mjs
 # Rapier 0.17.3 advertises a CJS entry that esbuild may interpret as ESM.
@@ -13,6 +13,7 @@ RUN test -s node_modules/@dimforge/rapier3d-compat/rapier.es.js
 RUN ./node_modules/.bin/esbuild physics_smoke.mjs --bundle --platform=node --format=esm --alias:@dimforge/rapier3d-compat=./node_modules/@dimforge/rapier3d-compat/rapier.es.js --outfile=/build/physics_smoke.bundle.mjs && node /build/physics_smoke.bundle.mjs
 RUN ./node_modules/.bin/esbuild visual_smoke.mjs --bundle --platform=node --format=esm --outfile=/build/visual_smoke.bundle.mjs && node /build/visual_smoke.bundle.mjs
 RUN ./node_modules/.bin/esbuild realistic_avatar_smoke.mjs --bundle --platform=node --format=esm --outfile=/build/realistic_avatar_smoke.bundle.mjs && node /build/realistic_avatar_smoke.bundle.mjs
+RUN ./node_modules/.bin/esbuild room_customization_smoke.mjs --bundle --platform=node --format=esm --outfile=/build/room_customization_smoke.bundle.mjs && node /build/room_customization_smoke.bundle.mjs
 RUN ./node_modules/.bin/esbuild renderer.js --bundle --platform=browser --format=esm --alias:@dimforge/rapier3d-compat=./node_modules/@dimforge/rapier3d-compat/rapier.es.js --target=es2020 --minify --outfile=/build/renderer.bundle.js && cp node_modules/three/LICENSE /build/THREE-LICENSE.txt
 
 # Independently cached, pinned and integrity-checked finished Rocketbox GLBs.
@@ -73,7 +74,7 @@ RUN ./node_modules/.bin/esbuild avatar_smoke.mjs --bundle --platform=node --form
 # Game-only runtime; retained player identity uses the standard library.
 FROM python:3.13-slim-bookworm
 WORKDIR /app
-COPY server.py updater_api.py wall_damage.py world_capture.py hotel_lobby.py game_accounts.py /app/
+COPY server.py updater_api.py wall_damage.py world_capture.py hotel_lobby.py game_accounts.py room_models.py /app/
 COPY --chmod=0644 scripts/game_only_smoke.py /app/game_only_smoke.py
 COPY web/ /app/web/
 RUN rm -f /app/web/scanner.html /app/web/panorama.html /app/web/capture.js /app/web/capture-flow.js /app/web/capture-quality.js /app/web/capture.css /app/web/panorama.js /app/web/panorama-flow.js /app/web/panorama.css /app/web/device-access.js /app/web/app.js /app/web/style.css /app/web/engine/capture-view.js

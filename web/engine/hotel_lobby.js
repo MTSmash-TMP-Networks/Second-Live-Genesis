@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LOBBY_LAYOUT as L, LOBBY_CAPACITY, lobbyDoor, roomHallTransform } from './lobby_layout.js';
+import { LOBBY_LAYOUT as L, LOBBY_CAPACITY, lobbyDoor, roomHallTransform, patrolPose, advancePatrolClock } from './lobby_layout.js';
 import { createCharacter, createHotelNpc, animateCharacter, disposeCharacter, normalizeCharacter } from './character.js';
 
 const mat=(color,roughness=.82,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
@@ -91,16 +91,26 @@ export class HotelLobbyView{
   // Bounded number of lights; no shadow-map cost in the public area.
   this.lights=[];for(let i=0;i<7;i++){const l=new THREE.PointLight(0xffdfb6,17,8,2);l.position.set(0,2.72,(i-3)*6);this.scene.add(l);this.lights.push(l);}
   this.local=null;
-  this.npc=createHotelNpc();this.npc.name='KI-Hotelservice';this.npc.visible=false;this.npcTarget=null;this.npcGreeting=0;
+  this.npc=createHotelNpc();this.npc.name='KI-Hotelservice';this.npc.visible=false;this.npcTarget=null;this.npcClock=null;this.npcSampleAt=0;this.npcGreeting=0;
   const tag=nameTag('KI-Hotelservice',2.13,1.02,.35);this.npc.add(tag);this.npc.userData.nameTag=tag;
   this.guestRoot.add(this.npc);
  }
  syncNpc(p){
   if(!p||!Array.isArray(p.position)||p.position.length!==3||!p.position.every(Number.isFinite)||!Number.isFinite(p.yaw)){
-   this.npc.visible=false;this.npcTarget=null;this.npcGreeting=0;this.npc.userData.hotelGreeting=0;return;
+   this.npc.visible=false;this.npcTarget=null;this.npcClock=null;this.npcGreeting=0;this.npc.userData.hotelGreeting=0;return;
   }
-  if(!this.npcTarget||this.npc.position.distanceTo(new THREE.Vector3(...p.position))>4){
-   this.npc.position.set(...p.position);this.npc.rotation.y=p.yaw;
+  const timed=Number.isFinite(p.phase)&&p.phase>=0;
+  if(timed&&this.npcTarget&&Number.isFinite(this.npcTarget.phase)&&p.phase<this.npcTarget.phase){
+   // A delayed response cannot reverse the NPC. A restarted server resets its clock.
+   if(this.npcTarget.phase-p.phase<5)return;
+   this.npcClock=null;
+  }
+  if(timed){
+   if(this.npcClock===null){this.npcClock=p.phase;const q=patrolPose(p.phase);this.npc.position.set(...q.position);this.npc.rotation.y=q.yaw;}
+   this.npcSampleAt=performance.now();
+  }else{
+   this.npcClock=null;
+   if(!this.npcTarget||this.npc.position.distanceTo(new THREE.Vector3(...p.position))>4){this.npc.position.set(...p.position);this.npc.rotation.y=p.yaw;}
   }
   this.npcTarget=p;this.npc.visible=true;
  }
@@ -108,11 +118,21 @@ export class HotelLobbyView{
  stepNpc(dt,player){
   if(!this.npcTarget)return;
   const p=this.npcTarget,g=this.npc,t=1-Math.exp(-dt*12);
-  g.position.lerp(new THREE.Vector3(...p.position),t);
-  g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;
+  let moving=p.walking!==false;
+  if(this.npcClock!==null){
+   const before=this.npcClock;
+   this.npcClock=advancePatrolClock(before,p.phase,(performance.now()-this.npcSampleAt)/1000,Math.min(dt,.1));
+   const pose=patrolPose(this.npcClock);
+   g.position.set(...pose.position);g.rotation.y=pose.yaw;
+   moving=pose.walking&&this.npcClock>before;
+   g.userData.patrolPlayback=Math.max(.85,Math.min(1.15,(this.npcClock-before)/Math.max(.001,dt)));
+  }else{
+   g.position.lerp(new THREE.Vector3(...p.position),t);
+   g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;
+  }
   this.npcGreeting=Math.max(0,this.npcGreeting-dt);
   const u=g.userData;u.hotelGreeting=this.npcGreeting;
-  animateCharacter(g,dt,p.walking!==false,'walk');
+  animateCharacter(g,dt,moving,'walk');
   if(u.realistic)return; // Rocketbox plays its own native upper-body greeting.
   if(this.npcGreeting>0){
    const weight=Math.min(1,this.npcGreeting*4);

@@ -1,3 +1,4 @@
+import math
 """Game-only deployment regression: no capture APIs; existing home identity survives."""
 import http.cookiejar
 import json
@@ -18,7 +19,59 @@ from hotel_lobby import HotelLobby, FacadeDirectory, CAPACITY, LEASE, spawn, npc
 from world_capture import CaptureError
 from game_accounts import AccountStore, DEFAULT_AVATAR, OPTIONS, password_hash, clean_avatar
 
+
+def room_model_fixture(change=None):
+    """A real embedded, uncompressed GLB 2.0 triangle for private-room tests."""
+    import struct
+    vertices=struct.pack('<9f',0.,0.,0.,1.,0.,0.,0.,1.,0.)
+    g={'asset':{'version':'2.0'},'buffers':[{'byteLength':len(vertices)}],
+       'bufferViews':[{'buffer':0,'byteLength':len(vertices)}],
+       'accessors':[{'bufferView':0,'componentType':5126,'count':3,'type':'VEC3','min':[0,0,0],'max':[1,1,0]}],
+       'meshes':[{'primitives':[{'attributes':{'POSITION':0}}]}],
+       'nodes':[{'mesh':0}],'scenes':[{'nodes':[0]}],'scene':0}
+    if change:change(g)
+    js=json.dumps(g,separators=(',',':')).encode()
+    js+=b' '*(-len(js)%4)
+    return struct.pack('<IIIII',0x46546c67,2,28+len(js)+len(vertices),len(js),0x4e4f534a)+js+struct.pack('<II',len(vertices),0x004e4942)+vertices
+
 class GameOnlyTest(unittest.TestCase):
+    def test_private_room_model_validation_and_persistence(self):
+        from room_models import RoomModelStore, validate_glb, MAX_MODELS
+        blob=room_model_fixture()
+        self.assertEqual(validate_glb(blob)['triangles'],1)
+        for change in (
+            lambda g:g['buffers'][0].update(uri='https://example.invalid/model.bin'),
+            lambda g:g['nodes'][0].update(children=[0]),
+            lambda g:g['accessors'][0].update(count=999999),
+            lambda g:g.update(extensionsRequired=['KHR_draco_mesh_compression']),
+            lambda g:g['bufferViews'][0].update(byteLength=99999),
+            lambda g:g.update(animations=[{}]),
+            lambda g:g.update(images=[{'bufferView':0,'mimeType':'image/svg+xml'}])):
+            with self.assertRaises(ValueError):validate_glb(room_model_fixture(change))
+        with self.assertRaises(ValueError):validate_glb(blob[:-1])
+        with tempfile.TemporaryDirectory() as tmp:
+            store=RoomModelStore(tmp)
+            self.assertEqual(store.list('a')['models'],[])
+            item=store.add('a','chair.glb',blob)
+            identifier=item['added']
+            self.assertFalse(item['models'][0]['placed'])
+            data={'action':'place','id':identifier,'x':1.5,'y':0,'z':1.5,'extent':.8,'rotation':45,'solid':True}
+            with self.assertRaises(CaptureError):store.action('b',data)
+            with self.assertRaises(CaptureError):store.get('b',identifier)
+            for bad in ({'x':4.7},{'extent':100},{'rotation':float('nan')},{'solid':'true'},{'y':2.8}):
+                with self.assertRaises(ValueError):store.action('a',{**data,**bad})
+            row=store.action('a',data)['models'][0]
+            self.assertTrue(row['placed'] and row['solid'])
+            self.assertEqual(row['rotation'],45)
+            reopened=RoomModelStore(tmp)
+            self.assertEqual(reopened.get('a',identifier),blob)
+            self.assertEqual(reopened.list('a')['models'],[row])
+            self.assertFalse(reopened.action('a',{'action':'hide','id':identifier})['models'][0]['placed'])
+            for _ in range(MAX_MODELS-1):store.add('a','chair.glb',blob)
+            with self.assertRaises(CaptureError):store.add('a','too-many.glb',blob)
+            store.action('a',{'action':'delete','id':identifier})
+            self.assertEqual(len(store.list('a')['models']),MAX_MODELS-1)
+
     def test_update_admin_reserved_and_local_activation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);capture=CaptureStore(root)
@@ -121,7 +174,16 @@ class GameOnlyTest(unittest.TestCase):
             q=npc_patrol(t)
             self.assertLessEqual(abs(q['position'][2]),64)
             self.assertAlmostEqual(q['position'][0],.62)
-            self.assertIn(q['yaw'],(0.0,3.1416))
+            self.assertGreaterEqual(q['yaw'],0)
+            self.assertLessEqual(q['yaw'],2*math.pi)
+            self.assertEqual(q['phase'],t)
+        from hotel_lobby import NPC_TURN, LAYOUT
+        turn=(2*(LAYOUT['halfLength']-2)-4)/NPC_SPEED
+        self.assertFalse(npc_patrol(turn+NPC_TURN/2)['walking'])
+        self.assertAlmostEqual(npc_patrol(turn+NPC_TURN/2)['position'][2],64)
+        self.assertAlmostEqual(npc_patrol(turn+NPC_TURN/2)['yaw'],math.pi*1.5,places=3)
+        self.assertTrue(npc_patrol(turn+NPC_TURN+.2)['walking'])
+        self.assertLess(npc_patrol(turn+NPC_TURN+.2)['position'][2],64)
         self.assertEqual(lobby.observe('b',profiles[1],[])['online'],2)
 
     def test_lobby_capacity_leases_and_privacy(self):
@@ -242,6 +304,27 @@ class GameOnlyTest(unittest.TestCase):
                 self.assertTrue(ca.startswith('sl_account='))
                 self.assertEqual(set(pa),{'nickname','slot','avatar'});self.assertEqual(pa['slot'],0);self.assertEqual(pb['slot'],1)
                 self.assertEqual(req(ca,'/api/account',{'action':'profile'}),pa)
+                # Real upload and fetch: neither bytes nor metadata cross account boundaries.
+                blob=room_model_fixture()
+                with self.assertRaises(urllib.error.HTTPError) as e:req('','/api/room-models')
+                self.assertEqual(e.exception.code,401)
+                def upload(cookie,origin=None):
+                    headers={'Cookie':cookie,'Content-Type':'model/gltf-binary'}
+                    if origin:headers['Origin']=origin
+                    with urllib.request.urlopen(urllib.request.Request(base+'/api/room-models/upload?name=chair.glb',data=blob,headers=headers),timeout=8) as res:return json.load(res)
+                with self.assertRaises(urllib.error.HTTPError) as e:upload(ca,'https://example.invalid')
+                self.assertEqual(e.exception.code,403)
+                model=upload(ca)['added'];self.assertEqual(req(cb,'/api/room-models')['models'],[])
+                p={'action':'place','id':model,'x':1.5,'y':0,'z':1.5,'extent':.8,'rotation':90,'solid':False}
+                self.assertTrue(req(ca,'/api/room-models',p)['models'][0]['placed'])
+                with self.assertRaises(urllib.error.HTTPError) as e:req(cb,'/api/room-models',p)
+                self.assertEqual(e.exception.code,404)
+                with urllib.request.urlopen(urllib.request.Request(base+'/api/room-models/'+model,headers={'Cookie':ca}),timeout=8) as res:
+                    self.assertEqual(res.read(),blob);self.assertEqual(res.headers.get_content_type(),'model/gltf-binary')
+                    self.assertEqual(res.headers['Cache-Control'],'no-store')
+                with self.assertRaises(urllib.error.HTTPError) as e:req(cb,'/api/room-models/'+model)
+                self.assertEqual(e.exception.code,404)
+                self.assertEqual(req(ca,'/api/room-models',{'action':'delete','id':model})['models'],[])
                 custom={**pb['avatar'],'topColor':(pb['avatar']['topColor']+1)%len(OPTIONS['topColor']['values'])}
                 self.assertEqual(req(cb,'/api/account',{'action':'avatar','avatar':custom})['avatar'],custom)
                 a=req(ca,'/api/lobby',{'action':'enter'});b=req(cb,'/api/lobby',{'action':'enter'})

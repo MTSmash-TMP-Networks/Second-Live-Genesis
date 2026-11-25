@@ -141,7 +141,7 @@ function syncWallState(next){
   if(wallSignatures!==sig){wallSignatures=sig;wallSolids=Object.entries(WALLS).flatMap(([id,w])=>solidRuns(w,next[id]||[]));}
   renderer?.syncWalls?.(next);physicsWorld?.syncWalls?.(next);
 }
-function collisionRoom(){return [...room.filter(o=>(!o.surfaceId||!WALLS[o.surfaceId])&&!movableDecor(o.surfaceId)&&(state.decor?.[o.surfaceId]||0)<REMOVED),...wallSolids];}
+function collisionRoom(){return [...room.filter(o=>(!o.surfaceId||!WALLS[o.surfaceId])&&!movableDecor(o.surfaceId)&&(state.decor?.[o.surfaceId]||0)<REMOVED),...wallSolids,...(renderer?.roomModels?.colliders()||[])];}
 function syncDecorState(next){
   for(const [id,original] of Object.entries(DECOR_BOUNDS)){
     const o=decorBoundsAt(id,original);
@@ -523,6 +523,7 @@ async function enterGame(){
   await refresh();if(protectedGame)sessionStorage.setItem('second_live_token',token);
   $('welcome').hidden=true;$('character-editor').hidden=true;studioOpen=false;renderer?.studio?.clear();document.body.classList.remove('character-editing');
   started=true;active=true;document.body.classList.add('playing');
+  void refreshRoomModels().catch(e=>{$('room-model-message').textContent=e.message;});
   if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});
  }catch(e){if(studioOpen)$('character-error').textContent=e.message;else $('loginerror').textContent=e.message;}
  finally{enteringGame=false;}
@@ -541,10 +542,136 @@ $('character-save').onclick=async()=>{if(accountBusy||!studioOpen)return;account
 $('edit-character').onclick=()=>{if(lobbyState){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}openStudio(true);};
 $('account-logout').onclick=async()=>{if(accountBusy||!confirm('Vom Spiel abmelden? Dein Zimmer und Charakter bleiben gespeichert.'))return;accountBusy=true;try{await api('/api/account',{action:'logout'});location.reload();}catch(e){$('notice').textContent=e.message;accountBusy=false;}};
 $('start').onclick=()=>enterGame();
-const phonePages=['home','world','settings'];
+const phonePages=['home','world','settings','models'];
 function showPhonePage(page){for(const key of phonePages)$('phone-page-'+key).hidden=page!==key;}
 function updatePhone(){const now=new Date();$('phone-clock').textContent=now.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});$('phone-date').textContent=now.toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'});$('phone-worldstate').textContent=$('worldstate').textContent;$('phone-volume').value=String(Math.round(audio.volume*100));$('phone-sound').checked=audio.enabled;$('phone-volume-label').textContent=Math.round(audio.volume*100)+' %';}
-$('phone-home').onclick=()=>showPhonePage('home');$('phone-app-world').onclick=()=>{showPhonePage('world');updatePhone();};$('phone-app-settings').onclick=()=>{showPhonePage('settings');updatePhone();};$('phone-app-inventory').onclick=()=>{$('closephone').onclick();arsenal();};
+$('phone-home').onclick=()=>showPhonePage('home');
+$('phone-app-models').onclick=$('world-open-models').onclick=()=>{showPhonePage('models');updateRoomModelUI();void refreshRoomModels(true).catch(e=>{$('room-model-message').textContent=e.message;});};$('phone-app-world').onclick=()=>{showPhonePage('world');updatePhone();};$('phone-app-settings').onclick=()=>{showPhonePage('settings');updatePhone();};$('phone-app-inventory').onclick=()=>{$('closephone').onclick();arsenal();};
+
+/* User-owned GLB furnishings: upload, select, place and persist during gameplay. */
+const ROOM_MODEL_MAX=16*1024*1024;
+let roomModelRows=[],roomModelBusy=false,roomModelRevision=0,roomModelRefreshing=false,roomModelLimits={max_models:8,max_owner:64*1024*1024},roomModelListKey='';
+const modelSelection=()=>$('room-model-select').value;
+const selectedRoomModel=()=>roomModelRows.find(r=>r.id===modelSelection());
+const roomModelAllowed=()=>!!(started&&accountProfile&&!lobbyState&&!lobbyTransition);
+const modelHeaders=()=>protectedGame?{'X-SecondLive-Token':token}:{};
+async function roomModelBytes(id,signal){
+ const r=await fetch('/api/room-models/'+encodeURIComponent(id),{headers:modelHeaders(),signal});
+ if(!r.ok)throw Error('Modelldatei nicht verfügbar (HTTP '+r.status+')');
+ return r.arrayBuffer();
+}
+function modelFrontPlacement(player,extent){
+ const margin=extent*Math.SQRT2/2+.04,limit=4.72-margin,dist=Math.max(1.5,extent*.75+.8);
+ const clamp=v=>Math.round(Math.max(-limit,Math.min(limit,v))*100)/100;
+ return {x:clamp(player.x-Math.sin(player.yaw)*dist),y:0,z:clamp(player.z-Math.cos(player.yaw)*dist),rotation:0,extent,solid:false};
+}
+function readRoomModelPlacement(){
+ const fields=['x','y','z','extent','rotation'];
+ return {...Object.fromEntries(fields.map(key=>[key,$('room-model-'+key).valueAsNumber])),solid:$('room-model-solid').checked};
+}
+function writeRoomModelPlacement(p){
+ for(const key of ['x','y','z','extent','rotation'])$('room-model-'+key).value=String(p[key]);
+ $('room-model-solid').checked=!!p.solid;
+}
+function fillRoomModelForm(){
+ const row=selectedRoomModel();
+ if(row)writeRoomModelPlacement(row.placed?row:{...modelFrontPlacement(player,row.extent),rotation:row.rotation,solid:row.solid});
+ updateRoomModelUI();
+}
+function updateRoomModelUI(){
+ const row=selectedRoomModel(),allowed=roomModelAllowed(),ready=allowed&&!roomModelBusy;
+ $('room-model-usage').textContent=roomModelRows.length+' / '+roomModelLimits.max_models+' Modelle · '+(roomModelRows.reduce((n,r)=>n+r.bytes,0)/1048576).toFixed(1)+' / '+Math.round(roomModelLimits.max_owner/1048576)+' MiB';
+ $('room-model-login').hidden=allowed;
+ $('room-model-file').disabled=!ready;
+ $('room-model-upload').disabled=!ready||!$('room-model-file').files?.length;
+ $('room-model-select').disabled=!ready||!roomModelRows.length;
+ $('room-model-editor').hidden=!row;
+ for(const id of ['x','y','z','extent','rotation','solid','front','save','hide','delete','retry'])$('room-model-'+id).disabled=!ready||!row;
+ $('room-model-hide').disabled=!ready||!row?.placed;
+ const entry=row?renderer?.roomModels?.status(row.id):null;
+ $('room-model-retry').hidden=entry?.status!=='error';
+ $('room-model-render').textContent=!row?'':!row.placed?'Im Inventar · noch nicht platziert':entry?.status==='ready'?'Im Zimmer sichtbar':entry?.status==='error'?'Darstellung fehlgeschlagen: '+entry.error:'3D-Modell wird geladen …';
+}
+function applyRoomModelList(data,prefer=null,fill=false){
+ if(!Array.isArray(data.models))throw Error('Ungültige Modellliste');
+ const prior=modelSelection();
+ roomModelRows=data.models;
+ roomModelLimits={max_models:data.max_models||8,max_owner:data.max_owner||64*1024*1024};
+ renderer?.roomModels?.sync(roomModelRows,roomModelBytes);
+ const key=JSON.stringify(roomModelRows.map(r=>[r.id,r.name,r.placed]));
+ if(key!==roomModelListKey||prefer){
+  roomModelListKey=key;const select=$('room-model-select');select.replaceChildren();
+  if(!roomModelRows.length){const opt=document.createElement('option');opt.value='';opt.textContent='Noch keine Modelle';select.append(opt);}
+  for(const row of roomModelRows){const opt=document.createElement('option');opt.value=row.id;opt.textContent=row.name+(row.placed?' · im Zimmer':' · Inventar');select.append(opt);}
+  const wanted=prefer||prior;select.value=roomModelRows.some(r=>r.id===wanted)?wanted:(roomModelRows[0]?.id||'');
+ }
+ if(fill||prior!==modelSelection())fillRoomModelForm();else updateRoomModelUI();
+}
+async function refreshRoomModels(fill=false){
+ if(!roomModelAllowed()||roomModelBusy||roomModelRefreshing){updateRoomModelUI();return;}
+ const revision=roomModelRevision,profile=accountProfile;roomModelRefreshing=true;
+ try{const data=await api('/api/room-models');if(revision===roomModelRevision&&profile===accountProfile)applyRoomModelList(data,null,fill);}
+ finally{roomModelRefreshing=false;}
+}
+async function changeRoomModel(work){
+ if(!roomModelAllowed()||roomModelBusy)return;
+ roomModelBusy=true;roomModelRevision++;updateRoomModelUI();
+ try{await work();}catch(e){$('room-model-message').textContent=e.message;}
+ finally{roomModelBusy=false;updateRoomModelUI();}
+}
+function modelDoesNotTrapPlayer(p){
+ const margin=p.extent*Math.SQRT2/2+.30;
+ return !p.solid||p.y>player.y+1.7||p.y+p.extent<player.y+.1||Math.abs(p.x-player.x)>margin||Math.abs(p.z-player.z)>margin;
+}
+async function persistRoomModel(row,p){
+ if(!modelDoesNotTrapPlayer(p))throw Error('Zu nah an deinem Charakter – Modell weiter entfernt platzieren oder Kollision deaktivieren.');
+ const result=await api('/api/room-models',{action:'place',id:row.id,...p});
+ applyRoomModelList(result,row.id,true);
+}
+$('room-model-file').onchange=()=>updateRoomModelUI();
+$('room-model-select').onchange=()=>fillRoomModelForm();
+$('room-model-placement').onsubmit=e=>{e.preventDefault();$('room-model-save').click();};
+$('room-model-upload').onclick=()=>changeRoomModel(async()=>{
+ const file=$('room-model-file').files?.[0];
+ if(!file||!file.name.toLowerCase().endsWith('.glb'))throw Error('Bitte eine GLB-Datei auswählen.');
+ if(!file.size||file.size>ROOM_MODEL_MAX)throw Error('Die Datei darf maximal 16 MiB groß sein.');
+ $('room-model-message').textContent='Datei wird hochgeladen und geprüft …';
+ const response=await fetch('/api/room-models/upload?name='+encodeURIComponent(file.name),{method:'POST',headers:{...modelHeaders(),'Content-Type':'model/gltf-binary'},body:file});
+ const result=await response.json();
+ if(!response.ok)throw Error(result.error||'Upload fehlgeschlagen');
+ $('room-model-file').value='';applyRoomModelList(result,result.added,true);
+ const row=selectedRoomModel();
+ if(row){
+  try{await persistRoomModel(row,modelFrontPlacement(player,row.extent));$('room-model-message').textContent='Importiert und vor dir platziert. Du kannst Größe und Position anpassen.';}
+  catch(e){$('room-model-message').textContent='Importiert. Im Inventar gespeichert: '+e.message;}
+ }
+});
+$('room-model-front').onclick=()=>changeRoomModel(async()=>{
+ const row=selectedRoomModel();if(!row)return;
+ const current=readRoomModelPlacement(),extent=current.extent;
+ if(!Number.isFinite(extent)||extent<.1||extent>2.4)throw Error('Größe zwischen 0,1 und 2,4 m wählen.');
+ const p={...modelFrontPlacement(player,extent),rotation:current.rotation,solid:current.solid};
+ await persistRoomModel(row,p);$('room-model-message').textContent='Vor dir platziert.';
+});
+$('room-model-save').onclick=()=>changeRoomModel(async()=>{
+ const row=selectedRoomModel();if(!row)return;
+ if(!$('room-model-placement').reportValidity())return;
+ await persistRoomModel(row,readRoomModelPlacement());$('room-model-message').textContent='Position, Größe und Drehung gespeichert.';
+});
+$('room-model-hide').onclick=()=>changeRoomModel(async()=>{
+ const row=selectedRoomModel();if(!row)return;
+ applyRoomModelList(await api('/api/room-models',{action:'hide',id:row.id}),row.id,true);
+ $('room-model-message').textContent='Modell zurück ins Inventar gelegt.';
+});
+$('room-model-delete').onclick=()=>changeRoomModel(async()=>{
+ const row=selectedRoomModel();if(!row||!confirm(row.name+' dauerhaft löschen?'))return;
+ applyRoomModelList(await api('/api/room-models',{action:'delete',id:row.id}),null,true);
+ $('room-model-message').textContent='Modell gelöscht.';
+});
+$('room-model-retry').onclick=()=>{const row=selectedRoomModel();if(row&&roomModelAllowed()){renderer.roomModels.retry(row.id);updateRoomModelUI();}};
+setInterval(()=>{if(roomModelAllowed())refreshRoomModels().catch(()=>{});},6000);
+setInterval(()=>{if(!$('phone').hidden&&!$('phone-page-models').hidden)updateRoomModelUI();},500);
+
 $('phone-sound').onchange=()=>{audio.configure($('phone-sound').checked,Number($('phone-volume').value)/100);updatePhone();};$('phone-volume').oninput=()=>{audio.configure($('phone-sound').checked,Number($('phone-volume').value)/100);$('phone-volume-label').textContent=$('phone-volume').value+' %';};$('phone-audio-test').onclick=async()=>{await audio.unlock();audio.play('phone');};
 setInterval(()=>{if(!$('phone').hidden)updatePhone();},15000);
 window.addEventListener('keydown',e=>{if(e.code==='Escape'&&!$('phone').hidden&&$('updater').hidden){$('closephone').onclick();}});
@@ -636,6 +763,7 @@ function frame(now,xrFrame){
   if(started&&!lobbyState){
     let holdPoint=[0,0,0];if(held){const s=spec[held].s,[x,z]=horizontalHold(held),floor=groundAt(x,z),d=dir(),dist=1.0+Math.hypot(s[0],s[2])*.52;
       const y=movableDecor(held)?floor+s[1]/2:Math.min(2.85-s[1]/2,Math.max(floor+s[1]/2,player.y+1.2+d[1]*dist));holdPoint=[x,y,z];}
+    physicsWorld.syncImported(renderer.roomModels?.colliders()||[]);
     physicsWorld.step(dt,bodies,lobbyEnabled?{...state,unlocked:false}:state,held,holdPoint,debris,yawQuat(heldAngle));
   }
   if(posture){
@@ -667,7 +795,7 @@ function frame(now,xrFrame){
   }
   for(let b of debris)draw(b);
   const third=!first&&!vr&&!posture&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5;
-  renderer.showCharacter(player,third&&started,dt,keys.has('KeyW')||keys.has('KeyA')||keys.has('KeyS')||keys.has('KeyD')||Math.hypot(...touchMove)>.05);
+  renderer.showCharacter(player,third&&started,dt,keys.has('KeyW')||keys.has('KeyA')||keys.has('KeyS')||keys.has('KeyD')||Math.hypot(...touchMove)>.05,started&&!vr);
   renderer.syncMarks(state.marks||[]);
   if(started&&active)audio.listener(eye,d);renderer.equip(equipped,first&&started&&!scopeZoom);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom);
   if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}

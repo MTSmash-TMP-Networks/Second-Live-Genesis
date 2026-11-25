@@ -12,7 +12,8 @@ CAPACITY=LAYOUT['roomsPerSide']*2
 LEASE=LAYOUT['leaseSeconds']
 STANCES=('walk','sprint','crouch')
 SPRINT_SPEED=5.8
-NPC_SPEED=1.65
+NPC_SPEED=LAYOUT['npcSpeed']
+NPC_TURN=LAYOUT['npcTurnSeconds']
 
 def door(slot):
     side=-1 if slot<LAYOUT['roomsPerSide'] else 1
@@ -35,14 +36,23 @@ def pose(data):
     return [round(v,3) for v in p],round(math.remainder(yaw,2*math.pi),4)
 
 def npc_patrol(elapsed):
-    """One server-clock-driven hotel attendant, independent of visiting clients."""
+    """Shared clock-driven route: steady walk, brief stationary turn, then return."""
+    elapsed=max(0,elapsed)
     edge=LAYOUT['halfLength']-2.0
-    span=2*edge
-    travel=(max(0,elapsed)*NPC_SPEED+4.0)%(2*span)
-    forward=travel<span
-    z=-edge+travel if forward else edge-(travel-span)
-    # Move on a dedicated side of the corridor rather than occupying its centre.
-    return {'position':[.62,0,round(z,3)],'yaw':round(math.pi if forward else 0.0,4),'walking':True}
+    leg=2*edge/NPC_SPEED
+    half=leg+NPC_TURN
+    t=(elapsed+4.0/NPC_SPEED)%(2*half)
+    reverse=t>=half
+    if reverse:t-=half
+    walking=t<leg
+    d=min(t,leg)*NPC_SPEED
+    z=edge-d if reverse else -edge+d
+    yaw=0.0 if reverse else math.pi
+    if not walking:
+        u=min(1.0,max(0.0,(t-leg)/NPC_TURN))
+        yaw+=math.pi*u*u*(3-2*u)
+    return {'position':[.62,0,round(z,3)],'yaw':round(yaw%(2*math.pi),4),'walking':walking,'phase':round(elapsed,3)}
+
 
 ENTRANCE_WALLS=('surface_8','surface_9','surface_10')
 

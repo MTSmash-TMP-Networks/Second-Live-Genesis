@@ -11,5 +11,7 @@
   "playerMargin": 0.28,
   "leaseSeconds": 15,
   "pollMilliseconds": 250,
-  "pairGap": 2
+  "pairGap": 2,
+  "npcSpeed": 1.35,
+  "npcTurnSeconds": 0.9
 }

@@ -38,3 +38,21 @@ export function hallToRoom(slot,p){
  const c=Math.cos(t.rotation),s=Math.sin(t.rotation),z=p[2]*t.mirror;
  return [t.p[0]+c*p[0]+s*z,p[1],t.p[2]-s*p[0]+c*z];
 }
+
+export function patrolPose(phase,L=layout){
+ const edge=L.halfLength-2,leg=2*edge/L.npcSpeed,half=leg+L.npcTurnSeconds;
+ let t=(Math.max(0,phase)+4/L.npcSpeed)%(2*half);
+ const reverse=t>=half;if(reverse)t-=half;
+ const walking=t<leg,d=Math.min(t,leg)*L.npcSpeed;
+ let yaw=reverse?0:Math.PI;
+ if(!walking){const u=Math.max(0,Math.min(1,(t-leg)/L.npcTurnSeconds));yaw+=Math.PI*u*u*(3-2*u);}
+ return {position:[.62,0,reverse?edge-d:-edge+d],yaw:yaw%(2*Math.PI),walking};
+}
+export function advancePatrolClock(clock,phase,age,dt){
+ const target=phase+Math.max(0,Math.min(1,age)),error=target-clock;
+ // Recover only from a substantial connection gap. Regular updates can
+ // gently alter playback rate but must never move the route clock backwards.
+ if(error>3)return target;
+ const rate=Math.max(.85,Math.min(1.15,1+error*2));
+ return clock+Math.min(Math.max(0,dt)*rate,Math.max(0,phase+1-clock));
+}
