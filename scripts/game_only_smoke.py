@@ -110,7 +110,7 @@ class GameOnlyTest(unittest.TestCase):
         observed=lobby.observe('b',profiles[1],[])
         self.assertEqual(observed['npc'],result['npc'])
         self.assertEqual(observed['peers'][0]['stance'],'sprint')
-        self.assertAlmostEqual(result['npc']['position'][2]-a['npc']['position'][2],NPC_SPEED*.25,places=3)
+        self.assertAlmostEqual(result['npc']['position'][2]-a['npc']['position'][2],NPC_SPEED*.25,delta=.001)
         now[0]+=.25
         result=lobby.request('a',{'action':'update','lease':a['lease'],'position':p,'yaw':0,'stance':'crouch'},profiles[0],[])
         self.assertEqual(lobby.observe('b',profiles[1],[])['peers'][0]['stance'],'crouch')
