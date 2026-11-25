@@ -154,6 +154,58 @@ for(const id of [...weaponIds,'none'])$('equip-'+id).onclick=()=>{chooseWeapon(i
 chooseWeapon('none');
 function phone(){if(renderer?.xrMode?.active){renderer.xrMode.end().then(()=>phone()).catch(e=>$('notice').textContent=e.message);return;}document.exitPointerLock?.();clearControls();$('phone').hidden=false;active=false;audio.stopAll();audio.play('phone');showPhonePage('home');updatePhone();}
 const movable=id=>id&&id!=='window'&&Object.hasOwn(spec,id)&&state.objects[id]>0;
+function updateWorldStatus(){
+ const message=lobbyState?'Hotelflur · '+lobbyState.online+' / '+lobbyState.capacity+' Gäste · Zimmer '+lobbyDoor(lobbyState.slot).number:personalWorld?'Privater Startraum':state.unlocked?'Testbereich freigeschaltet':'Startraum';
+ $('worldstate').textContent=message;$('phone-worldstate').textContent=message;
+}
+async function lobbyRequest(data,keepalive=false){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),3500);
+ try{
+  const res=await fetch('/api/lobby',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...(protectedGame?{'X-SecondLive-Token':token}:{})},body:JSON.stringify(data),signal:controller.signal,keepalive});
+  const result=await res.json();if(!res.ok){const e=Error(result.error||'Hotelflur nicht erreichbar');e.status=res.status;throw e;}return result;
+ }finally{clearTimeout(timer);}
+}
+async function enterLobby(){
+ if(!lobbyEnabled||lobbyState||lobbyTransition||busy||held||posture)return;
+ lobbyTransition=true;chooseWeapon('none');clearControls();$('notice').textContent='Hotelflur wird verbunden …';
+ try{
+  const result=await lobbyRequest({action:'enter'});
+  if(!lobbyDoor(result.slot)||!Array.isArray(result.position)||!lobbyWalkable(result.position[0],result.position[2])||typeof result.lease!=='string')throw Error('Ungültige Flursitzung');
+  lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
+  renderer.lobby.setOwn(result.slot);renderer.lobby.sync(result.peers||[]);
+  Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0});
+  audio.play('door');updateWorldStatus();$('notice').textContent='Willkommen im Hotelflur. Dein Zimmer: '+lobbyDoor(result.slot).number;
+ }catch(e){$('notice').textContent=e.message||'Hotelflur nicht erreichbar';}
+ finally{lobbyTransition=false;clearControls();}
+}
+function returnToRoom(message='Du bist wieder in deinem Zimmer.',notify=true){
+ const old=lobbyState;if(!old)return;
+ lobbyState=null;lobbyTransition=false;renderer.lobby.clear();clearControls();player.y=0;player.vy=0;
+ const spawn=HOTEL_LAYOUT.spawn.p,candidates=[[0,-3.8],[-.8,-3.6],[.8,-3.6],[spawn[0],spawn[2]]];
+ for(let z=-3.8;z<=4;z+=.65)for(let x=-4;x<=4;x+=.65)candidates.push([x,z]);
+ const p=candidates.find(([x,z])=>groundAt(x,z)>=-.05&&!coll(x,z))||[spawn[0],spawn[2]];
+ Object.assign(player,{x:p[0],z:p[1],y:groundAt(...p),yaw:Math.PI,pitch:0,vy:0});
+ audio.play('door');updateWorldStatus();$('notice').textContent=message;
+ if(notify)lobbyRequest({action:'leave',lease:old.lease},true).catch(()=>{});
+}
+async function updateLobby(){
+ const visit=lobbyState;if(!visit||visit.sending||lobbyTransition)return;
+ visit.sending=true;
+ try{
+  const result=await lobbyRequest({action:'update',lease:visit.lease,position:[player.x,player.y,player.z],yaw:player.yaw});
+  if(lobbyState!==visit)return;
+  if(visit.offline)$('notice').textContent='Flurverbindung wiederhergestellt';visit.offline=false;visit.lastOK=performance.now();visit.online=result.online;visit.capacity=result.capacity;renderer.lobby.sync(result.peers||[]);updateWorldStatus();
+ }catch(e){
+  if(lobbyState!==visit)return;
+  if(e.status===409||performance.now()-visit.lastOK>LOBBY_LAYOUT.leaseSeconds*1000){returnToRoom('Flurverbindung beendet. Du bist wieder in deinem Zimmer.',false);}
+  else {visit.offline=true;$('notice').textContent='Flurverbindung unterbrochen – erneuter Verbindungsversuch';}
+ }finally{visit.sending=false;}
+}
+setInterval(updateLobby,LOBBY_LAYOUT.pollMilliseconds);
+window.addEventListener('pagehide',()=>{if(lobbyState)lobbyRequest({action:'leave',lease:lobbyState.lease},true).catch(()=>{});});
+function lobbyInteraction(ray=null){
+ if(!lobbyState)return null;const {origin,direction}=interactionRay(ray);return lobbyDoorAt(origin,direction);
+}
 const CURTAIN_TARGETS=new Set(['surface_curtain_l','surface_curtain_r','surface_curtainrod','surface_windowframe','window']);
 const OBJECT_NAMES={surface_bed:'Bett',surface_wardrobe:'Garderobe',surface_nightstand:'Nachttisch',surface_lamp:'Nachttischleuchte',surface_rug:'Teppich',surface_picture:'Kopfteil und Wandregal',surface_ceilinglamp:'Deckenbeleuchtung',surface_switch:'Lichtschalter',surface_outlet:'Steckdose',surface_doortrim:'Türzarge',surface_windowframe:'Fensterrahmen',surface_curtain_l:'Vorhänge',surface_curtain_r:'Vorhänge',surface_curtainrod:'Vorhangstange',surface_radiator:'Heizkörper',crate:'Koffer',table:'Schreibtisch',chair:'Stuhl',sofa:'Sofa',coffee_table:'Couchtisch',window:'Fenster'};
 function objectName(id){
@@ -240,58 +292,6 @@ function pickUp(id){
  chooseWeapon('none');held=id;heldAngle=yawAngle(bodies[held].q);
  $('notice').textContent='Gegenstand aufgenommen · Q/F: drehen · E: abstellen';
 }
-function updateWorldStatus(){
- const message=lobbyState?'Hotelflur · '+lobbyState.online+' / '+lobbyState.capacity+' Gäste · Zimmer '+lobbyDoor(lobbyState.slot).number:personalWorld?'Privater Startraum':state.unlocked?'Testbereich freigeschaltet':'Startraum';
- $('worldstate').textContent=message;$('phone-worldstate').textContent=message;
-}
-async function lobbyRequest(data,keepalive=false){
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),3500);
- try{
-  const res=await fetch('/api/lobby',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...(protectedGame?{'X-SecondLive-Token':token}:{})},body:JSON.stringify(data),signal:controller.signal,keepalive});
-  const result=await res.json();if(!res.ok){const e=Error(result.error||'Hotelflur nicht erreichbar');e.status=res.status;throw e;}return result;
- }finally{clearTimeout(timer);}
-}
-async function enterLobby(){
- if(!lobbyEnabled||lobbyState||lobbyTransition||busy||held||posture)return;
- lobbyTransition=true;chooseWeapon('none');clearControls();$('notice').textContent='Hotelflur wird verbunden …';
- try{
-  const result=await lobbyRequest({action:'enter'});
-  if(!lobbyDoor(result.slot)||!Array.isArray(result.position)||!lobbyWalkable(result.position[0],result.position[2])||typeof result.lease!=='string')throw Error('Ungültige Flursitzung');
-  lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
-  renderer.lobby.setOwn(result.slot);renderer.lobby.sync(result.peers||[]);
-  Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0});
-  audio.play('door');updateWorldStatus();$('notice').textContent='Willkommen im Hotelflur. Dein Zimmer: '+lobbyDoor(result.slot).number;
- }catch(e){$('notice').textContent=e.message||'Hotelflur nicht erreichbar';}
- finally{lobbyTransition=false;clearControls();}
-}
-function returnToRoom(message='Du bist wieder in deinem Zimmer.',notify=true){
- const old=lobbyState;if(!old)return;
- lobbyState=null;lobbyTransition=false;renderer.lobby.clear();clearControls();player.y=0;player.vy=0;
- const spawn=HOTEL_LAYOUT.spawn.p,candidates=[[0,-3.8],[-.8,-3.6],[.8,-3.6],[spawn[0],spawn[2]]];
- for(let z=-3.8;z<=4;z+=.65)for(let x=-4;x<=4;x+=.65)candidates.push([x,z]);
- const p=candidates.find(([x,z])=>groundAt(x,z)>=-.05&&!coll(x,z))||[spawn[0],spawn[2]];
- Object.assign(player,{x:p[0],z:p[1],y:groundAt(...p),yaw:Math.PI,pitch:0,vy:0});
- audio.play('door');updateWorldStatus();$('notice').textContent=message;
- if(notify)lobbyRequest({action:'leave',lease:old.lease},true).catch(()=>{});
-}
-async function updateLobby(){
- const visit=lobbyState;if(!visit||visit.sending||lobbyTransition)return;
- visit.sending=true;
- try{
-  const result=await lobbyRequest({action:'update',lease:visit.lease,position:[player.x,player.y,player.z],yaw:player.yaw});
-  if(lobbyState!==visit)return;
-  visit.lastOK=performance.now();visit.online=result.online;visit.capacity=result.capacity;renderer.lobby.sync(result.peers||[]);updateWorldStatus();
- }catch(e){
-  if(lobbyState!==visit)return;
-  if(e.status===409||performance.now()-visit.lastOK>LOBBY_LAYOUT.leaseSeconds*1000){returnToRoom('Flurverbindung beendet. Du bist wieder in deinem Zimmer.',false);}
-  else $('notice').textContent='Flurverbindung unterbrochen – erneuter Verbindungsversuch';
- }finally{visit.sending=false;}
-}
-setInterval(updateLobby,LOBBY_LAYOUT.pollMilliseconds);
-window.addEventListener('pagehide',()=>{if(lobbyState)lobbyRequest({action:'leave',lease:lobbyState.lease},true).catch(()=>{});});
-function lobbyInteraction(ray=null){
- if(!lobbyState)return null;const {origin,direction}=interactionRay(ray);return lobbyDoorAt(origin,direction);
-}
 function updateInteractionHint(vr=false){
   const playing=canPlay()&&!vr,panel=$('interaction-prompt'),actionButton=$('touchInteract'),repairButton=$('touchRepair');
   $('touchRotateLeft').hidden=$('touchRotateRight').hidden=!held;
@@ -327,6 +327,7 @@ function updateInteractionHint(vr=false){
   actionButton.disabled=!canAct||busy||lobbyTransition;repairButton.disabled=!canRepair||busy;
   const extra=$('touchSecondary');extra.hidden=!secondary;extra.disabled=busy;extra.textContent=secondary||'Weitere Aktion';
   $('touchZoom').hidden=equipped!=='rifle'||!!posture||!!held;$('touchZoom').disabled=!!reloadId;
+  $('touchArsenal').disabled=!!lobbyState||lobbyTransition;
   $('touchFire').disabled=!!posture||!!lobbyState||lobbyTransition;$('touchJump').disabled=!!posture;
   $('touchReload').disabled=!!posture||!!lobbyState||!equipped;
   $('hint').textContent=started?(lobbyState?'Gemeinsamer Hotelflur · E: eigenes Zimmer':mobile?'Handy · Inventar':'P: Smartphone · I: Inventar · Mausrad: Waffenwechsel'):'Spiel starten';
