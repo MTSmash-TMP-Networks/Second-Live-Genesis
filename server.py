@@ -33,7 +33,7 @@ HOTEL_LAYOUT = json.loads((WEB / 'engine' / 'hotel_layout.json').read_text('utf-
 MAX_BODY = 9 * 1024 * 1024
 MAX_IMAGE = 6 * 1024 * 1024
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
-SAFE_FILES = {"/device-access.js":"device-access.js","/audio.js":"audio.js","/capture.js":"capture.js", "/capture-quality.js":"capture-quality.js", "/capture-flow.js":"capture-flow.js", "/capture.css":"capture.css", "/engine/capture-view.bundle.js":"engine/capture-view.bundle.js", "/updater.js": "updater.js", **{f"/assets/{n}.jpg": f"assets/{n}.jpg" for n in ("wood", "wall", "fabric")},"/scanner.html": "scanner.html", "/panorama.html":"panorama.html", "/panorama.js":"panorama.js", "/panorama-flow.js":"panorama-flow.js", "/panorama.css":"panorama.css", "/game.js": "game.js", "/bootstrap.js": "bootstrap.js", "/engine/renderer.bundle.js": "engine/renderer.bundle.js", "/engine/THREE-LICENSE.txt": "engine/THREE-LICENSE.txt", "/engine/RAPIER-LICENSE.txt": "engine/RAPIER-LICENSE.txt", "/game.css": "game.css", "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css", "/manifest.webmanifest": "manifest.webmanifest", "/icon.svg": "icon.svg"}
+SAFE_FILES = {"/device-access.js":"device-access.js","/audio.js":"audio.js","/capture.js":"capture.js", "/capture-quality.js":"capture-quality.js", "/capture-flow.js":"capture-flow.js", "/capture.css":"capture.css", "/engine/capture-view.bundle.js":"engine/capture-view.bundle.js", "/updater.js": "updater.js", **{f"/assets/{n}.jpg": f"assets/{n}.jpg" for n in ("wood", "wall", "fabric")},"/scanner.html": "scanner.html", "/panorama.html":"panorama.html", "/panorama.js":"panorama.js", "/panorama-flow.js":"panorama-flow.js", "/panorama.css":"panorama.css", "/game.js": "game.js", "/bootstrap.js": "bootstrap.js", "/engine/renderer.bundle.js": "engine/renderer.bundle.js", "/engine/realistic-avatar.bundle.js": "engine/realistic-avatar.bundle.js", "/assets/avatars/LICENSE.txt": "assets/avatars/LICENSE.txt", "/engine/THREE-LICENSE.txt": "engine/THREE-LICENSE.txt", "/engine/RAPIER-LICENSE.txt": "engine/RAPIER-LICENSE.txt", "/game.css": "game.css", "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css", "/manifest.webmanifest": "manifest.webmanifest", "/icon.svg": "icon.svg"}
 
 # Archive-only routes: never serve scanner assets in the normal game.
 LEGACY_SCAN_FILES = frozenset((
@@ -372,7 +372,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.11.5"
+        server_version = "SecondLive/0.11.6"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -549,6 +549,21 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                 typ, _ = mimetypes.guess_type(filepath.name)
                 if filepath.suffix == ".wasm": typ = "application/wasm"
                 self.send_data(200, filepath.read_bytes(), (typ or "application/octet-stream") + ("; charset=utf-8" if typ and (typ.startswith("text/") or typ.endswith("javascript")) else ""))
+            elif path.startswith("/assets/avatars/data/"):
+                from urllib.parse import unquote
+                root = (WEB / "assets" / "avatars" / "data").resolve()
+                rel = unquote(path.removeprefix("/assets/avatars/data/"))
+                if "\x00" in rel or "\\" in rel or any(not x or x.startswith(".") for x in rel.split("/")):
+                    self.send_json(404, {"error": "Nicht gefunden"})
+                    return
+                filepath = (root / rel).resolve()
+                if not filepath.is_relative_to(root) or not filepath.is_file():
+                    self.send_json(404, {"error": "Avatar-Asset nicht gefunden"})
+                    return
+                # Only inert data or images, never executable or HTML content.
+                types = {".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".glb": "model/gltf-binary", ".gltf": "model/gltf+json", ".txt": "text/plain; charset=utf-8"}
+                typ = types.get(filepath.suffix.lower(), "application/octet-stream")
+                self.send_data(200, filepath.read_bytes(), typ, "public, max-age=3600")
             elif path.startswith("/assets/polyhaven/"):
                 root = (WEB / "assets" / "polyhaven").resolve()
                 rel = path.removeprefix("/assets/polyhaven/")
@@ -564,7 +579,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.11.5", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.11.6", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":

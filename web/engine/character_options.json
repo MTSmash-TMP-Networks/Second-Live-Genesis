@@ -25,7 +25,7 @@
       "Markant",
       "Rund"
     ],
-    "default": 0
+    "default": 1
   },
   "skin": {
     "label": "Hautton",
@@ -57,7 +57,7 @@
       "Pferdeschwanz",
       "Glatze"
     ],
-    "default": 1
+    "default": 0
   },
   "hairColor": {
     "label": "Haarfarbe",
@@ -105,7 +105,7 @@
       "Hemd",
       "Jacke"
     ],
-    "default": 0
+    "default": 3
   },
   "topColor": {
     "label": "Oberteilfarbe",
@@ -129,7 +129,7 @@
       "c48b90",
       "85878d"
     ],
-    "default": 2
+    "default": 1
   },
   "trousers": {
     "label": "Hose",
@@ -156,7 +156,7 @@
       "24262a",
       "7798b5"
     ],
-    "default": 0
+    "default": 3
   },
   "shoes": {
     "label": "Schuhe",
@@ -174,7 +174,7 @@
       "Stoppeln",
       "Kurzer Bart"
     ],
-    "default": 0
+    "default": 1
   },
   "glasses": {
     "label": "Brille",

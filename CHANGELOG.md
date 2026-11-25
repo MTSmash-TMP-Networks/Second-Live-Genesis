@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.6 – Realistic Player Avatars
+- Realistische, texturierte MakeHuman-basierte Spielerfiguren mit Skelett und Animationen für Stehen, Gehen, Laufen und Ducken; lokale Erzeugung über Ara 3D Gen.
+- Neuer Standardlook: dunkle Jacke, graues Shirt, dunkle Jeans, helle Sneaker, kurze Haare und Bartstoppeln. Bestehende Charakterprofile bleiben erhalten.
+- Lokale Modelldaten, asynchroner Loader, begrenzter Cache und sichere Ersatzdarstellung bei Ladefehlern; unveränderte CSP und Datenbank.
+- Charakterstudio zeigt Modellstatus. Neue Prüfungen der Profilzuordnung und der Animationsbibliothek; separater Browser-Smoke-Test. Der Hotelmitarbeiter behält vorerst sein bisheriges Modell.
+
 ## 0.11.5 – Hotel Service Build Fix
 - Korrigiert Docker-Build-Abbruch durch Sprite.raycast ohne Kamera: Namensschilder von NPC und Gästen sind rein visuell und nicht raycastbar.
 - Regressionstest für sichtbare und unsichtbare Sprites bei kamerafreien rekursiven Strahltests; alle bisherigen Flur-, Wand- und Physiktests bleiben aktiv.

@@ -2,9 +2,9 @@
 FROM node:22-bookworm-slim AS renderer
 WORKDIR /build
 RUN npm install --no-audit --no-fund --save-exact three@0.170.0 esbuild@0.25.10 @dimforge/rapier3d-compat@0.17.3
-COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/hotel_room.js web/engine/hotel_layout.json web/engine/hotel_reference.json web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js web/engine/portal_door.js web/engine/optional_asset.js web/engine/hotel_lobby.js web/engine/lobby_layout.js web/engine/lobby_layout.json web/engine/hotel_connections.js web/engine/character.js web/engine/character_options.json ./
+COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/hotel_room.js web/engine/hotel_layout.json web/engine/hotel_reference.json web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js web/engine/portal_door.js web/engine/optional_asset.js web/engine/hotel_lobby.js web/engine/lobby_layout.js web/engine/lobby_layout.json web/engine/hotel_connections.js web/engine/character.js web/engine/character_options.json web/engine/realistic_character.js web/engine/avatar_recipe.js ./
 COPY web/engine/wall_layout.json /build/wall_layout.json
-COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs ./
+COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs scripts/realistic_avatar_smoke.mjs ./
 COPY web/game.js web/index.html web/updater.js scripts/game_only_smoke.mjs ./
 RUN node --check game.js && node --check updater.js && node game_only_smoke.mjs
 # Rapier 0.17.3 advertises a CJS entry that esbuild may interpret as ESM.
@@ -12,7 +12,16 @@ RUN node --check game.js && node --check updater.js && node game_only_smoke.mjs
 RUN test -s node_modules/@dimforge/rapier3d-compat/rapier.es.js
 RUN ./node_modules/.bin/esbuild physics_smoke.mjs --bundle --platform=node --format=esm --alias:@dimforge/rapier3d-compat=./node_modules/@dimforge/rapier3d-compat/rapier.es.js --outfile=/build/physics_smoke.bundle.mjs && node /build/physics_smoke.bundle.mjs
 RUN ./node_modules/.bin/esbuild visual_smoke.mjs --bundle --platform=node --format=esm --outfile=/build/visual_smoke.bundle.mjs && node /build/visual_smoke.bundle.mjs
+RUN ./node_modules/.bin/esbuild realistic_avatar_smoke.mjs --bundle --platform=node --format=esm --outfile=/build/realistic_avatar_smoke.bundle.mjs && node /build/realistic_avatar_smoke.bundle.mjs
 RUN ./node_modules/.bin/esbuild renderer.js --bundle --platform=browser --format=esm --alias:@dimforge/rapier3d-compat=./node_modules/@dimforge/rapier3d-compat/rapier.es.js --target=es2020 --minify --outfile=/build/renderer.bundle.js && cp node_modules/three/LICENSE /build/THREE-LICENSE.txt
+
+# The avatar generator and its pinned data never invalidate cached room downloads.
+FROM renderer AS realistic-avatar
+RUN npm install --no-audit --no-fund --save-exact ara3d@0.16.0
+COPY scripts/install_avatar_data.mjs ./
+RUN node install_avatar_data.mjs
+COPY web/engine/realistic_avatar_provider.js ./
+RUN ./node_modules/.bin/esbuild realistic_avatar_provider.js --bundle --platform=browser --format=esm --target=es2020 --minify --outfile=/build/realistic-avatar.bundle.js
 
 FROM python:3.13-slim AS assets
 WORKDIR /build
@@ -71,6 +80,9 @@ COPY web/ /app/web/
 RUN rm -f /app/web/scanner.html /app/web/panorama.html /app/web/capture.js /app/web/capture-flow.js /app/web/capture-quality.js /app/web/capture.css /app/web/panorama.js /app/web/panorama-flow.js /app/web/panorama.css /app/web/device-access.js /app/web/app.js /app/web/style.css /app/web/engine/capture-view.js
 COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bundle.js
 COPY --from=renderer /build/THREE-LICENSE.txt /app/web/engine/THREE-LICENSE.txt
+COPY --from=realistic-avatar /build/realistic-avatar.bundle.js /app/web/engine/realistic-avatar.bundle.js
+COPY --from=realistic-avatar /build/node_modules/ara3d-data/assets/ /app/web/assets/avatars/data/
+COPY docs/AVATAR-LICENSE.txt /app/web/assets/avatars/LICENSE.txt
 COPY --from=door-converted /build/polyhaven /app/web/assets/polyhaven/
 ARG SECOND_LIVE_REVISION=local
 LABEL org.opencontainers.image.revision=${SECOND_LIVE_REVISION}

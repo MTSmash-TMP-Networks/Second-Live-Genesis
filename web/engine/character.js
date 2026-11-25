@@ -2,6 +2,7 @@
 // facial features and clothing. Same model factory for editor and multiplayer.
 import * as THREE from 'three';
 import options from './character_options.json';
+import {prepareRealistic,animateRealistic,disposeRealistic} from './realistic_character.js';
 export const CHARACTER_OPTIONS=options;
 export const DEFAULT_CHARACTER=Object.freeze(Object.fromEntries(Object.entries(options).map(([k,v])=>[k,v.default])));
 export function normalizeCharacter(value){
@@ -94,7 +95,7 @@ function faceModel(parent,a,skin,hair){
  }
  hairModel(h,a,hair);return h;
 }
-export function createCharacter(value){
+export function createCharacter(value,{legacyOnly=false}={}){
  const a=normalizeCharacter(value),root=new THREE.Group(),body=new THREE.Group();root.add(body);
  const bw=[.88,1,1.16,.99][a.body],hip=[.88,1,1.14,1.12][a.body],height=[.925,1,1.075][a.height];
  const skin=material(color(a,'skin'),.84),hair=material(color(a,'hairColor'),.89);hair.side=THREE.DoubleSide;
@@ -135,11 +136,12 @@ export function createCharacter(value){
   for(let j=0;j<3;j++)line(shoeRoot,[[-.031,.047,-.033-j*.019],[.031,.047,-.033-j*.019]],.003,sole);
  }
  body.scale.set(1,height,1);root.userData={character:a,body,head,arms,elbows,legs,knees,phase:0,height};
+ if(!legacyOnly)prepareRealistic(root,a,options);
  return root;
 }
 // Original concierge character inspired by classic red hotel uniforms.
 export function createHotelNpc(){
- const g=createCharacter({...DEFAULT_CHARACTER,body:1,height:1,face:1,skin:1,hair:1,hairColor:2,eyes:0,top:3,topColor:4,trousers:1,trousersColor:3,shoes:2,beard:0,glasses:0});
+ const g=createCharacter({...DEFAULT_CHARACTER,body:1,height:1,face:1,skin:1,hair:1,hairColor:2,eyes:0,top:3,topColor:4,trousers:1,trousersColor:3,shoes:2,beard:0,glasses:0},{legacyOnly:true});
  const {head,body,arms}=g.userData,red=material(0x9d2636,.8),gold=material(0xbda56d,.36),black=material(0x26272c,.68);
  // Pillbox concierge hat: shaped crown, dark band, gold piping and insignia.
  loft(head,[[.136,.142,.135,.012],[.158,.148,.14,.012],[.223,.141,.137,.012],[.244,.124,.124,.012],[.249,.003,.003,.012]],red,48);
@@ -159,6 +161,7 @@ export function createHotelNpc(){
  return g;
 }
 export function animateCharacter(root,dt,moving=false,stance='walk'){
+ if(animateRealistic(root,dt,moving,stance))return;
  const u=root.userData,crouch=stance==='crouch',sprint=stance==='sprint'&&moving;
  u.phase+=dt*(moving?(sprint?15:crouch?6.2:9.5):2.0);
  const a=moving?Math.sin(u.phase)*(sprint?.82:crouch?.21:.48):Math.sin(u.phase)*.018,t=Math.min(1,dt*12);
@@ -176,6 +179,7 @@ export function animateCharacter(root,dt,moving=false,stance='walk'){
  if(u.nameTag)u.nameTag.position.y=(2.03-.35*c)*u.height;
 }
 export function disposeCharacter(root){
+ disposeRealistic(root);
  root.removeFromParent();const materials=new Set(),geometry=new Set(),textures=new Set();
  root.traverse(o=>{if(o.userData.ownedGeometry&&o.geometry)geometry.add(o.geometry);if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);if(m.map)textures.add(m.map);}}});
  for(const t of textures)t.dispose();for(const g of geometry)g.dispose();for(const m of materials)m.dispose();

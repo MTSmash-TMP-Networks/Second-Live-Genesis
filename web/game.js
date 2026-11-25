@@ -443,6 +443,11 @@ function openStudio(fromGame=false){
  $('character-save').textContent=fromGame?'Charakter speichern':'Speichern und spielen';$('character-error').textContent='';
  renderCharacterFields();renderer.studio.set(characterDraft);
 }
+function updateAvatarModelStatus(){
+ const node=$('character-model-status'),status=renderer?.studio?.root?.userData.realisticStatus;
+ const message=status==='ready'?'Realistisches 3D-Modell bereit':status==='loading'?'Realistisches 3D-Modell wird lokal erstellt …':status==='fallback'?'Realistisches Modell nicht verfügbar – Ersatzmodell aktiv':'';
+ if(node&&node.textContent!==message)node.textContent=message;
+}
 function renderCharacterFields(){
  const area=$('character-fields');area.replaceChildren();
  for(const [key,entry] of Object.entries(CHARACTER_OPTIONS)){
@@ -563,7 +568,7 @@ window.addEventListener('blur',()=>{clearControls();audio.stopAll();});document.
 let prev=performance.now();
 function frame(now,xrFrame){
   let dt=Math.max(0,Math.min(.035,(now-prev)/1000));prev=now;
-  if(studioOpen){renderer.renderStudio(canvas,dt);return;}
+  if(studioOpen){updateAvatarModelStatus();renderer.renderStudio(canvas,dt);return;}
   const vr=!!renderer.xrMode?.active;const xrInput=vr?renderer.xrMode.inputs(xrFrame):null;
   if(canPlay()&&!posture&&!lobbyTransition){
     stepReload(dt);stepTrigger(dt);
