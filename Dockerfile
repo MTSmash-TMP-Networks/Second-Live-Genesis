@@ -6,8 +6,8 @@ COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web
 COPY web/engine/wall_layout.json /build/wall_layout.json
 COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs ./
 COPY web/engine/capture-view.js ./capture-view.js
-COPY web/capture.js web/capture-flow.js web/scanner.html scripts/capture_ui_smoke.mjs ./
-RUN node --check capture.js && node capture_ui_smoke.mjs
+COPY web/capture.js web/capture-flow.js web/scanner.html scripts/capture_ui_smoke.mjs web/panorama.js web/panorama-flow.js web/panorama.html scripts/panorama_ui_smoke.mjs ./
+RUN node --check capture.js && node capture_ui_smoke.mjs && node --check panorama.js && node panorama_ui_smoke.mjs
 RUN ./node_modules/.bin/esbuild capture-view.js --bundle --platform=browser --format=esm --target=es2020 --minify --outfile=/build/capture-view.bundle.js
 # Rapier 0.17.3 advertises a CJS entry that esbuild may interpret as ESM.
 # Bypass package entry resolution for both builds; use the same embedded-WASM ESM file.
@@ -68,7 +68,8 @@ ENV QT_QPA_PLATFORM=offscreen
 ARG SECOND_LIVE_ONNX_PACKAGE=onnxruntime==1.22.0
 RUN pip install --no-cache-dir numpy==2.2.6 Pillow==11.3.0 qrcode==8.2 opencv-python-headless==4.12.0.88 "${SECOND_LIVE_ONNX_PACKAGE}" && python -c "import cv2,numpy,PIL,onnxruntime; assert 'CPUExecutionProvider' in onnxruntime.get_available_providers()" && colmap -h >/dev/null
 ENV SECOND_LIVE_COMPUTE=cpu SECOND_LIVE_COMPUTE_THREADS=4
-COPY server.py updater_api.py wall_damage.py world_capture.py capture_compute.py da3_client.py /app/
+COPY server.py updater_api.py wall_damage.py world_capture.py capture_compute.py da3_client.py panorama_capture.py /app/
+COPY --chmod=0644 scripts/panorama_smoke.py /app/panorama_smoke.py
 COPY --chmod=0644 tests/test_live_capture.py /app/test_live_capture.py
 COPY web/ /app/web/
 COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bundle.js
@@ -86,7 +87,7 @@ RUN useradd -m appuser && mkdir -p /app/data && chown -R appuser:appuser /app/da
     && python /app/runtime_permissions.py --normalize /app
 USER appuser
 # Fail the image build if the actual runtime UID cannot read code and assets.
-RUN python /app/runtime_permissions.py --check /app && python -c "import server, capture_compute" && python -B /app/test_live_capture.py
+RUN python /app/runtime_permissions.py --check /app && python -c "import server, capture_compute" && python -B /app/test_live_capture.py && python -B /app/panorama_smoke.py
 VOLUME ["/app/data"]
 EXPOSE 8765
 CMD ["python", "server.py"]
