@@ -22,6 +22,8 @@ import { HOTEL_LAYOUT, hotelMaterials, applyPhotoMaterials, createHotelModel } f
 export { HOTEL_LAYOUT };
 import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
 import { HotelLobbyView } from './hotel_lobby.js';
+import { NeighborRoomView, hotelOpenings } from './hotel_connections.js';
+export { hotelOpenings } from './hotel_connections.js';
 import { CharacterStudio, createCharacter, animateCharacter, disposeCharacter } from './character.js';
 export { CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter } from './character.js';
 export { LOBBY_LAYOUT, LOBBY_CAPACITY, lobbyDoor, lobbyWalkable, lobbyDoorAt } from './lobby_layout.js';
@@ -410,6 +412,9 @@ export class RoomRenderer {
     }
     this.status('Gemeinsamer Hotelflur wird vorbereitet');
     this.lobby=new HotelLobbyView(this);this.studio=new CharacterStudio();
+    this.hotelViewRoot=new THREE.Group();this.scene.add(this.hotelViewRoot);
+    this.neighborView=new NeighborRoomView(this,spec);
+    this.hotelSlot=null;this.hotelHallOpen=false;
     this.status('Fotomaterialien und 3D-Modelle bereit · '+this.quality.toUpperCase());
   }
 
@@ -523,6 +528,19 @@ export class RoomRenderer {
     }
   }
   reload(progress){this.reloadProgress=Math.max(0,Math.min(1,progress||0));}
+  setHotelOpenings(slot,walls,inLobby=false){
+    const openings=hotelOpenings(walls);
+    const valid=Number.isInteger(slot)&&slot>=0&&slot<24;
+    const hall=valid&&!inLobby&&openings.hall,neighbor=valid&&!inLobby&&openings.neighbor;
+    if(this.hotelSlot!==slot||this.hotelHallOpen!==hall){
+      this.hotelSlot=slot;this.hotelHallOpen=hall;
+      if(hall){this.lobby.projectInto(this.hotelViewRoot,slot);this.lobby.setOwn(slot);}
+      else this.lobby.restoreProjection();
+    }
+    this.neighborView?.setVisible(neighbor);
+    return {hall,neighbor};
+  }
+  setNeighborSnapshot(snapshot){this.neighborView?.setSnapshot(snapshot);}
   setCharacter(profile){
     if(this.localCharacter)disposeCharacter(this.localCharacter);
     this.localCharacter=createCharacter(profile.avatar);this.localCharacter.visible=false;this.scene.add(this.localCharacter);
