@@ -14,7 +14,7 @@ from pathlib import Path
 from server import create_server, GameStore, HOTEL_LAYOUT
 from world_capture import CaptureStore
 
-from hotel_lobby import HotelLobby, CAPACITY, LEASE, spawn
+from hotel_lobby import HotelLobby, FacadeDirectory, CAPACITY, LEASE, spawn
 from world_capture import CaptureError
 from game_accounts import AccountStore, DEFAULT_AVATAR, OPTIONS, password_hash, clean_avatar
 
@@ -158,6 +158,30 @@ class GameOnlyTest(unittest.TestCase):
             self.assertEqual(restored.directory(),[{'slot':0,'nickname':'Guest Alpha'},{'slot':1,'nickname':'Guest Beta'}])
             restored.logout(k2);self.assertIsNone(restored.identify(k2));self.assertIsNotNone(restored.identify(key))
 
+    def test_facade_directory_existing_openings_and_repairs(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as tmp:
+            capture=CaptureStore(Path(tmp));accounts=AccountStore(capture)
+            a,ka=accounts.register({'nickname':'Alpha','email':'a@example.invalid','password':'Test-password-123'},None,'a')
+            b,kb=accounts.register({'nickname':'Beta','email':'b@example.invalid','password':'Test-password-456'},None,'b')
+            room=GameStore(capture.home_path(accounts.identify(ka)))
+            GameStore(capture.home_path(accounts.identify(kb)))
+            with sqlite3.connect(room.path) as db:
+                db.executemany("INSERT INTO wall_cells VALUES (?,?,?,?)",[('surface_8',2,3,4),('surface_9',5,4,3),('surface_10',1,1,4),('surface_6',3,4,4)])
+            now=[10.0];directory=FacadeDirectory(accounts,lambda:now[0])
+            expected=[{'slot':a['slot'],'walls':{'surface_10':[[1,1,4]],'surface_8':[[2,3,4]]}}]
+            self.assertEqual(directory.snapshot(),expected)
+            room.action({'action':'repair_surface','id':'surface_8'},None)
+            self.assertEqual(directory.snapshot(),expected)
+            now[0]+=1.1
+            self.assertEqual(directory.snapshot(),[{'slot':a['slot'],'walls':{'surface_10':[[1,1,4]]}}])
+            room.action({'action':'repair_surface','id':'surface_10'},None)
+            now[0]+=1.1
+            self.assertEqual(directory.snapshot(),[])
+            # The unrelated side-wall damage and partial damage are unchanged.
+            self.assertEqual(room.state()['walls'],{'surface_6':[[3,4,4]],'surface_9':[[5,4,3]]})
+            self.assertEqual(accounts.profile(accounts.identify(kb)),b)
+
     def test_two_players_meet_without_sharing_homes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);capture=CaptureStore(root)
@@ -213,6 +237,8 @@ class GameOnlyTest(unittest.TestCase):
                 self.assertEqual(observed['online'],1)
                 self.assertEqual(observed['peers'][0]['nickname'],'Alpha')
                 self.assertNotIn('lease',observed)
+                self.assertEqual(observed['facades'],[])
+                self.assertEqual(a['facades'],[]);self.assertEqual(b['facades'],[])
                 # Only a physical opening in the paired wall permits a snapshot.
                 self.assertEqual(req(ca,'/api/hotel/view',{'action':'neighbor'}),{'room':None})
                 import sqlite3
@@ -232,6 +258,15 @@ class GameOnlyTest(unittest.TestCase):
                 self.assertEqual(e.exception.code,401)
                 game_a.action({'action':'repair_surface','id':'surface_6'},None)
                 self.assertEqual(req(ca,'/api/hotel/view',{'action':'neighbor'}),{'room':None})
+                with sqlite3.connect(game_a.path) as db:
+                    db.execute("INSERT INTO wall_cells VALUES ('surface_9',6,4,4)")
+                time.sleep(1.1)
+                opening=[{'slot':pa['slot'],'walls':{'surface_9':[[6,4,4]]}}]
+                self.assertEqual(req(cb2,'/api/hotel/view',{'action':'hall'})['facades'],opening)
+                self.assertEqual(req(ca,'/api/lobby',{'action':'update','lease':a['lease'],'position':a['position'],'yaw':a['yaw']})['facades'],opening)
+                game_a.action({'action':'repair_surface','id':'surface_9'},None)
+                time.sleep(1.1)
+                self.assertEqual(req(cb2,'/api/hotel/view',{'action':'hall'})['facades'],[])
             finally:
                 srv.shutdown();srv.server_close();thread.join(timeout=5)
 
