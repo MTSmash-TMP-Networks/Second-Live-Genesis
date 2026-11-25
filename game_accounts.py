@@ -125,6 +125,13 @@ class AccountStore:
     def directory(self):
         with self.capture.tx(False) as db:
             return [{'slot':r[0],'nickname':r[1]} for r in db.execute('SELECT room_slot,nickname FROM game_accounts ORDER BY room_slot')]
+    def paired_neighbor(self,player):
+        with self.capture.tx(False) as db:
+            own=db.execute('SELECT room_slot FROM game_accounts WHERE player=?',(player,)).fetchone()
+            if not own:return None
+            slot=own[0]^1
+            row=db.execute('SELECT player,room_slot FROM game_accounts WHERE room_slot=?',(slot,)).fetchone()
+            return (row[0],row[1]) if row else None
     def save_avatar(self,player,value):
         avatar=clean_avatar(value)
         with self.capture.tx() as db:db.execute('UPDATE game_accounts SET avatar=? WHERE player=?',(json.dumps(avatar,separators=(',',':')),player))
