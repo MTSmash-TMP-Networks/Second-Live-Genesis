@@ -49,7 +49,7 @@ class CaptureStoreTest(unittest.TestCase):
 
 class CaptureHTTPTest(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory();self.server=create_server(port=0,data_dir=self.tmp.name,token='private-key',guest_game=True,world_capture=True);self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start();self.base=f'http://127.0.0.1:{self.server.server_port}';self.a=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()));self.b=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        self.tmp=tempfile.TemporaryDirectory();self.server=create_server(port=0,data_dir=self.tmp.name,token='private-key',guest_game=True,world_capture=True,legacy_capture=True);self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start();self.base=f'http://127.0.0.1:{self.server.server_port}';self.a=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()));self.b=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
     def tearDown(self):self.server.shutdown();self.server.server_close();self.thread.join();self.tmp.cleanup()
     def req(self,opener,path,data=None,headers=None):
         return json.load(opener.open(urllib.request.Request(self.base+path,data=json.dumps(data).encode() if data is not None else None,headers={'Content-Type':'application/json',**(headers or {})})))
