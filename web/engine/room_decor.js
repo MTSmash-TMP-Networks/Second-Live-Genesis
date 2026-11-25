@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { HOTEL_LAYOUT, hotelMaterials, softBox, box, rod, buildHotelFeatureWall, addHotelLight } from './hotel_room.js';
+import { HOTEL_LAYOUT, hotelMaterials, softBox, box, rod, upholstered, seamLoop, buildHotelFeatureWall, addHotelLight } from './hotel_room.js';
 
 // Shared visual and collision layout. Positions are metres in the virtual room.
 const floorSlot=o=>({p:[o.p[0],o.p[1]-o.s[1]/2,o.p[2]],s:o.s});
@@ -45,48 +45,55 @@ export function quiltGeometry(w,d,top,low=false){
 function pillow(g,r,p,angle,tint,w=.62,d=.47){const m=new THREE.Mesh(pillowGeometry(w,d,.17),surface(r,tint,[2,2]));m.position.set(...p);m.rotation.y=angle;m.castShadow=true;m.receiveShadow=true;g.add(m);}
 // The duvet and runner share the same draped surface; their meshes follow the
 // mattress edges instead of floating above a rectangular block.
+// True fabric overhang: once it passes the mattress edge the cloth turns
+// downward, rather than cutting diagonally through the mattress.
 export function hotelDrape(w,d,top,from=0,to=1,offset=0,low=false){
- const nx=low?36:64,nz=low?24:48,p=[],uv=[],idx=[];
+ const nx=low?56:84,nz=low?48:72,p=[],uv=[],idx=[];
  for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){
-  const u=i/nx,v=from+(to-from)*j/nz;
-  const side=Math.pow(Math.max(0,(Math.abs(u-.5)-.36)/.14),1.7);
-  const foot=Math.pow(Math.max(0,(.13-v)/.13),1.4);
-  const head=Math.pow(Math.max(0,(v-.96)/.04),1.7);
-  const wrinkle=.006*Math.sin(u*41+v*18)+.007*Math.sin(v*27+u*12)+.004*Math.sin(u*94+v*20);
-  const y=top-.24*Math.max(side,foot,head*.45)+wrinkle+offset;
-  p.push((u-.5)*w,y,(v-.5)*d);uv.push(u,v);
+  const u=i/nx,v=from+(to-from)*j/nz,a=Math.abs(u-.5)*2;
+  const t=Math.max(0,(a-.86)/.14),f=Math.max(0,(.12-v)/.12),back=Math.max(0,(v-.97)/.03);
+  const side=.26*Math.pow(t,1.6),foot=.25*Math.pow(f,1.6);
+  const x=Math.sign(u-.5)*(a<=.86?a/.86*w*.447:w*.447+w*.053*Math.sin(t*Math.PI/2));
+  const z=v<.12?-d*.442-d*.058*Math.sin(f*Math.PI/2):v>.97?d*.474+d*.026*Math.sin(back*Math.PI/2):(-.442+(v-.12)/.85*.916)*d;
+  const edge=Math.max(t,f),fold=.004*Math.sin(u*35+v*14)+.006*Math.sin(v*23+u*10)+.011*edge*Math.sin(u*43+v*18);
+  const loft=.021*Math.sin(Math.PI*u)*Math.sin(Math.PI*v);
+  const y=top+loft-Math.max(side,foot,.07*back)+fold+offset;
+  p.push(x,y,z);uv.push(u,v);
   if(i<nx&&j<nz){const k=j*(nx+1)+i;idx.push(k,k+nx+1,k+1,k+1,k+nx+1,k+nx+2);}
  }
  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(p,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geo.setIndex(idx);geo.computeVertexNormals();return geo;
 }
 function drape(g,r,m,from,to,offset=0){
- const o=new THREE.Mesh(hotelDrape(1.56,2.14,.70,from,to,offset,r.quality==='1k'),m);o.position.z=-.035;o.castShadow=true;o.receiveShadow=true;g.add(o);
+ const o=new THREE.Mesh(hotelDrape(1.56,2.14,.744,from,to,offset,r.quality==='1k'),m);o.position.z=-.035;o.castShadow=true;o.receiveShadow=true;g.add(o);
 }
 function hotelPillow(g,m,w,d,h,p,tilt=-1.04,angle=0){
- const o=new THREE.Mesh(pillowGeometry(w,d,h),m);o.position.set(...p);o.rotation.set(tilt,0,angle);o.castShadow=true;o.receiveShadow=true;g.add(o);
+ const pillow=new THREE.Group();pillow.position.set(...p);pillow.rotation.set(tilt,0,angle);g.add(pillow);
+ const o=new THREE.Mesh(pillowGeometry(w,d,h),m);o.castShadow=true;o.receiveShadow=true;pillow.add(o);
+ seamLoop(pillow,w*.955,d*.955,0,[0,0,0],m,.0028);
 }
 function bed(r,g){
  const m=hotelMaterials(r);
  // Twin upholstered divan bases, seam piping and full mattress volume.
  for(const x of [-.383,.383]){
-   softBox(g,[.759,.34,2.13],[x,.17,-.015],m.leather,.055);
+   upholstered(g,[.759,.34,2.13],[x,.17,-.015],m.leather,x*8);
    softBox(g,[.750,.025,2.09],[x,.315,-.015],m.darkCloth,.009);
  }
- softBox(g,[1.49,.32,2.08],[0,.49,-.02],m.cotton,.11);
+ upholstered(g,[1.49,.32,2.08],[0,.49,-.02],m.cotton,5);
+ seamLoop(g,1.455,2.045,.09,[0,.49,-.02],m.cotton,.004);
  softBox(g,[1.52,1.12,.11],[0,.64,1.06],m.leather,.055);
  for(const x of [-.49,0,.49])softBox(g,[.478,.46,.025],[x,.89,.991],m.black,.018);
  drape(g,r,m.white,0,1);
- drape(g,r,m.gold,.15,.45,.012);
- drape(g,r,m.darkCloth,.105,.15,.014);
- drape(g,r,m.darkCloth,.45,.477,.014);
+ drape(g,r,m.gold,.115,.46,.014);
+ drape(g,r,m.darkCloth,.092,.115,.014);
+ drape(g,r,m.darkCloth,.46,.487,.014);
  for(const x of [-.365,.365]){
-   hotelPillow(g,m.white,.68,.46,.16,[x,.84,.72],-.94,x*.17);
-   hotelPillow(g,m.cotton,.63,.45,.155,[x,.91,.84],-1.08,-x*.10);
-   hotelPillow(g,m.gold,.385,.40,.13,[x,.83,.51],-.96,x*.16);
+   hotelPillow(g,m.white,.68,.46,.16,[x,.86,.70],-.94,x*.17);
+   hotelPillow(g,m.cotton,.63,.45,.155,[x,.95,.84],-1.08,-x*.10);
+   hotelPillow(g,m.gold,.385,.40,.13,[x,.885,.46],-.96,x*.16);
    // Rolled towels have independent rounded folds, not printed onto the duvet.
-   const towel=new THREE.Group();towel.position.set(x,.723,-.38);g.add(towel);
+   const towel=new THREE.Group();towel.position.set(x,.775,-.38);g.add(towel);
    softBox(towel,[.39,.044,.25],[0,.022,0],m.cotton,.018);
-   for(const z of [-.071,.022,.10])softBox(towel,[.34,.068,.083],[0,.069,z],m.cotton,.031);
+   for(const z of [-.071,.022,.10])upholstered(towel,[.34,.068,.083],[0,.069,z],m.cotton,z*12);
    for(const dx of [-.143,.143])for(const z of [-.071,.022,.10])softBox(towel,[.018,.040,.045],[dx,.073,z],m.white,.01);
  }
 }
