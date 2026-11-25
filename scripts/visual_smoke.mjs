@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { DECOR, pillowGeometry, quiltGeometry, hotelDrape, fitDecor, buildRoomDecor } from './room_decor.js';
 import { ShotEffects } from './shotfx.js';
-import { HOTEL_LAYOUT, createHotelModel, hotelMaterials } from './hotel_room.js';
+import { HOTEL_LAYOUT, createHotelModel, hotelMaterials, upholsteredGeometry, REFERENCE_TEXTURES } from './hotel_room.js';
 for(const geo of [pillowGeometry(.62,.47,.17),quiltGeometry(1.56,1.62,.65,true),quiltGeometry(1.56,1.62,.65,false),hotelDrape(1.56,2.14,.70,.15,.45,.012,true)]){
   assert.ok(geo.index.count>100);assert.ok([...geo.attributes.position.array].every(Number.isFinite));
   geo.computeBoundingBox();assert.ok(geo.boundingBox.max.x>geo.boundingBox.min.x);assert.ok([...geo.attributes.normal.array].every(Number.isFinite));
@@ -15,6 +15,14 @@ const scene=new THREE.Scene(),r={quality:'1k',textured:{oak_veneer_01:new THREE.
 await buildRoomDecor(r,{decor_models:{nightstand:'/ok'}},s=>s,{async loadAsync(){return {scene:new THREE.Mesh(new THREE.BoxGeometry(.5,.6,.4),new THREE.MeshStandardMaterial())};}});
 assert.equal(r.realismStatus.bed,'hotel');assert.equal(r.realismStatus.nightstand,'hotel');
 assert.ok(r.hotelLights.length>=5);assert.ok(hotelMaterials(r).stripe.map.isDataTexture);
+assert.equal(hotelMaterials(r).wall.map,null);assert.equal(hotelMaterials(r).ceiling.aoMap,null);
+for(const [name,len] of [['wall',963],['carpet',1537],['gold',757]]){
+ const b=Buffer.from(REFERENCE_TEXTURES[name],'base64');assert.equal(b.length,len);assert.equal(b.readUInt16BE(0),0xffd8);assert.equal(b.readUInt16BE(b.length-2),0xffd9);
+}
+const plush=upholsteredGeometry(.7,.20,.80,5);assert.ok(plush.attributes.position.count>1200);assert.ok([...plush.attributes.normal.array].every(Number.isFinite));
+const drape=hotelDrape(1.56,2.14,.744);const a=drape.attributes.position;
+for(let i=0;i<a.count;i++)if(Math.abs(a.getX(i))<.68&&a.getZ(i)>-.84&&a.getZ(i)<.80)assert.ok(a.getY(i)>.66,'Duvet clips through top of mattress');
+
 for(const id of ['surface_wardrobe','table','chair','sofa','coffee_table','crate']){
  const g=createHotelModel(r,id);g.updateMatrixWorld(true);
  const b=new THREE.Box3().setFromObject(g),s=HOTEL_LAYOUT[id].s;
