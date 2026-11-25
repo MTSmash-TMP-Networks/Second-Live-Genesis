@@ -1,6 +1,6 @@
 # Second Live – World Genesis
 
-**v0.7.7 · Guided Mobile World Capture / World Capture CPU-Testversion**
+**v0.7.8 · Live 3D World Capture / CPU-Testversion**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spieler sollen ihre gemeinsame Welt aus realen Aufnahmen erschaffen, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
 
@@ -67,7 +67,9 @@ Die `.env`, ein zufälliger Scanner-/optionaler Spielschlüssel sowie ein unabh�
 
 **Update von älteren ZIP-Versionen:** Dateien in den bisherigen Projektordner kopieren, `.env` und Docker-Volume unverändert lassen; `chmod +x start.sh stop.sh && ./start.sh --build` (ohne aktive Ingame-Update-Konfiguration). Ordnername/Compose-Projektname beibehalten, damit das existierende Datenvolume verwendet wird. Nicht `docker compose down -v` ausführen.
 
-## World Capture – geführter Smartphone-Scan
+## World Capture – geführter Smartphone-Scan mit Live-3D
+
+Ab v0.7.8 startet der CPU-Worker ab vier Fotos automatisch eine erste räumliche COLMAP-Vorschau. Währenddessen können weitere Fotos aufgenommen werden. Neue Bilder werden gebündelt nachberechnet, bis zu 100 Sekunden Rechenbudget je Versuch; keine Echtzeit-SLAM-Garantie. Die Live-Ansicht zeigt echte triangulierte 3D-Punkte, die Anzahl verbundener Fotos und Kamerapositionen. Die Punktwolke bleibt privat, wird bei Entfernen eines Fotos invalidiert und bei finalem Submit durch die ausführlichere Rekonstruktion ersetzt. Die Live-Ansicht ist eine Vorschau ohne geschlossene oder maßstäbliche Oberflächen. Finalaufträge haben Vorrang.
 
 Ab v0.7.7 führt die Scan-App in vier Schritten durch Start, Aufnahmen, Fotoprüfung und 3D-Vorschau. Kamera-Hinweise und Fotozählung bleiben sichtbar; GPS ist nur für gemeinsame geografische Scans erforderlich. Die Galerie und native Kamera bleiben als Alternativen verfügbar. Die 24–40 empfohlenen Aufnahmen sind ein Richtwert, keine gemessene Raumabdeckung. Die Vorschau lässt sich mit einem Finger drehen, mit zwei Fingern zoomen/verschieben und zurücksetzen. Der Server rechnet unverändert echte COLMAP- und optionale KI-Daten, keine künstliche Ersatzwelt.
 
