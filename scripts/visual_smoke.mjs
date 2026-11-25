@@ -1,9 +1,10 @@
 // Runs against actual Three.js math and meshes during Docker build, without a GPU.
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { DECOR, pillowGeometry, quiltGeometry, fitDecor, buildRoomDecor } from './room_decor.js';
+import { DECOR, pillowGeometry, quiltGeometry, hotelDrape, fitDecor, buildRoomDecor } from './room_decor.js';
 import { ShotEffects } from './shotfx.js';
-for(const geo of [pillowGeometry(.62,.47,.17),quiltGeometry(1.56,1.62,.65,true),quiltGeometry(1.56,1.62,.65,false)]){
+import { HOTEL_LAYOUT, createHotelModel, hotelMaterials } from './hotel_room.js';
+for(const geo of [pillowGeometry(.62,.47,.17),quiltGeometry(1.56,1.62,.65,true),quiltGeometry(1.56,1.62,.65,false),hotelDrape(1.56,2.14,.70,.15,.45,.012,true)]){
   assert.ok(geo.index.count>100);assert.ok([...geo.attributes.position.array].every(Number.isFinite));
   geo.computeBoundingBox();assert.ok(geo.boundingBox.max.x>geo.boundingBox.min.x);assert.ok([...geo.attributes.normal.array].every(Number.isFinite));
 }
@@ -12,7 +13,22 @@ const fitted=fitDecor(model,DECOR.bed);const bounds=new THREE.Box3().setFromObje
 assert.ok(Math.abs(bounds.min.y)<1e-5);assert.ok(size.z>size.x);assert.ok(size.x<=DECOR.bed.s[0]+1e-5&&size.z<=DECOR.bed.s[2]+1e-5);
 const scene=new THREE.Scene(),r={quality:'1k',textured:{oak_veneer_01:new THREE.MeshStandardMaterial()},staticGroup:scene,realismStatus:{},shadowTexture:null};
 await buildRoomDecor(r,{decor_models:{nightstand:'/ok'}},s=>s,{async loadAsync(){return {scene:new THREE.Mesh(new THREE.BoxGeometry(.5,.6,.4),new THREE.MeshStandardMaterial())};}});
-assert.equal(r.realismStatus.bed,'local');assert.equal(r.realismStatus.nightstand,'ready');
+assert.equal(r.realismStatus.bed,'hotel');assert.equal(r.realismStatus.nightstand,'hotel');
+assert.ok(r.hotelLights.length>=5);assert.ok(hotelMaterials(r).stripe.map.isDataTexture);
+for(const id of ['surface_wardrobe','table','chair','sofa','coffee_table','crate']){
+ const g=createHotelModel(r,id);g.updateMatrixWorld(true);
+ const b=new THREE.Box3().setFromObject(g),s=HOTEL_LAYOUT[id].s;
+ assert.ok(b.min.y>=-.01,id+' below floor');
+ assert.ok(b.max.y<=s[1]+.09,id+' above collider');
+ assert.ok(b.min.x>=-s[0]/2-.05&&b.max.x<=s[0]/2+.05,id+' width');
+ assert.ok(b.min.z>=-s[2]/2-.05&&b.max.z<=s[2]/2+.05,id+' depth');
+ let meshes=0;g.traverse(o=>{if(o.isMesh){meshes++;assert.ok([...o.geometry.attributes.position.array].every(Number.isFinite));}});assert.ok(meshes>8,id+' incomplete furniture');
+}
+for(const [id,o] of Object.entries(HOTEL_LAYOUT)){
+ if(!o.s||id==='window')continue;
+ assert.ok(Math.abs(o.p[0])+o.s[0]/2<=4.85&&Math.abs(o.p[2])+o.s[2]/2<=4.85,id+' outside room');
+}
+console.log('Hotel geometry, fabric textures and shared layout bounds OK');
 const fx=new ShotEffects(scene);fx.fire({origin:[0,1,0],direction:[0,0,-1],distance:2,impact:true});
 assert.equal(fx.items.length,3);const shell=fx.items.find(i=>i.kind==='case');assert.equal(shell.mesh.parent,scene);for(let i=0;i<60;i++)fx.update(1/60);
 assert.ok(shell.mesh.position.y>=.022);assert.ok(fx.items.every(i=>i.kind!=='trail'));for(let i=0;i<320;i++)fx.update(1/60);assert.equal(fx.items.length,0);
