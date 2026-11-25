@@ -104,3 +104,38 @@ for(const panel of infill.children){
 assert.ok(Math.abs(new THREE.Box3().setFromObject(infill).min.x+1)<1e-6);
 assert.ok(Math.abs(new THREE.Box3().setFromObject(infill).max.x-1)<1e-6);
 console.log('Portal geometry and optional door fallback OK');
+
+// Exercise actual animated curtain roots and ray intersections without a GPU.
+import {buildArchitecture,curtainBounds,curtainPose} from './architecture.js';
+const curtainScene=new THREE.Group(),curtainDynamic=new THREE.Group(),curtainImpacts=new ImpactMarks();
+const curtainRenderer={quality:'1k',textured:{},staticGroup:curtainScene,dynamicGroup:curtainDynamic,impacts:curtainImpacts,models:{},windowDaylight:{fill:{intensity:4},spill:{intensity:42}},
+ makeBox(s,p,m,g){const o=new THREE.Mesh(new THREE.BoxGeometry(...s),m);o.position.set(...p);g.add(o);return o;},
+ makeCylinder(a,b,h,n,p,m,g,rot=[0,0,0]){const o=new THREE.Mesh(new THREE.CylinderGeometry(a,b,h,n),m);o.position.set(...p);o.rotation.set(...rot);g.add(o);return o;}
+};
+buildArchitecture(curtainRenderer,{});
+const control=curtainRenderer.curtainControl;
+assert.equal(control.progress,0);
+const left=curtainImpacts.targets.get('surface_curtain_l').root,right=curtainImpacts.targets.get('surface_curtain_r').root;
+const open=curtainBounds('surface_curtain_l',0);
+assert.ok(open.p[2]+open.s[2]/2<-1.5);
+control.setClosed(true);
+for(let i=0;i<5;i++)control.step(.1);
+assert.ok(control.progress>0&&control.progress<1);
+for(let i=0;i<8;i++)control.step(.1);
+assert.equal(control.progress,1);
+const closedL=curtainBounds('surface_curtain_l',1),closedR=curtainBounds('surface_curtain_r',1);
+assert.ok(closedL.p[2]+closedL.s[2]/2>=closedR.p[2]-closedR.s[2]/2);
+assert.ok(curtainRenderer.windowDaylight.fill.intensity<1);
+assert.ok(curtainRenderer.windowDaylight.spill.intensity<5);
+curtainScene.updateMatrixWorld(true);
+for(const z of [-2,-1,0]){
+ const hit=curtainImpacts.cast([-3,1.6,z],[-1,0,0],[curtainScene]);
+ assert.ok(['surface_curtain_l','surface_curtain_r'].includes(hit.id),'Closed curtain blocks view at '+z);
+}
+assert.ok(left.scale.z>2&&right.scale.z>2);
+control.step(.016,{surface_curtain_l:4,surface_curtain_r:4});
+assert.equal(curtainRenderer.windowDaylight.fill.intensity,4);
+control.setClosed(false,true);
+assert.equal(control.progress,0);assert.equal(left.scale.z,1);assert.equal(right.scale.z,1);
+assert.equal(curtainRenderer.windowDaylight.spill.intensity,42);
+console.log('Curtain animation, centre coverage, ray hits and daylight OK');
