@@ -12,6 +12,8 @@ services:
       SECOND_LIVE_BIND: 0.0.0.0
       SECOND_LIVE_PORT: 8765
       SECOND_LIVE_TOKEN: ${SECOND_LIVE_TOKEN:?Set a strong token in .env}
+      # Host-only account authorization; old token retained only for rollback.
+      SECOND_LIVE_UPDATE_ADMIN_EMAIL: ${SECOND_LIVE_UPDATE_ADMIN_EMAIL:-}
       SECOND_LIVE_UPDATE_ADMIN_TOKEN: ${SECOND_LIVE_UPDATE_ADMIN_TOKEN:-}
       SECOND_LIVE_UPDATE_BRIDGE: /app/update
     volumes:
