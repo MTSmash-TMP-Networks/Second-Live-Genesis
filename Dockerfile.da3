@@ -8,8 +8,8 @@ RUN pip install --no-cache-dir numpy==1.26.4 opencv-python-headless==4.10.0.84 P
 ARG DA3_SOURCE_REVISION=3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
 RUN git init /opt/da3 && git -C /opt/da3 fetch --depth 1 https://github.com/ByteDance-Seed/Depth-Anything-3.git "$DA3_SOURCE_REVISION" && git -C /opt/da3 checkout --detach FETCH_HEAD && test "$(git -C /opt/da3 rev-parse HEAD)" = "$DA3_SOURCE_REVISION" && rm -rf /opt/da3/.git
 ENV PYTHONPATH=/opt/da3/src PYTHONUNBUFFERED=1 HF_HOME=/models HF_HUB_DISABLE_TELEMETRY=1 HF_HUB_DISABLE_IMPLICIT_TOKEN=1 SL_DA3_DEVICE=cpu SL_DA3_THREADS=4
-COPY --chmod=0644 da3_service.py da3_geometry.py ./
-RUN python -c "from depth_anything_3.api import DepthAnything3; import da3_service, da3_geometry; DepthAnything3(model_name='da3-small')" && useradd -m -u 10001 da3 && mkdir -p /models && chown da3:da3 /models && chmod 755 /opt/second-live-da3
+COPY --chmod=0644 da3_service.py da3_geometry.py scripts/da3_smoke.py ./
+RUN python -B da3_smoke.py && python -c "from depth_anything_3.api import DepthAnything3; import da3_service, da3_geometry; DepthAnything3(model_name='da3-small')" && useradd -m -u 10001 da3 && mkdir -p /models && chown da3:da3 /models && chmod 755 /opt/second-live-da3
 USER da3
 EXPOSE 8766
 CMD ["python","da3_service.py"]
