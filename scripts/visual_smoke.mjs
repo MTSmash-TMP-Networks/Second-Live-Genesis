@@ -128,14 +128,15 @@ assert.ok(closedL.p[2]+closedL.s[2]/2>=closedR.p[2]-closedR.s[2]/2);
 assert.equal(curtainRenderer.windowDaylight.fill.intensity,0);
 assert.equal(curtainRenderer.windowDaylight.spill.intensity,0);
 assert.equal(curtainRenderer.roomSun.intensity,0);
-assert.equal(curtainRenderer.roomHemi.intensity,0);
-assert.equal(curtainRenderer.scene.environmentIntensity,0);
+assert.equal(curtainRenderer.roomHemi.intensity,.055);
+assert.equal(curtainRenderer.scene.environmentIntensity,.035);
 curtainRenderer.roomIndoorLight=true;control.step(0);
-assert.ok(curtainRenderer.roomHemi.intensity>0);
-assert.ok(curtainRenderer.scene.environmentIntensity>0);
+assert.ok(Math.abs(curtainRenderer.roomHemi.intensity-.155)<1e-9);
+assert.ok(Math.abs(curtainRenderer.scene.environmentIntensity-.135)<1e-9);
 assert.equal(curtainRenderer.roomSun.intensity,0);
 curtainRenderer.roomIndoorLight=false;control.step(0);
-assert.equal(curtainRenderer.scene.environmentIntensity,0);
+assert.equal(curtainRenderer.roomHemi.intensity,.055);
+assert.equal(curtainRenderer.scene.environmentIntensity,.035);
 curtainScene.updateMatrixWorld(true);
 for(const z of [-2,-1,0]){
  const hit=curtainImpacts.cast([-3,1.6,z],[-1,0,0],[curtainScene]);
@@ -147,7 +148,9 @@ assert.equal(curtainRenderer.windowDaylight.fill.intensity,4);
 control.setClosed(false,true);
 assert.equal(control.progress,0);assert.equal(left.scale.z,1);assert.equal(right.scale.z,1);
 assert.equal(curtainRenderer.windowDaylight.spill.intensity,42);
-console.log('Curtain animation, centre coverage, ray hits and daylight OK');
+assert.equal(curtainRenderer.roomHemi.intensity,.36);
+assert.equal(curtainRenderer.scene.environmentIntensity,.36);
+console.log('Curtain animation, centre coverage, ray hits, daylight and dim-room visibility OK');
 
 // Rug uses the same persistent impact ID; moving its root moves the mesh.
 const rugScene=new THREE.Group(),rugMarks=new ImpactMarks(),rugRenderer={quality:'1k',textured:{},staticGroup:rugScene,realismStatus:{},shadowTexture:null,impacts:rugMarks};

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.10 – Low Light Visibility
+- Geschlossene intakte Vorhaenge blockieren weiterhin direkte Sonne und Fensterlicht. Eine schwache diffuse Restbeleuchtung (Hemisphaere 0,055, HDR-Umgebung 0,035) simuliert Dunkeladaptation und laesst Umrisse im unbeleuchteten Zimmer erkennen.
+- Offene Vorhaenge, Innenlampen und die globale Belichtung bleiben unveraendert. Der Vorhang dimmt stufenlos bis zur neuen Mindesthelligkeit; Beleuchtungstests entsprechend aktualisiert.
+
 ## 0.12.9 – Wall Attachment Physics Regression Fix
 - Der Rapier-Test fuer abgeloeste Wandobjekte prueft Schwerkraft, dynamischen Starrkoerper und echten Bodenkontakt anhand der rotierten Kollisionsbox, statt eine feste aufrechte Endlage vorauszusetzen. Separate Tests fuer zerstoerte Befestigung und Aufheben/Loslassen; keine deaktivierten Build-Pruefungen.
 - Physikpositionen duennen Modelle koennen nach dem Herunterfallen auch unmittelbar an der inneren Wandflaeche gespeichert werden (bis 4,90 m vom Raumzentrum). Bestehende Begrenzung normaler Platzierung bleibt unveraendert.

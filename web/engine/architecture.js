@@ -39,11 +39,14 @@ export function applyRoomDaylight(r,progress,decor={}){
  const t=Math.max(0,Math.min(1,progress)),surviving=(decor.surface_curtainrod||0)>=4?0:
   Number((decor.surface_curtain_l||0)<4)+Number((decor.surface_curtain_r||0)<4);
  const daylight=1-t*t*(3-2*t)*surviving/2;
- const bounce=r.roomIndoorLight?(1-daylight)*.10:0;
+ // Keep direct daylight blocked, but approximate dark-adapted vision with
+ // a very small diffuse ambient contribution when the curtains are closed.
+ // No change to lamp power, open-curtain lighting or exposure.
+ const covered=1-daylight,bounce=r.roomIndoorLight?covered*.10:0;
  if(r.windowDaylight){r.windowDaylight.fill.intensity=4*daylight;r.windowDaylight.spill.intensity=42*daylight;}
  if(r.roomSun)r.roomSun.intensity=2.5*daylight;
- if(r.roomHemi)r.roomHemi.intensity=.36*daylight+bounce;
- if(r.scene)r.scene.environmentIntensity=.36*daylight+bounce;
+ if(r.roomHemi)r.roomHemi.intensity=.36*daylight+covered*.055+bounce;
+ if(r.scene)r.scene.environmentIntensity=.36*daylight+covered*.035+bounce;
  return daylight;
 }
 export function buildArchitecture(r,spec) {
