@@ -99,8 +99,12 @@ function desk(g,m){
  box(g,[.16,.014,.026],[.51,.66,.278],m.brass);
  softBox(g,[.24,.018,.33],[-.22,.786,.05],m.paper,.005);
  box(g,[.014,.012,.20],[-.06,.798,.06],m.black,[0,.38,0]);
- // Low-profile hotel desk lamp, folded down so the collider stays conservative.
- box(g,[.22,.022,.12],[.57,.786,-.27],m.brass);
+ // Brass task lamp with a slender stem and a horizontal metal shade.
+ softBox(g,[.22,.022,.12],[.57,.786,-.27],m.brass,.008);
+ rod(g,[.57,.797,-.27],[.57,1.13,-.27],.013,m.brass);
+ rod(g,[.57,1.13,-.27],[.39,1.13,-.17],.013,m.brass);
+ softBox(g,[.25,.045,.13],[.31,1.13,-.13],m.black,.02);
+ softBox(g,[.20,.009,.095],[.31,1.105,-.13],m.whitePlastic,.004);
 }
 function chair(g,m){
  for(const x of [-.30,.30])for(const z of [-.29,.29]){
@@ -127,6 +131,9 @@ function coffee(g,m){
  for(const x of [-.53,.53])for(const z of [-.25,.25])rod(g,[x,.03,z],[x,.44,z],.022,m.brass);
  box(g,[1.12,.025,.46],[0,.19,0],m.black);
  softBox(g,[.31,.027,.21],[.29,.506,.12],m.paper,.008);
+ box(g,[.32,.008,.22],[.29,.492,.12],m.darkCloth);
+ box(g,[.32,.008,.22],[.29,.524,.12],m.black);
+ for(const z of [-.25,.25])rod(g,[-.53,.19,z],[.53,.19,z],.012,m.brass);
 }
 function suitcase(g,m){
  // Hard-shell suitcase: separate halves, ribbing, zip seam, handles and wheels.
