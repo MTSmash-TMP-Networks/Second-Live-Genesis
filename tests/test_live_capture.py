@@ -40,6 +40,18 @@ class LiveCaptureTest(unittest.TestCase):
         self.s.finish_live(next_job,message='overlap insufficient')
         self.assertEqual(self.s.status(self.a)['live']['state'],'insufficient')
         self.assertEqual(self.s.live_preview(self.a,self.sid)['revision'],meta['revision'])
+    def test_switch_to_da3_rechecks_existing_frames_and_allows_early_submit(self):
+        self.add(4)
+        old=self.s.claim_live();self.s.finish_live(old,message='not connected')
+        self.assertIsNone(self.s.claim_live())
+        job=self.s.claim_live('da3');self.assertEqual(job['frames'],old['frames'])
+        data=self.fixture(job);data['kind']='da3_multiview';data['input_count']=4
+        self.assertTrue(self.s.finish_live(job,data,'DA3 ready'))
+        self.assertIsNone(self.s.claim_live('da3'))
+        self.assertEqual(self.s.status(self.a)['live']['kind'],'da3_multiview')
+        self.s.heartbeat('cpu',{'status':'ready','device':'cpu'})
+        self.assertEqual(self.s.status(self.a)['worker']['da3']['status'],'ready')
+        self.assertEqual(self.s.transition(self.a,self.sid,'submit')['status'],'queued')
     def test_removal_cancel_and_final_priority(self):
         ids=self.add(8);job=self.s.claim_live();self.s.remove_frame(self.a,self.sid,ids[0])
         self.assertFalse(self.s.live_allowed(job));self.assertFalse(self.s.finish_live(job,self.fixture(job)))
