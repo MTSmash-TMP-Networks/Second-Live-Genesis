@@ -95,7 +95,7 @@ export class HallFacadeViews{
   const e=this.entries.get(slot);if(!e)return;
   if(this.ownView.root.parent===e.group)this.ownView.root.removeFromParent();
   e.group.removeFromParent();for(const mesh of e.meshes)mesh.geometry.dispose();
-  this.lobby.wallSections[slot].userData.solid.visible=true;this.entries.delete(slot);
+  this.lobby.wallSections[slot].wallSolid.visible=true;this.entries.delete(slot);
  }
  sync(rows,ownSlot,state){
   if(!Array.isArray(rows))return;
@@ -125,7 +125,7 @@ export class HallFacadeViews{
     group.name='Shared entrance partition '+slot;
     group.matrix.compose(new THREE.Vector3(...t.p),new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),t.rotation),new THREE.Vector3(1,1,t.mirror)).invert();
     group.matrixAutoUpdate=false;group.matrixWorldNeedsUpdate=true;
-    const section=this.lobby.wallSections[slot];section.add(group);section.userData.solid.visible=false;
+    const section=this.lobby.wallSections[slot];section.add(group);section.wallSolid.visible=false;
     const meshes=[],add=(geo,p,material)=>{
      const mesh=new THREE.Mesh(geo,material);mesh.position.set(...p);mesh.receiveShadow=true;group.add(mesh);meshes.push(mesh);
     };
