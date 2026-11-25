@@ -12,6 +12,12 @@ Standard: SECOND_LIVE_COMPUTE=cpu, SECOND_LIVE_COMPUTE_THREADS=4 (1–8). SECOND
 ## Datenpfad
 Kamera nach Einwilligung → Qualitätsheuristik → ausgewählte JPEGs → serverseitige Validierung und Metadatenbereinigung → private Bilddateien → OpenCV / optionale ONNX-Semantik → COLMAP SfM → echte sparse Punktwolke bei erfolgreicher Rekonstruktion → optional an sparse Tiefe angenäherte Tiefenflächen → lokale experimentelle Three.js-Vorschau. Die Tiefenschätzung ist relativ. Kein PLY-/GLB-Weltimport, keine automatische Kollisions-/Zerstörungsgeometrie aus Scans. Nicht als exakte Architekturvermessung verwenden.
 
+## Smartphone-Aufnahme ab 0.7.7
+1. Privaten Raum oder gemeinsames Testgebiet wählen; Erlaubnis bestätigen. GPS ist für private Scans nicht erforderlich.
+2. Kamera öffnen. Eine Ecke aufnehmen, dann seitlich weitergehen und dieselben Details aus unterschiedlichen Positionen erfassen. Automatische Aufnahmen lassen sich ausschalten. Alternativ Fotos importieren. 8–60 Bilder, Richtwert 24–40, keine Garantie für räumliche Abdeckung.
+3. Fotos prüfen und schlechte Aufnahmen entfernen. Weitere Fotos aufnehmen oder 3D-Berechnung starten.
+4. Tatsächlichen Serverstatus abwarten; bei Bedarf Seite verlassen und später wieder öffnen. Vorschau per Touch drehen/zoomen/verschieben; erst nach Prüfung bestätigen. Bei Rekonstruktionsfehler weitere Perspektiven erfassen.
+
 ## Abnahme
 Zwei getrennte Browserprofile erhalten getrennte Räume. Einen Scan mit eigenen autorisierten Aufnahmen starten und fehlerhafte Fotos entfernen. Den Workerstatus und die Rekonstruktionsmeldung prüfen; bei fehlender Überlappung weitere Bilder aus seitlich verschobenen Positionen aufnehmen. Nach Erfolg Vorschau ansehen und bestätigen. Ein bestätigter Scan ist für normale neue Aufnahmen gesperrt; Eigentümer kann ihn explizit löschen. Der gemeinsame Testmodus teilt nur geometrische Vorschau, keine Fotos oder Farbe. Keine fremden privaten Innenräume oder Personen aufnehmen. Rechte, Moderation und echtes Kontensystem sind vor öffentlichem Betrieb offen.
 
