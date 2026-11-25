@@ -32,7 +32,7 @@ Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphon
 
 ## Weltentwicklung ab v0.9.1
 
-Die experimentelle Kamera-, Foto-, GPS- und Panoramaerfassung wurde aus dem normalen Spielbetrieb entfernt. Die bisherigen Quelltexte und Aufnahmen bleiben als Archiv erhalten; die früheren Scanner-Seiten und APIs sind nicht mehr erreichbar. Persönliche Spieleridentitäten, Starträume, Möbelpositionen und Schäden bleiben erhalten. Die weitere Welt wird aus modellierten und texturierten 3D-Objekten aufgebaut.
+Die experimentelle Kamera-, Foto-, GPS- und Panoramaerfassung wurde aus dem normalen Spielbetrieb entfernt. Die bisherigen Quelltexte und Aufnahmen bleiben als Archiv erhalten; die früheren Scanner-Seiten und APIs sind nicht mehr erreichbar. Persönliche Spieleridentitäten, Starträume, Möbelpositionen und Schäden bleiben erhalten. Die weitere Welt wird aus modellierten und texturierten 3D-Objekten aufgebaut. Die Smartphone-App „Meine Welt“ bleibt als Einstieg für die spätere Verwaltung und das Nachladen eigener 3D-Welten erhalten; der Weltimport selbst ist noch nicht implementiert.
 
 ## Start, Stopp und Image-Verwaltung (0.7.4)
 
