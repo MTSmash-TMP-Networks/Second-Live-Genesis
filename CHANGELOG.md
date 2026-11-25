@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.1 – Free World Runtime Permissions
+- `free_world.py` und der neue Free-World-Grundriss werden in die obligatorische Runtime-Prüfung aufgenommen. Auch künftig neu hinzukommende Python-Dateien direkt unter `/app` werden normalisiert und als unprivilegierter Benutzer überprüft.
+- Programmdateien bleiben für `appuser` schreibgeschützt (0644, Verzeichnisse 0755); Datenbank und Datenverzeichnis werden nicht verändert. Regressionstest für restriktive Checkout-Modi und bislang nicht registrierte Module.
+
 ## 0.14.0 – Free World Creative & PvP
 - Zusätzliche Tür FREE WORLD am nördlichen Ende des Hotelflurs. Separater, weißer Gemeinschaftsraum (80 × 80 × 24 m) mit freier Eingangszone und Rückkehr zum Hotel.
 - Persistenter Blockbau auf einem 0,5-m-Raster, Würfel von 0,5–4 m, Wand-/Bodenplatten, Vorschau, Stapeln, Kollision und Sprung auf Blöcke. Eigene Blöcke lassen sich wieder entfernen; andere Bauwerke sind gegen fremdes Löschen geschützt.

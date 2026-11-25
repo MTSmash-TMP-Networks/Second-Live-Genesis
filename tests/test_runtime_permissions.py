@@ -22,6 +22,9 @@ class TestRuntimePermissions(unittest.TestCase):
             source = ROOT / ('scripts/runtime_permissions.py' if name == 'runtime_permissions.py' else name)
             shutil.copyfile(source, p)
             p.chmod(0o600)
+        # Simulate a future runtime module not yet in the required-file list.
+        (root/'extra_runtime.py').write_text('READY = True\n', encoding='utf8')
+        (root/'extra_runtime.py').chmod(0o600)
         for name in REQUIRED_WEB:
             p = root / 'web' / name
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -43,6 +46,9 @@ class TestRuntimePermissions(unittest.TestCase):
         root = self.make_tree()
         normalize(root)
         self.assertEqual(stat.S_IMODE((root/'server.py').stat().st_mode), 0o644)
+        self.assertEqual(stat.S_IMODE((root/'free_world.py').stat().st_mode), 0o644)
+        self.assertEqual(stat.S_IMODE((root/'extra_runtime.py').stat().st_mode), 0o644)
+        self.assertEqual(stat.S_IMODE((root/'web'/'engine'/'free_world_layout.json').stat().st_mode), 0o644)
         self.assertEqual(stat.S_IMODE((root/'web'/'engine').stat().st_mode), 0o755)
         self.assertEqual(stat.S_IMODE((root/'web'/'engine'/'renderer.bundle.js').stat().st_mode), 0o644)
         self.assertEqual(stat.S_IMODE((root/'data').stat().st_mode), 0o700)
@@ -61,10 +67,10 @@ class TestRuntimePermissions(unittest.TestCase):
         normalize(root)
         passed = subprocess.run([sys.executable, 'runtime_permissions.py', '--check', str(root)], **opts, timeout=15)
         self.assertEqual(passed.returncode, 0, passed.stderr)
-        passed = subprocess.run([sys.executable, '-c', 'import server,capture_compute'], **opts, timeout=15)
+        passed = subprocess.run([sys.executable, '-c', 'import server,free_world,extra_runtime'], **opts, timeout=15)
         self.assertEqual(passed.returncode, 0, passed.stderr)
         # A writable program file is a regression, even when it can be read.
-        (root/'server.py').chmod(0o666)
+        (root/'extra_runtime.py').chmod(0o666)
         unsafe = subprocess.run([sys.executable, 'runtime_permissions.py', '--check', str(root)], **opts, timeout=15)
         self.assertNotEqual(unsafe.returncode, 0)
         self.assertIn('must not be writable', unsafe.stderr)

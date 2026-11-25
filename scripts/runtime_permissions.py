@@ -5,9 +5,9 @@ import tempfile
 from pathlib import Path
 
 MODULES = ('server.py', 'updater_api.py', 'wall_damage.py', 'world_capture.py', 'hotel_lobby.py', 'game_accounts.py',
-           'room_models.py', 'runtime_permissions.py')
+           'room_models.py', 'free_world.py', 'runtime_permissions.py')
 REQUIRED_WEB = ('index.html', 'game.js', 'audio.js', 'updater.js',
-                'engine/renderer.bundle.js', 'engine/wall_layout.json', 'engine/hotel_layout.json', 'engine/lobby_layout.json', 'engine/character_options.json',
+                'engine/renderer.bundle.js', 'engine/wall_layout.json', 'engine/hotel_layout.json', 'engine/lobby_layout.json', 'engine/character_options.json', 'engine/free_world_layout.json',
                 'assets/polyhaven/manifest.json')
 
 
@@ -15,6 +15,15 @@ def app_paths(root):
     yield root
     for name in MODULES:
         p = root / name
+        if p.is_symlink() or not p.is_file():
+            raise RuntimeError(f'Missing or invalid module: {p}')
+        yield p
+    # Cover newly copied top-level Python modules and build-time smoke tests.
+    # Keep the explicit required modules above, but never silently skip a new
+    # module whose checkout mode is 0600. Never recurse into the data volume.
+    for p in sorted(root.glob('*.py')):
+        if p.name in MODULES:
+            continue
         if p.is_symlink() or not p.is_file():
             raise RuntimeError(f'Missing or invalid module: {p}')
         yield p
