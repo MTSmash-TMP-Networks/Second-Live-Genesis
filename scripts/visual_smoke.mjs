@@ -152,7 +152,6 @@ console.log('Hotel rug root, persistent target and rotated ray hit OK');
 // Shared corridor: actual layout, scene and animated remote guests (no GPU).
 import {LOBBY_LAYOUT,LOBBY_CAPACITY,lobbyDoor,lobbyDoorAt,lobbyWalkable,pairedRoom,roomHallTransform,hallToRoom} from './lobby_layout.js';
 import {NeighborRoomView,HallFacadeViews,hotelOpenings} from './hotel_connections.js';
-import {site} from './wall_layout.js';
 import {HotelLobbyView} from './hotel_lobby.js';
 import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,animateCharacter,disposeCharacter,CharacterStudio,sculptedMesh} from './character.js';
 {
