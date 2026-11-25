@@ -1,7 +1,9 @@
 """Bounded, ephemeral hotel lobby presence, keyed by authenticated player.
 No private home state, credentials or client-supplied identities are published.
 """
-import json, math, secrets, threading, time
+import json, math, secrets, sqlite3, threading, time
+from contextlib import closing
+from wall_damage import WALLS, REMOVED
 from pathlib import Path
 from world_capture import CaptureError
 
@@ -28,6 +30,37 @@ def pose(data):
     if abs(x)>LAYOUT['halfWidth']-m+.001 or abs(z)>LAYOUT['halfLength']-m+.001 or not 0<=y<=1.2:
         raise CaptureError('Position ausserhalb des Hotelflurs',400)
     return [round(v,3) for v in p],round(math.remainder(yaw,2*math.pi),4)
+
+ENTRANCE_WALLS=('surface_8','surface_9','surface_10')
+
+class FacadeDirectory:
+    """Read-only public opening geometry; no private furnishing or account data."""
+    def __init__(self,accounts,clock=time.monotonic):
+        self.accounts=accounts;self.clock=clock;self.lock=threading.Lock()
+        self.expires=0;self.value=[]
+    def snapshot(self):
+        with self.lock:
+            now=self.clock()
+            if now<self.expires:return self.value
+            out=[]
+            for slot,player in self.accounts.room_owners():
+                path=self.accounts.capture.home_path(player)/'world.sqlite3'
+                if not path.is_file():continue
+                try:
+                    with closing(sqlite3.connect(path.resolve().as_uri()+'?mode=ro',uri=True,timeout=.3)) as db:
+                        rows=db.execute("SELECT target,col,row,stage FROM wall_cells WHERE target IN ('surface_8','surface_9','surface_10') AND stage=? ORDER BY target,row,col",(REMOVED,)).fetchall()
+                except sqlite3.OperationalError as exc:
+                    if 'no such table' in str(exc):continue
+                    # A temporarily locked room must not falsely appear repaired.
+                    return self.value
+                walls={}
+                for target,col,row,stage in rows:
+                    w=WALLS[target]
+                    if 0<=col<w['cols'] and 0<=row<w['rows']:
+                        walls.setdefault(target,[]).append([col,row,stage])
+                if walls:out.append({'slot':slot,'walls':walls})
+            self.value=out;self.expires=now+1.0
+            return out
 
 class HotelLobby:
     def __init__(self,clock=time.monotonic):
