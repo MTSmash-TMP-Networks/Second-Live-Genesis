@@ -22,7 +22,7 @@ export class RoomPhysics {
     return {body,col,held:false};
   }
   remove(entry){this.world.removeRigidBody(entry.body);}
-  impulse(id,d){const e=this.entries.get(id);if(e&&id!=='window'&&!e.held)e.body.applyImpulse(vector(d.map(x=>x*2.5)),true);}
+  impulse(id,d){const e=this.entries.get(id);if(e&&id!=='window'&&!this.spec[id].decor&&!e.held)e.body.applyImpulse(vector(d.map(x=>x*2.5)),true);}
   read(e,b){b.p=array(e.body.translation());b.v=array(e.body.linvel());b.q=rotation(e.body.rotation());}
   syncWalls(walls={}){
     for(const [id,e] of this.wallColliders){const cells=walls[id]||[],signature=wallSignature(cells);if(signature===e.signature)continue;
@@ -33,16 +33,16 @@ export class RoomPhysics {
     }
   }
   syncDecor(decor={}){for(const [id,c] of this.decorColliders)c.setEnabled((decor[id]||0)<4);}
-  step(dt,bodies,state,held,holdPoint,debris){
+  step(dt,bodies,state,held,holdPoint,debris,holdRotation=[0,0,0,1]){
     this.syncWalls(state.walls||{});this.syncDecor(state.decor||{});
     if(this.unlocked!==state.unlocked){this.unlocked=state.unlocked;this.door.setEnabled(!this.unlocked);for(const c of this.extension)c.setEnabled(this.unlocked);}
     for(const [id,b] of Object.entries(bodies)){
       let e=this.entries.get(id);const spec=this.spec[id];
       if(!state.objects[id]){if(e){this.remove(e);this.entries.delete(id);}continue;}
-      if(!e||e.ref!==b){if(e)this.remove(e);e=this.add(b.p,spec.s,id==='window');e.ref=b;this.entries.set(id,e);}
+      if(!e||e.ref!==b){if(e)this.remove(e);e=this.add(b.p,spec.s,id==='window'||spec.decor);if(b.q)e.body.setRotation({x:b.q[0],y:b.q[1],z:b.q[2],w:b.q[3]},true);e.ref=b;this.entries.set(id,e);}
       if(id==='window')continue;
-      if(id===held){if(!e.held){e.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased,true);e.col.setSensor(true);e.held=true;}e.body.setNextKinematicTranslation(vector(holdPoint));e.body.setNextKinematicRotation({x:0,y:0,z:0,w:1});}
-      else if(e.held){e.body.setBodyType(RAPIER.RigidBodyType.Dynamic,true);e.col.setSensor(false);e.body.setLinvel(vector(b.v),true);e.body.setAngvel({x:0,y:0,z:0},true);e.held=false;}
+      if(id===held){if(!e.held){e.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased,true);e.col.setSensor(true);e.held=true;}e.body.setNextKinematicTranslation(vector(holdPoint));e.body.setNextKinematicRotation({x:holdRotation[0],y:holdRotation[1],z:holdRotation[2],w:holdRotation[3]});}
+      else if(e.held){e.body.setBodyType(spec.decor?RAPIER.RigidBodyType.Fixed:RAPIER.RigidBodyType.Dynamic,true);e.col.setSensor(false);e.body.setLinvel(vector(b.v),true);e.body.setAngvel({x:0,y:0,z:0},true);e.held=false;}
     }
     const current=new Set(debris);
     for(const [b,e] of this.fragments)if(!current.has(b)){this.remove(e);this.fragments.delete(b);}
