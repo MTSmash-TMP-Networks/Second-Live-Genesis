@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.11.2 · Account Admin Update**
+**v0.11.3 · Shared Wall Openings**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.11.3 – Beidseitige Wandöffnungen
+
+Entfernte Wandzellen der Eingangswand sind nun auch von der Flurseite sichtbar. Der Flur verwendet dieselbe gespeicherte Bruchgeometrie und dieselben Raumtransformationen wie die Zimmer. Vorhandene Löcher werden ohne Migration übernommen; bei Reparatur verschwindet die Öffnung auch für andere Flurgäste. Der authentifizierte Flurabgleich enthält lediglich Zimmernummernzuordnungen und vollständig entfernte Eingangswandzellen; die Abfrage wird serverweit eine Sekunde zwischengespeichert. Durch Löcher sieht man das eigene Zimmer mit seiner gespeicherten Einrichtung; fremde Räume werden von dieser Seite mit der Standard-Hoteleinrichtung dargestellt, ohne ihre privaten Möbelzustände oder Spielerpositionen zu übertragen. Der Flur bleibt unbewaffnet und fremde Räume bleiben nicht betretbar. Die bestehende Nachbaransicht an der seitlichen Trennwand und die Update-Administration bleiben unverändert.
 
 ## Neu in 0.11.2 – System-Updates über das Admin-Konto
 
