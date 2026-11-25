@@ -1,4 +1,4 @@
-import { RoomRenderer, RoomPhysics, DECOR, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, PORTAL_SIDES } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
@@ -19,7 +19,7 @@ function startReload(){if(!canPlay()||!equipped||reloadId||ammo[equipped]===clip
 function stepReload(dt){if(!reloadId)return;const before=reloadLeft;reloadLeft=Math.max(0,reloadLeft-dt);if(before>RELOAD_TIME*.48&&reloadLeft<=RELOAD_TIME*.48)audio.play('reload',null,1);renderer.reload?.(1-reloadLeft/RELOAD_TIME);if(reloadLeft===0){ammo[reloadId]=clipSize[reloadId];audio.play('click');reloadId=null;renderer.reload?.(0);updateAmmo();}}
 const rgb=h=>[parseInt(h.slice(0,2),16)/255,parseInt(h.slice(2,4),16)/255,parseInt(h.slice(4,6),16)/255];
 function mat(c){
-  return ['a58d72','aa8b67','b28f68'].includes(c)?'wooden_floor_01'
+  return c==='465a70'?'hotel_carpet':c==='464749'?'hotel_stripe':['a58d72','aa8b67','b28f68'].includes(c)?'wooden_floor_01'
     :['e3ded3','e4e1d9','e9e5dc','d8d2c9','d7d3ce','ddd7cf'].includes(c)?'white_plaster_02':c==='f0ede8'?'paint'
     :['765742','81664b','655343','a77a48','967e64','ac9478','7f6752','8a715c','70553f'].includes(c)?'oak_veneer_01'
     :['667d89','9caeb3','536c76','466c79','ccd7df','c3ced7','d6dce2','bfc8cf'].includes(c)?'rough_linen'
@@ -33,13 +33,13 @@ const room=[];
 function solid(x,y,z,w,h,d,c){box(x,y,z,w,h,d,c);room.push({p:[x,y,z],s:[w,h,d]});}
 
 // Room shell.
-for(const [id,w] of Object.entries(WALLS)){solid(...w.p,...w.s,w.kind==='floor'?'aa8b67':w.kind==='ceiling'?'e4e1d9':'d8d2c9');objects.at(-1).surfaceId=id;room.at(-1).surfaceId=id;}
+for(const [id,w] of Object.entries(WALLS)){solid(...w.p,...w.s,w.kind==='floor'?'465a70':w.kind==='ceiling'?'e4e1d9':id==='surface_7'?'464749':'d8d2c9');objects.at(-1).surfaceId=id;room.at(-1).surfaceId=id;}
 // A visible lower safety foundation keeps the unfinished world bounded.
 solid(0,-1.46,0,10,.22,10,'605a50');
 
 // Baseboards, crown details, outlet and switch.
 for(let x of [-4.86,4.86]){const start=objects.length;box(x,.075,0,.08,.15,9.78,'f0ede8');groupSurface(x<0?'surface_trim_w':'surface_trim_e',start);}
-{const start=objects.length;box(0,.075,4.86,9.78,.15,.08,'f0ede8');groupSurface('surface_trim_s',start);}
+{const start=objects.length;box(0,.075,4.86,9.78,.15,.08,'252a2e');groupSurface('surface_trim_s',start);}
 for(let x of [-3,3]){const start=objects.length;box(x,.075,-4.86,3.85,.15,.08,'f0ede8');groupSurface(x<0?'surface_trim_nw':'surface_trim_ne',start);}
 for(let x of [-4.86,4.86]){const start=objects.length;box(x,2.965,0,.1,.08,9.8,'f0ede8');groupSurface(x<0?'surface_crown_w':'surface_crown_e',start);}
 for(let z of [-4.86,4.86]){const start=objects.length;box(0,2.965,z,9.8,.08,.1,'f0ede8');groupSurface(z<0?'surface_crown_n':'surface_crown_s',start);}
@@ -57,12 +57,8 @@ room.push(...PORTAL_SIDES);
 // Furniture visuals and collision layout share the same dimensions.
 for(const [id,slot] of Object.entries(DECOR))room.push({p:[slot.p[0],slot.p[1]+slot.s[1]/2,slot.p[2]],s:slot.s,surfaceId:'surface_'+id});
 
-// Wardrobe and shelf.
-solid(3.95,1.4,-3.62,1.44,2.8,.74,'967e64');objects.at(-1).surfaceId='surface_wardrobe';room.at(-1).surfaceId='surface_wardrobe';const wardrobeStart=objects.length;
-for(let y of [.36,1.03,1.72,2.38])box(3.95,y,-3.27,1.34,.025,.04,'655343');
-box(3.61,1.4,-3.26,.03,2.45,.04,'655343');
-box(4.29,1.4,-3.26,.03,2.45,.04,'655343');
-box(3.95,1.2,-3.28,.48,.06,.03,'252a2e');for(const o of objects.slice(wardrobeStart))o.parentSurface='surface_wardrobe';
+// Open hotel wardrobe with TV; use the same collider and damage ID.
+{const {p,s}=HOTEL_LAYOUT.surface_wardrobe;solid(...p,...s,'24282c');objects.at(-1).surfaceId='surface_wardrobe';room.at(-1).surfaceId='surface_wardrobe';}
 
 // Decorative radiator beneath the window.
 {const start=objects.length;box(-4.72,.52,-.96,.12,.84,1.6,'f0ede8');
@@ -70,25 +66,13 @@ for(let i=0;i<7;i++)box(-4.66,.53,-1.58+i*.26,.03,.78,.13,'f0ede8');
 box(-4.61,.95,-1.72,.03,.14,.08,'c6b8a1');
 box(-4.61,.95,-.18,.03,.14,.08,'c6b8a1');groupSurface('surface_radiator',start);}
 
-// Small architectural and decor details.
-{const start=objects.length;box(0,1.55,4.86,1.82,1.1,.08,'70553f');
-box(0,1.56,4.79,1.66,.95,.04,'9caeb3');
-for(let x of [-.63,-.21,.21,.63])box(x,1.56,4.75,.18,.68,.03,'75846b');groupSurface('surface_picture',start);}
+// Hotel headboard, shelves and recessed lighting are rendered by room_decor.js.
 
-const DECOR_BOUNDS={...decorBounds,surface_windowframe:{p:[-4.88,1.74,-1],s:[.45,1.7,2.8]},surface_curtain_l:{p:[-4.52,1.5,-2.12],s:[.34,2.6,.98]},surface_curtain_r:{p:[-4.52,1.5,.12],s:[.34,2.6,.98]},surface_curtainrod:{p:[-4.5,2.73,-1],s:[.45,.14,3.3]},surface_ceilinglamp:{p:[0,2.86,0],s:[.74,.22,.74]},...Object.fromEntries(room.filter(o=>o.surfaceId&&!WALLS[o.surfaceId]).map(o=>[o.surfaceId,o])),surface_lamp:{p:[2.24,.93,4.53],s:[.42,.68,.42]},surface_rug:{p:[-.65,.012,1.4],s:[3.2,.05,2.22]}};
-const spec={
-  surface_bed:{p:[DECOR.bed.p[0],DECOR.bed.p[1]+DECOR.bed.s[1]/2,DECOR.bed.p[2]],s:DECOR.bed.s,c:'bfc8cf',max:REMOVED,decor:true},
-  surface_wardrobe:{p:[3.95,1.4,-3.62],s:[1.44,2.8,.74],c:'967e64',max:REMOVED,decor:true},
-  crate:{p:[-1.4,.45,-2.05],s:[.9,.9,.9],c:'a77a48',max:60},
-  table:{p:[2.25,.39,-1.7],s:[1.6,.78,.85],c:'765742',max:100},
-  window:{p:[-4.94,1.74,-1],s:[.045,1.44,2.38],c:'75b6d1',max:35},
-  chair:{p:[2.15,.5,.15],s:[.86,1,.9],c:'466c79',max:60},
-  sofa:{p:[-3.32,.55,2.84],s:[2.5,1.1,1.4],c:'667d89',max:150},
-  coffee_table:{p:[-3.3,.25,1.22],s:[1.4,.5,.76],c:'765742',max:100}
-};
+const DECOR_BOUNDS={...decorBounds,surface_windowframe:{p:[-4.88,1.74,-1],s:[.45,1.7,2.8]},surface_curtain_l:{p:[-4.52,1.48,-2.12],s:[.34,2.85,.98]},surface_curtain_r:{p:[-4.52,1.48,.12],s:[.34,2.85,.98]},surface_curtainrod:{p:[-4.5,2.925,-1],s:[.45,.14,3.3]},surface_ceilinglamp:{p:[0,2.95,0],s:[.74,.10,.74]},surface_picture:{p:[-2.1,1.5,4.58],s:[3.2,1.2,.25]},...Object.fromEntries(room.filter(o=>o.surfaceId&&!WALLS[o.surfaceId]).map(o=>[o.surfaceId,o])),surface_lamp:{p:[HOTEL_LAYOUT.nightstand.p[0],.85,HOTEL_LAYOUT.nightstand.p[2]],s:[.42,.46,.42]},surface_rug:HOTEL_LAYOUT.rug};
+const spec=Object.fromEntries(Object.entries(HOTEL_LAYOUT).filter(([,o])=>typeof o.max==='number'));
 
 let wallSolids=Object.values(WALLS).map(w=>({p:w.p,s:w.s})),wallSignatures={};
-let state={walls:{},decor:{},marks:[],lights_on:true,placements:{},rotations:{},objects:Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,o.max])),unlocked:false}, bodies=Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,{p:[...o.p],v:[0,0,0]}])), debris=[], busy=false, held=null, player={x:0,z:3,y:0,vy:0,yaw:.62,pitch:0}, keys=new Set(), first=true, started=false, active=false;
+let state={walls:{},decor:{},marks:[],lights_on:true,placements:{},rotations:{},objects:Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,o.max])),unlocked:false}, bodies=Object.fromEntries(Object.entries(spec).map(([id,o])=>[id,{p:[...o.p],v:[0,0,0]}])), debris=[], busy=false, held=null, player={x:HOTEL_LAYOUT.spawn.p[0],z:HOTEL_LAYOUT.spawn.p[2],y:0,vy:0,yaw:HOTEL_LAYOUT.spawn.yaw,pitch:0}, keys=new Set(), first=true, started=false, active=false;
 let lastInteractionHint=-Infinity, heldAngle=0;
 const yawQuat=a=>[0,Math.sin(a*Math.PI/360),0,Math.cos(a*Math.PI/360)];
 const quarter=a=>((Math.round(a/90)*90%360)+360)%360;
@@ -300,7 +284,7 @@ qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListe
     }
     $('m16-credit').textContent=renderer.m16Credit||'Lokale Spielrequisite';
     for(const id of weaponIds){ $('model-'+id).textContent=renderer.propPaths?.[id]?(id==='m16'?'OpenGameArt Originalmodell':'Fototexturiertes Originalmodell'):'Lokales Ersatzmodell'; }
-    $('realismstatus').textContent=(renderer.realismStatus?.outside==='ready'?'Fotografischer Fensterausblick':'Fensterausblick: Ersatz')+' · Schlafzone: '+(renderer.realismStatus?.bed==='ready'?'Originalmodell':'Lokales Stoffmodell')+' · Nachttisch: '+(renderer.realismStatus?.nightstand==='ready'?'Originalmodell':'Lokales Modell')+' · Tür: '+(renderer.realismStatus?.door==='ready'?'Originalmodell':'Lokale Kassettentür')+' · Hände: '+(renderer.realismStatus?.hands==='ready'?'WebXR-Originalmodelle':'Modell nicht vollständig verfügbar');
+    $('realismstatus').textContent=(renderer.realismStatus?.outside==='ready'?'Fotografischer Fensterausblick':'Fensterausblick: Ersatz')+' · Hotelzimmer: modellierte Stoffe und Möbel'+' · Tür: '+(renderer.realismStatus?.door==='ready'?'Originalmodell':'Lokale Kassettentür')+' · Hände: '+(renderer.realismStatus?.hands==='ready'?'WebXR-Originalmodelle':'Modell nicht vollständig verfügbar');
     status.textContent='Rapier-Physik wird geladen …';
     physicsWorld=await RoomPhysics.create(room.filter(o=>!movableDecor(o.surfaceId)),spec);
     status.textContent='Fotomaterialien und Rapier-Physik bereit';
