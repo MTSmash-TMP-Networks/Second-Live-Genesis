@@ -32,3 +32,15 @@ for(const id of ['surface_0','surface_1']){
 const furniture=await RoomPhysics.create([{p:[0,1,0],s:[.5,.5,.5],surfaceId:'surface_nightstand'}],{});
 const furnitureRay=new RAPIER.Ray({x:0,y:1,z:1},{x:0,y:0,z:-1});furniture.world.step();assert.ok(furniture.world.castRay(furnitureRay,2,true));furniture.syncDecor({surface_nightstand:4});furniture.world.step();assert.equal(furniture.world.castRay(furnitureRay,2,true),null);furniture.syncDecor({});furniture.world.step();assert.ok(furniture.world.castRay(furnitureRay,2,true));
 console.log('Rapier: irregular floor/ceiling collision and destructible decor repair');
+
+const bedSpec={bed:{p:[0,.6,0],s:[1.56,1.2,2.26],decor:true}};
+const bp=await RoomPhysics.create([{p:[0,-.1,0],s:[10,.2,10]}],bedSpec);
+const bb={bed:{p:[0,.6,0],v:[0,0,0]}},bs={objects:{bed:4},unlocked:false};
+const quarter=[0,Math.SQRT1_2,0,Math.SQRT1_2];
+for(let i=0;i<3;i++)bp.step(1/60,bb,bs,'bed',[1,.6,1],[],quarter);
+assert.ok(Math.abs(bb.bed.q[1]-Math.SQRT1_2)<.001,'held rotation');
+bb.bed={p:[1,.6,1],v:[0,0,0],q:quarter};
+for(let i=0;i<10;i++)bp.step(1/60,bb,bs,null,null,[]);
+assert.ok(Math.abs(bb.bed.q[1]-Math.SQRT1_2)<.001,'saved orientation restored');
+assert.ok(Math.abs(bb.bed.p[0]-1)<.001,'placed furniture remains stationary');
+console.log('Rapier: movable decor rotation and stable placement');
