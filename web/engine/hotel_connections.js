@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { WALLS, REMOVED } from './wall_layout.js';
-import { HOTEL_LAYOUT } from './hotel_room.js';
 import { curtainPose } from './architecture.js';
 
 // A wall is open only if a physical wall cell has actually been removed.
@@ -13,11 +12,11 @@ export class NeighborRoomView{
  constructor(r,spec){
   this.root=new THREE.Group();this.root.name='Adjacent hotel room (read-only view)';this.root.position.x=10;this.root.scale.x=-1;this.root.visible=false;r.scene.add(this.root);
   this.furnished=new THREE.Group();this.shell=new THREE.Group();this.root.add(this.furnished,this.shell);
-  this.clones=new Map();this.items=new Map();this.decor=new Map();this.materials=new Map();this.spec=spec;
+  this.clones=new Map();this.items=new Map();this.decor=new Map();this.materials=new Map();this.baseEmission=new Map();this.spec=spec;
   const exclude=new Set([r.walls.entries.get('surface_6')?.mesh,r.impacts.targets.get('surface_trim_e')?.root,r.impacts.targets.get('surface_crown_e')?.root,r.impacts.targets.get('surface_outlet')?.root].filter(Boolean));
   // Copy the pristine meshes before any personal save is loaded. Share geometry
   // but isolate materials, visibility and transforms from the player's own room.
-  const material=m=>{if(!this.materials.has(m)){const c=m.clone();this.materials.set(m,c);}return this.materials.get(m);};
+  const material=m=>{if(!this.materials.has(m)){const c=m.clone();this.materials.set(m,c);this.baseEmission.set(c,c.emissiveIntensity||0);}return this.materials.get(m);};
   const copy=(o,parent)=>{
    if(!o||exclude.has(o)||o.isLight||o.isCamera)return null;
    const n=o.clone(false);this.clones.set(o,n);
@@ -47,16 +46,18 @@ export class NeighborRoomView{
    box(w.p,w.s,m);
   }
   box([0,1.1,-5],[2,2.2,.2],r.textured.hotel_wall);
+  this.light=new THREE.PointLight(0xffe6c6,12,6,2);this.light.position.set(0,2.72,0);this.root.add(this.light);this.light.intensity=0;
   this.furnished.visible=false;this.shell.visible=true;
  }
  setSnapshot(snapshot){
   const state=snapshot?.room;
   this.furnished.visible=!!state;this.shell.visible=!state;
+  this.light.intensity=state?.lights_on===false||!state?0:12;
   if(!state)return;
   for(const [id,root] of this.decor)root.visible=(state.decor?.[id]||0)<REMOVED;
   for(const [id,entry] of this.items){
    const spec=this.spec[id],p=state.placements?.[id]||spec.p,a=(state.rotations?.[id]||0)*Math.PI/180;
-   entry.root.visible=(state.objects?.[id]??spec.max)>0;
+   entry.root.visible=spec.decor?(state.decor?.[id]||0)<REMOVED:(state.objects?.[id]??spec.max)>0;
    entry.root.rotation.set(0,id==='window'?0:a,0);
    entry.root.position.set(...p);
    if(!entry.centered)entry.root.position.y-=spec.s[1]/2;
@@ -65,9 +66,8 @@ export class NeighborRoomView{
    const root=this.decor.get(id);if(!root)continue;
    const p=curtainPose(side,state.curtains_closed?1:0);root.scale.z=p.scale;root.position.z=p.offset;
   }
-  // The neighbouring light switch is reflected without introducing extra
-  // unshadowed light into the active player's room.
-  for(const [source,copy] of this.materials)if(copy.emissive)copy.emissiveIntensity=state.lights_on===false?0:source.emissiveIntensity||0;
+  // Keep the neighbour's lighting independent of the local room switch.
+  for(const [copy,base] of this.baseEmission)if(copy.emissive)copy.emissiveIntensity=state.lights_on===false?0:base;
  }
  setVisible(on){this.root.visible=!!on;}
 }
