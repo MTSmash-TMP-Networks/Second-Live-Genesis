@@ -363,7 +363,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     updater = updater or UpdateBridge(None, "")
     game = GameStore(store.path) # preserve the original legacy world unchanged in personal mode
     capture = CaptureStore(store.path) if world_capture else None
-    accounts = AccountStore(capture) if capture and not legacy_capture else None
+    accounts = AccountStore(capture,os.getenv('SECOND_LIVE_UPDATE_ADMIN_EMAIL','')) if capture and not legacy_capture else None
     lobby = HotelLobby() if accounts else None
     # Keep the original player/cookie/home database, independent of image capture.
     panorama = None
@@ -371,7 +371,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.11.1"
+        server_version = "SecondLive/0.11.2"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -516,10 +516,17 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             return GameStore(capture.home_path(self.player())) if capture else game
 
         def require_admin(self):
-            if updater.authorized(self.headers.get("X-SecondLive-Admin", "")):
-                return True
-            self.send_json(401, {"error": "Separater Update-Admin-Schluessel erforderlich"})
-            return False
+            # All host-update routes require a current account session and the
+            # locally activated, configured admin identity. No legacy key bypass.
+            if not self.require_game():return False
+            player=accounts.identify(self.account_cookie()) if accounts else None
+            if not player:
+                self.send_json(401,{"error":"Bitte mit dem Admin-Konto anmelden"})
+                return False
+            if not accounts.is_update_admin(player):
+                self.send_json(403,{"error":"System-Updates sind nur fuer den Administrator freigegeben"})
+                return False
+            return True
 
         def do_GET(self):
             path = unquote(urlsplit(self.path).path)
@@ -556,7 +563,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.11.1", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.11.2", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
