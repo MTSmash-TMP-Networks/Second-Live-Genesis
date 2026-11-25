@@ -8,7 +8,7 @@ The same local GLB loader serves the character studio, the player's third-person
 
 Existing 14 numeric appearance fields are preserved in stored profiles; a new optional model index defaults to the standard identity (Ryan, or Emma for the old curvy body preset). The server accepts both old and new profile shapes. The studio exposes the 20 actual identities, height, original outfit, business suit, shirt, T-shirt and fabric colours. Hair, face, skin, eyes, beard, glasses and shoes are part of the chosen identity rather than independent sliders. Trousers can be separately tinted with shirt or T-shirt; the original and business outfits are combined garments. Older appearance values remain stored but do not all affect the new identity.
 
-Native idle and walk clips are used; the supplied GLBs do not include dedicated run and crouch motion capture. Sprint uses faster walk playback, and crouch uses a slower walk or idle until dedicated clips are added. Gameplay movement and collision states are unchanged. The concierge remains on its existing separate uniform rig.
+Native idle and walk clips are used; the supplied GLBs do not include dedicated run and crouch motion capture. Sprint uses faster walk playback, and crouch uses a slower walk or idle until dedicated clips are added. Gameplay movement and collision states are unchanged. The concierge now uses the same Rocketbox loader, with the fixed Daniel business identity and the original suit. Native idle and walk remain active while an upper-body-only native Wave clip blends in for greetings. The old uniform geometry is retained only for emergency fallback; patrol, greeting audio and server state remain unchanged.
 
 ## Verification
 

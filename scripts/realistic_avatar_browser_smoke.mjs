@@ -9,7 +9,7 @@ try{
  page.on('console',m=>{if(/content.security.policy|refused to|unsafe.eval/i.test(m.text()))security.push(m.text());});
  await page.goto(url,{waitUntil:'domcontentloaded'});
  const result=await page.evaluate(async()=>{
-  const {CharacterStudio,DEFAULT_CHARACTER}=await import('/engine/renderer.bundle.js');
+  const {CharacterStudio,DEFAULT_CHARACTER,createHotelNpc,animateCharacter,disposeCharacter}=await import('/engine/renderer.bundle.js');
   const studio=new CharacterStudio();
   const wait=async()=>{for(let i=0;i<600;i++){const u=studio.root?.userData;if(u?.realisticStatus==='ready')return u;if(u?.realisticStatus==='fallback')throw Error(u.realisticError);await new Promise(r=>setTimeout(r,100));}throw Error('Avatar timeout');};
   studio.set(DEFAULT_CHARACTER);
@@ -20,9 +20,20 @@ try{
   studio.set({...DEFAULT_CHARACTER,model:2});
   const c=await wait(),second=c.realistic.look.model.id;
   studio.render({render(){}},1.8,.016);studio.clear();
-  return {first,second,same,outfit,visible};
+  const npc=createHotelNpc();
+  try{
+   for(let i=0;i<600&&npc.userData.realisticStatus==='loading';i++)await new Promise(r=>setTimeout(r,100));
+   const u=npc.userData,r=u.realistic;if(!r)throw Error(u.realisticError||'Hotel staff not loaded');
+   if(!r.actions.greeting)throw Error('Hotel staff upper-body Wave clip missing');
+   u.hotelGreeting=1.4;animateCharacter(npc,.05,true,'walk');
+   const greeting=r.greetingActive&&r.actions.greeting.isRunning(),walking=r.current===r.actions.walk;
+   const staff=r.look.model.id,formal=r.outfit==='original'||r.outfit==='formal';
+   u.hotelGreeting=0;animateCharacter(npc,.05,true,'walk');
+   return {first,second,same,outfit,visible,staff,formal,greeting,walking,ended:!r.greetingActive};
+  }finally{disposeCharacter(npc);}
  });
  assert.equal(result.first,'ryan');assert.equal(result.second,'ethan');assert.equal(result.same,true);assert.equal(result.outfit,'tee');assert.ok(result.visible);
+ assert.equal(result.staff,'daniel');assert.ok(result.formal&&result.greeting&&result.walking&&result.ended);
  assert.deepEqual(external,[]);assert.deepEqual(security,[]);
  console.log('Browser Rocketbox preview, outfit swap, identity swap and local-only loading:',result);
 }finally{await browser.close();}

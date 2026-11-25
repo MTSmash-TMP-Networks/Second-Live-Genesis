@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import options from './character_options.json';
-import {ROCKETBOX_CATALOG,resolveRocketboxLook,outfitParts} from './rocketbox_look.js';
+import {ROCKETBOX_CATALOG,resolveRocketboxLook,outfitParts,hotelNpcProfile,isGreetingTrack} from './rocketbox_look.js';
 const defaults=Object.fromEntries(Object.entries(options).map(([k,v])=>[k,v.default]));
 assert.equal(ROCKETBOX_CATALOG.models.length,20);
 assert.equal(options.model.values.length,21);
@@ -24,3 +24,10 @@ assert.deepEqual([...outfitParts('tee',parts).visible],['Top_tee','Skin_tee','Tr
 assert.deepEqual([...outfitParts('formal',parts).visible],['Outfit_formal','Skin_formal']);
 parts.delete('Outfit_formal');assert.equal(outfitParts('formal',parts).top,'original');
 console.log('Rocketbox: 20 identities, supported outfit controls and old profile mapping validated');
+
+const npc=hotelNpcProfile(defaults,ROCKETBOX_CATALOG),staff=resolveRocketboxLook(npc,options);
+assert.equal(staff.model.id,'daniel');assert.equal(staff.top,'formal');assert.equal(staff.tint,null);
+for(const key of Object.keys(options))assert.ok(Number.isInteger(npc[key])&&npc[key]>=0&&npc[key]<options[key].values.length,key);
+for(const name of ['mixamorigRightArm.quaternion','mixamorig:LeftForeArm.quaternion','mixamorigRightHandThumb1.quaternion','mixamorigRightShoulder.quaternion'])assert.ok(isGreetingTrack(name),name);
+for(const name of ['mixamorigHips.position','mixamorigRightLeg.quaternion','mixamorigRightArm.position','mixamorigSpine.quaternion','Root.position'])assert.ok(!isGreetingTrack(name),name);
+console.log('Hotel staff: fixed formal identity and upper-body-only greeting mask validated');

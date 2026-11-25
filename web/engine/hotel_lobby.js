@@ -92,12 +92,12 @@ export class HotelLobbyView{
   this.lights=[];for(let i=0;i<7;i++){const l=new THREE.PointLight(0xffdfb6,17,8,2);l.position.set(0,2.72,(i-3)*6);this.scene.add(l);this.lights.push(l);}
   this.local=null;
   this.npc=createHotelNpc();this.npc.name='KI-Hotelservice';this.npc.visible=false;this.npcTarget=null;this.npcGreeting=0;
-  const tag=nameTag('KI-Hotelservice',2.13,1.02,.35);this.npc.add(tag);
+  const tag=nameTag('KI-Hotelservice',2.13,1.02,.35);this.npc.add(tag);this.npc.userData.nameTag=tag;
   this.guestRoot.add(this.npc);
  }
  syncNpc(p){
   if(!p||!Array.isArray(p.position)||p.position.length!==3||!p.position.every(Number.isFinite)||!Number.isFinite(p.yaw)){
-   this.npc.visible=false;this.npcTarget=null;this.npcGreeting=0;return;
+   this.npc.visible=false;this.npcTarget=null;this.npcGreeting=0;this.npc.userData.hotelGreeting=0;return;
   }
   if(!this.npcTarget||this.npc.position.distanceTo(new THREE.Vector3(...p.position))>4){
    this.npc.position.set(...p.position);this.npc.rotation.y=p.yaw;
@@ -110,11 +110,13 @@ export class HotelLobbyView{
   const p=this.npcTarget,g=this.npc,t=1-Math.exp(-dt*12);
   g.position.lerp(new THREE.Vector3(...p.position),t);
   g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;
+  this.npcGreeting=Math.max(0,this.npcGreeting-dt);
+  const u=g.userData;u.hotelGreeting=this.npcGreeting;
   animateCharacter(g,dt,p.walking!==false,'walk');
+  if(u.realistic)return; // Rocketbox plays its own native upper-body greeting.
   if(this.npcGreeting>0){
-   this.npcGreeting=Math.max(0,this.npcGreeting-dt);
-   const u=g.userData,weight=Math.min(1,this.npcGreeting*4);
-   // A small greeting gesture while continuing the patrol.
+   const weight=Math.min(1,this.npcGreeting*4);
+   // The procedural emergency fallback retains its old greeting.
    u.arms[1].rotation.z=.1+weight*.65;u.arms[1].rotation.x+=(-.4-u.arms[1].rotation.x)*weight*.35;u.elbows[1].rotation.x+=(-.9-u.elbows[1].rotation.x)*weight*.35;
    if(player){
     const yaw=Math.atan2(g.position.x-player.x,g.position.z-player.z);

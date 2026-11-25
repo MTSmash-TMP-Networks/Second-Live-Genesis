@@ -19,3 +19,14 @@ export function outfitParts(top,available){
  if((top==='shirt'||top==='tee')&&!available.has(top==='shirt'?'Top_shirt':'Top_tee'))top='original';
  return {top,visible:new Set(OUTFIT_PARTS[top]||OUTFIT_PARTS.original)};
 }
+
+// Stable staff identity, independent of any player profile or editor defaults.
+export function hotelNpcProfile(defaults,catalog){
+ const model=catalog.models.findIndex(m=>m.id==='daniel'&&m.outfit==='formal')+1;
+ if(!model)throw Error('Missing hotel staff Rocketbox model');
+ return {...defaults,model,body:1,height:1,top:1,topColor:8,trousers:1,trousersColor:3,shoes:2,beard:0,glasses:0};
+}
+export function isGreetingTrack(name){
+ // Include upper-body bone tracks only. Never override hips, legs, feet or root motion.
+ return /(?:shoulder|clavicle|forearm|upperarm|(?:left|right)arm|hand|thumb|index|middle|ring|pinky|finger)/i.test(name.split('.')[0])&&/\.(quaternion|rotation)$/.test(name);
+}

@@ -2,6 +2,7 @@
 // facial features and clothing. Same model factory for editor and multiplayer.
 import * as THREE from 'three';
 import options from './character_options.json';
+import {ROCKETBOX_CATALOG,hotelNpcProfile} from './rocketbox_look.js';
 import {prepareRealistic,animateRealistic,disposeRealistic,updateRealistic} from './realistic_character.js';
 import {RGBELoader} from 'three/addons/loaders/RGBELoader.js';
 export const CHARACTER_OPTIONS=options;
@@ -142,9 +143,13 @@ export function createCharacter(value,{legacyOnly=false,studio=false}={}){
  if(!legacyOnly)prepareRealistic(root,a,options,studio);
  return root;
 }
-// Original concierge character inspired by classic red hotel uniforms.
+// The concierge uses the same Rocketbox loader as all players.
 export function createHotelNpc(){
- const g=createCharacter({...DEFAULT_CHARACTER,body:1,height:1,face:1,skin:1,hair:1,hairColor:2,eyes:0,top:3,topColor:4,trousers:1,trousersColor:3,shoes:2,beard:0,glasses:0},{legacyOnly:true});
+ const profile=hotelNpcProfile(DEFAULT_CHARACTER,ROCKETBOX_CATALOG);
+ const g=createCharacter(profile);
+ g.userData.hotelNpc=true;
+ g.userData.hotelGreeting=0;
+ // Keep the old uniform geometry only as an emergency fallback when loading fails.
  const {head,body,arms}=g.userData,red=material(0x9d2636,.8),gold=material(0xbda56d,.36),black=material(0x26272c,.68);
  // Pillbox concierge hat: shaped crown, dark band, gold piping and insignia.
  loft(head,[[.136,.142,.135,.012],[.158,.148,.14,.012],[.223,.141,.137,.012],[.244,.124,.124,.012],[.249,.003,.003,.012]],red,48);

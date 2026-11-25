@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.1 – Rocketbox Hotel Staff
+- KI-Hotelservice verwendet das festgelegte, texturierte Rocketbox-Grundmodell Daniel im Business-Anzug statt der bisherigen künstlichen Figur.
+- Native Stand- und Gehbewegung sowie überblendete Wave-Begrüßung nur für den Oberkörper; Laufroute, Begrüßungston und gemeinsamer Hotelflur bleiben unverändert.
+- Bestehende Modelldaten werden wiederverwendet, keine neuen externen Downloads. Neue Profil-, Animationsmasken- und Browser-Regressionstests für den Hotelmitarbeiter.
+
 ## 0.12.0 – Rocketbox Characters & Automatic Reload
 - 20 fertige Microsoft-Rocketbox-GLB-Menschenmodelle aus Avatar Studio ersetzen die bisherige Ara/MakeHuman-Erzeugung. Lokale Originaltexturen, Skelett und native Bewegungsclips; Build prüft jede fest gepinnte Datei.
 - Charakterstudio: echte Grundmodelle, austauschbare Original-/Business-/Hemd-/T-Shirt-Outfits, realistische Größenanpassung und getrennte Stofffarben bei Hemd/T-Shirt. Lokales HDR-Studiolicht und weichere Schatten. Keine irreführenden Regler für fest modellierte Gesichter oder Haare; alte Werte bleiben gespeichert.

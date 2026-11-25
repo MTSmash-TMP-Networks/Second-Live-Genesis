@@ -25,7 +25,7 @@ import { HotelLobbyView } from './hotel_lobby.js';
 import { NeighborRoomView, HallFacadeViews, hotelOpenings } from './hotel_connections.js';
 export { hotelOpenings } from './hotel_connections.js';
 import { CharacterStudio, createCharacter, animateCharacter, disposeCharacter } from './character.js';
-export { CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, CharacterStudio } from './character.js';
+export { CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, CharacterStudio, createHotelNpc, animateCharacter, disposeCharacter } from './character.js';
 export { LOBBY_LAYOUT, LOBBY_CAPACITY, lobbyDoor, lobbyWalkable, lobbyDoorAt } from './lobby_layout.js';
 export { PORTAL_SIDES };
 export { DECOR } from './room_decor.js';

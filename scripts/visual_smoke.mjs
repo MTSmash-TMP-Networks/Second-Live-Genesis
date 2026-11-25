@@ -187,7 +187,7 @@ import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,c
   lobby.scene.updateMatrixWorld(true);
   assert.equal(noCameraRay.intersectObject(npcLabel,true).length,0);
   assert.doesNotThrow(()=>noCameraRay.intersectObject(lobby.guestRoot,true));
-  lobby.syncNpc({position:[.62,0,-3],yaw:Math.PI,walking:true});lobby.greetNpc();lobby.step(.1,{x:0,y:0,z:-3});assert.ok(lobby.npc.position.z>-4&&lobby.npc.position.z<-3);assert.ok(lobby.npcGreeting>0);lobby.syncNpc(null);assert.equal(lobby.npc.visible,false);
+  lobby.syncNpc({position:[.62,0,-3],yaw:Math.PI,walking:true});lobby.greetNpc();lobby.step(.1,{x:0,y:0,z:-3});assert.ok(lobby.npc.position.z>-4&&lobby.npc.position.z<-3);assert.ok(lobby.npcGreeting>0);assert.equal(lobby.npc.userData.hotelGreeting,lobby.npcGreeting);lobby.syncNpc(null);assert.equal(lobby.npc.visible,false);assert.equal(lobby.npc.userData.hotelGreeting,0);
   lobby.sync([{slot:1,position:[0,0,-2],yaw:0}]);assert.equal(lobby.peers.size,1);
   const peerLabel=lobby.peers.get(1).g.userData.nameTag;assert.ok(peerLabel.isSprite);
   assert.equal(noCameraRay.intersectObject(peerLabel,true).length,0);
@@ -224,7 +224,7 @@ console.log('Shared lobby: layout, named doors, avatar interpolation and cleanup
  const studio=new CharacterStudio();studio.set(DEFAULT_CHARACTER);const old=studio.root;studio.set({...DEFAULT_CHARACTER,skin:0});assert.notEqual(studio.root,old);studio.turn(.3);let renders=0;studio.render({render(scene,camera){assert.equal(scene,studio.scene);assert.equal(camera,studio.camera);renders++;}},1.8,.016);studio.render({render(){renders++;}},.6,.016);assert.equal(renders,2);disposeCharacter(studio.root);
 }
 {
- const npc=createHotelNpc();npc.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(npc);
+ const npc=createHotelNpc();assert.equal(npc.userData.hotelNpc,true);assert.equal(npc.userData.hotelGreeting,0);assert.equal(npc.userData.character.model,9);assert.equal(npc.userData.character.top,1);npc.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(npc);
  assert.ok(bounds.max.y>1.85&&bounds.max.y<2.1);assert.ok(bounds.min.y>-.13);
  const c=createCharacter(DEFAULT_CHARACTER);
  for(let i=0;i<20;i++)animateCharacter(c,.05,true,'crouch');

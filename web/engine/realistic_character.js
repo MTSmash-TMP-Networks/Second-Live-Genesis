@@ -1,7 +1,7 @@
 // Prepared, locally hosted Microsoft Rocketbox avatars. No browser mesh generation.
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {resolveRocketboxLook,OUTFIT_PARTS,outfitParts} from './rocketbox_look.js';
+import {resolveRocketboxLook,OUTFIT_PARTS,outfitParts,isGreetingTrack} from './rocketbox_look.js';
 
 const base='/assets/avatars/data/',pending=new Map(),cache=new Map(),queue=[];
 let active=0;
@@ -116,6 +116,17 @@ export function prepareRealistic(root,a,options,studio=false){
    if(!idle||!walk)throw Error('Bewegungsanimationen fehlen');
    const mixer=new THREE.AnimationMixer(model),actions={idle:mixer.clipAction(idle),walk:mixer.clipAction(walk)};
    for(const id of ['run','crouch','crouchwalk']){const clip=findClip(gltf.animations,id);if(clip)actions[id]=mixer.clipAction(clip);}
+   if(u.hotelNpc){
+    const wave=findClip(gltf.animations,'wave');
+    if(wave){
+     const tracks=wave.tracks.filter(t=>isGreetingTrack(t.name)).map(t=>t.clone());
+     if(tracks.length){
+      const clip=new THREE.AnimationClip('HotelGreeting',wave.duration,tracks);
+      actions.greeting=mixer.clipAction(clip).setLoop(THREE.LoopOnce,1);
+      actions.greeting.clampWhenFinished=true;
+     }
+    }
+   }
    actions.idle.play();mixer.update(0);model.updateMatrixWorld(true);
    // All shipped garments use the same body. Fit uniformly rather than distorting proportions.
    const bounds=new THREE.Box3().setFromObject(model,true),size=bounds.getSize(new THREE.Vector3());
@@ -123,7 +134,7 @@ export function prepareRealistic(root,a,options,studio=false){
    const center=bounds.getCenter(new THREE.Vector3());
    model.position.x-=center.x;model.position.y-=bounds.min.y;model.position.z-=center.z;
    const pivot=new THREE.Group();pivot.rotation.y=Math.PI;pivot.add(model);
-   const r={pivot,model,mixer,actions,current:actions.idle,parts,morphMeshes,nativeHeight:size.y,height:size.y,look,time:0};
+   const r={pivot,model,mixer,actions,current:actions.idle,parts,morphMeshes,nativeHeight:size.y,height:size.y,look,time:0,greetingActive:false};
    applyAppearance(r,look);root.add(pivot);u.realistic=r;model=null;
    u.body.visible=false;u.body.traverse(o=>{if(o.isMesh)o.raycast=()=>{};});
    u.realisticStatus='ready';
@@ -141,7 +152,16 @@ export function animateRealistic(root,dt,moving,stance){
  const action=crouch?(moving?(r.actions.crouchwalk||r.actions.crouch||r.actions.walk):(r.actions.crouch||r.actions.idle)):moving?(sprint?(r.actions.run||r.actions.walk):r.actions.walk):r.actions.idle;
  if(action!==r.current){action.reset().setEffectiveWeight(1).play().crossFadeFrom(r.current,.22,false);r.current=action;}
  action.setEffectiveTimeScale(action===r.actions.walk?(sprint?1.6:crouch?.65:1):1);
- const delta=Math.max(0,Math.min(dt,.1));r.mixer.update(delta);r.time+=delta;
+ const delta=Math.max(0,Math.min(dt,.1));
+ // A separately weighted upper-body wave leaves the native walk cycle running.
+ const greeting=r.actions.greeting,remaining=u.hotelGreeting||0;
+ if(greeting){
+  if(remaining>0){
+   if(!r.greetingActive){greeting.reset().setDuration(1.7).play();r.greetingActive=true;}
+   greeting.setEffectiveWeight(2*Math.max(0,Math.min(1,(1.7-remaining)*6+.1,remaining*5)));
+  }else if(r.greetingActive){greeting.stop();r.greetingActive=false;}
+ }
+ r.mixer.update(delta);r.time+=delta;
  const phase=r.time%4.7,blink=Math.max(0,1-Math.abs(phase-.11)/.11);
  for(const m of r.morphMeshes)for(const key of ['eyeBlinkLeft','eyeBlinkRight']){
   const i=m.morphTargetDictionary[key];if(i!==undefined)m.morphTargetInfluences[i]=blink;
