@@ -1,0 +1,14 @@
+{
+  "halfWidth": 1.8,
+  "halfLength": 21,
+  "height": 2.85,
+  "roomsPerSide": 12,
+  "doorSpacing": 3.3,
+  "firstDoorZ": -18.15,
+  "doorWidth": 1.12,
+  "doorHeight": 2.2,
+  "firstRoom": 101,
+  "playerMargin": 0.28,
+  "leaseSeconds": 15,
+  "pollMilliseconds": 250
+}
