@@ -21,12 +21,13 @@ function stopCamera(){generation++;clearTimeout(timer);timer=null;stream?.getTra
 function scrollToPanel(el){el.scrollIntoView({behavior:'auto',block:'start'});}
 function nextSlot(){const [a,b]=rings[ring],saved=frames();return Array.from({length:b-a},(_,i)=>a+i).find(i=>!saved.has(i))??null;}
 function selectRing(which){ring=which;slot=nextSlot();steadySince=0;lastMetric=null;$('source').hidden=true;render();}
-function selectStation(sid,scroll=true){stopCamera();clearPreview();id=sid;zero=null;manual=!sensor;ring='middle';slot=nextSlot();$('source').hidden=true;render();if(scroll&&current())scrollToPanel(current().preview?$('preview-panel'):$('capture-panel'));}
+function selectStation(sid,scroll=true){stopCamera();clearPreview();id=sid;zero=null;manual=!sensor;$('fov').value=String(current()?.fov||75);ring='middle';slot=nextSlot();$('source').hidden=true;render();if(scroll&&current())scrollToPanel(current().preview?$('preview-panel'):$('capture-panel'));}
 function setState(s){state=s;if(!state.stations.some(x=>x.id===id)){const last=state.stations.at(-1);if(last)selectStation(last.id,false);else{id=null;stopCamera();clearPreview();}}render();}
 const portrait=()=>!matchMedia('(orientation: landscape)').matches;
 function pose(){if(!sensor||manual||!portrait()||zero===null||!orientation||performance.now()-orientation.time>2000)return null;return {...orientation,yaw:((orientation.yaw-zero)%360+360)%360};}
 function isAligned(){const p=pose(),t=state?.targets[slot];return !!p&&!!t&&slot<28&&aligned(p,t);}
 function guidance(){
+ if(!state||!current())return;
  const target=state?.targets[slot],p=pose(),ok=isAligned();
  $('camera-box').classList.toggle('aligned',ok);
  $('sensor-status').textContent=sensor&&!portrait()?'Handy hochkant halten':p?'Sensor aktiv':sensor&&!manual?'Startrichtung ausrichten':'Manuelle Richtung';
@@ -110,7 +111,7 @@ async function tick(gen){
  }catch(e){fail(e);stopCamera();render();}
  finally{if(gen===generation&&stream)timer=setTimeout(()=>tick(gen),300);}
 }
-$('file').onchange=async()=>{const f=$('file').files[0];$('file').value='';if(!f||busy||slot===null)return;stopCamera();render();let url;try{url=URL.createObjectURL(f);const img=new Image();await new Promise((ok,no)=>{img.onload=ok;img.onerror=()=>no(Error('Bild nicht lesbar. Bitte JPEG verwenden.'));img.src=url;});await save(jpeg(img,img.naturalWidth,img.naturalHeight));}catch(e){fail(e);}finally{if(url)URL.revokeObjectURL(url);}};
+$('file').onchange=async()=>{const f=$('file').files[0];$('file').value='';if(!f||busy||slot===null)return;const sid=id,n=slot;stopCamera();render();let url;try{url=URL.createObjectURL(f);const img=new Image();await new Promise((ok,no)=>{img.onload=ok;img.onerror=()=>no(Error('Bild nicht lesbar. Bitte JPEG verwenden.'));img.src=url;});if(id!==sid||slot!==n||busy)return;await save(jpeg(img,img.naturalWidth,img.naturalHeight));}catch(e){fail(e);}finally{if(url)URL.revokeObjectURL(url);}};
 $('show-source').onclick=()=>action(async()=>{const d=await request('panorama_image',{id,slot});$('source').src=d.image;$('source').hidden=false;});
 $('remove-source').onclick=()=>action(async()=>{if(!confirm('Diese Aufnahme entfernen?'))return;state=await request('panorama_remove',{id,slot});$('source').hidden=true;});
 async function build(){if(!allMiddle(current()))return;stopCamera();await action(async()=>{say('Panorama wird aus den gespeicherten Bildern zusammengesetzt …');state=await request('panorama_build',{id,fov:Number($('fov').value)});say('Panorama gespeichert. Du kannst dich rundum umsehen.');});if(current()?.preview)scrollToPanel($('preview-panel'));}
