@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.4 – Door Wall Fix
+- Wandfüllstücke links und rechts der Tür nutzen identisches glattes Hotelwandmaterial und bündige planare Geometrie statt alter Putztextur.
+- Sockelleisten bis zur Türzarge verlängert. Türmodell, Öffnung, Kollisionen und persistente Spielstände unverändert.
+- Geometrie-/Material-Regressionsprüfung ergänzt.
+
 ## 0.9.3 – Hotel Realism
 - Saubere warme, matte Wände/Decke statt Beton- und Putzflecken; fotoabgeleitete Farbtexturen für Tapete, Teppich und gelben Stoff.
 - Überarbeitete Polster, Stoffnähte, Bettwäsche mit durchgehender Drapierung, feinere Vorhangfalten und natürlichere Materialien.
