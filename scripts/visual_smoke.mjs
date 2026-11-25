@@ -151,7 +151,8 @@ console.log('Hotel rug root, persistent target and rotated ray hit OK');
 
 // Shared corridor: actual layout, scene and animated remote guests (no GPU).
 import {LOBBY_LAYOUT,LOBBY_CAPACITY,lobbyDoor,lobbyDoorAt,lobbyWalkable,pairedRoom,roomHallTransform,hallToRoom} from './lobby_layout.js';
-import {NeighborRoomView,hotelOpenings} from './hotel_connections.js';
+import {NeighborRoomView,HallFacadeViews,hotelOpenings} from './hotel_connections.js';
+import {site} from './wall_layout.js';
 import {HotelLobbyView} from './hotel_lobby.js';
 import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,animateCharacter,disposeCharacter,CharacterStudio,sculptedMesh} from './character.js';
 {
@@ -230,3 +231,36 @@ console.log('Character models: all customization variants, geometry, movement an
  rv.setVisible(false);assert.equal(rv.root.visible,false);
 }
 console.log('Connected hotel: 24 aligned rooms, corridor rays, visibility, mirrored neighbour layout and repair gating OK');
+
+{
+ const savedDocument=globalThis.document;
+ globalThis.document={createElement(){return {width:0,height:0,getContext(){return {fillRect(){},strokeRect(){},fillText(){}};}};}};
+ try{
+  const scene=new THREE.Scene(),staticGroup=new THREE.Group(),material=new THREE.MeshStandardMaterial();
+  scene.add(staticGroup);
+  const walls=new Map();for(const id of ['surface_8','surface_9','surface_10']){
+   const w=WALLS[id],mesh=new THREE.Mesh(new THREE.BoxGeometry(...w.s),material);mesh.position.set(...w.p);staticGroup.add(mesh);walls.set(id,{mesh});
+  }
+  const renderer={scene,staticGroup,models:{},walls:{entries:walls,edge:material},impacts:{targets:new Map()},textured:{hotel_carpet:material,hotel_wall:material,hotel_ceiling:material}};
+  renderer.lobby=new HotelLobbyView(renderer);
+  const facade=new HallFacadeViews(renderer,HOTEL_LAYOUT);
+  const w=WALLS.surface_9,[u,v]=site(w,6,4),[su,sv]=site(w,2,4),damage={surface_9:[[6,4,4]]};
+  for(let slot=0;slot<LOBBY_CAPACITY;slot++){
+   facade.sync([{slot,walls:damage}],null,null);
+   const entry=facade.entries.get(slot);assert.ok(entry);assert.equal(renderer.lobby.wallSections[slot].wallSolid.visible,false);
+   renderer.lobby.scene.updateMatrixWorld(true);
+   const origin=entry.group.localToWorld(new THREE.Vector3(0,0,-5.1)),door=lobbyDoor(slot);
+   assert.ok(origin.distanceTo(new THREE.Vector3(door.x,0,door.z))<1e-8);
+   const cast=(x,y,z,dir)=>new THREE.Raycaster(entry.group.localToWorld(new THREE.Vector3(x,y,z)),new THREE.Vector3(0,0,dir).transformDirection(entry.group.matrixWorld)).intersectObjects(entry.meshes,false);
+   for(const [z,dir] of [[-6.9,1],[-4.5,-1]]){
+    assert.equal(cast(w.p[0]+u,w.p[1]+v,z,dir).length,0,'same aperture from both faces '+slot);
+    assert.ok(cast(w.p[0]+su,w.p[1]+sv,z,dir).length>0,'intact cell blocks '+slot);
+   }
+   facade.sync([],null,null);assert.equal(facade.entries.size,0);assert.equal(renderer.lobby.wallSections[slot].wallSolid.visible,true);
+  }
+  facade.sync([],0,{walls:damage});assert.equal(facade.entries.get(0).own,true);
+  facade.sync([{slot:0,walls:damage}],0,{walls:{}});assert.equal(facade.entries.size,0);
+  facade.sync([{slot:0,walls:{surface_9:[[6,4,3]]}}],null,null);assert.equal(facade.entries.size,0);
+ }finally{if(savedDocument===undefined)delete globalThis.document;else globalThis.document=savedDocument;}
+}
+console.log('Shared facade: matching bidirectional holes in all 24 rooms, immediate own repair and remote repair');
