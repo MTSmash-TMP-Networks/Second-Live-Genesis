@@ -85,7 +85,7 @@ let state={walls:{},decor:{},marks:[],objects:Object.fromEntries(Object.entries(
 let mobile=matchMedia('(pointer:coarse)').matches, touchMove=[0,0], look=null;
 function clearControls(){releaseTrigger();keys.clear();touchMove=[0,0];look=null;$('stick').classList.remove('moving');$('stick').style.removeProperty('--jx');$('stick').style.removeProperty('--jy');}
 function setMode(v){mobile=v;document.body.classList.toggle('mobile',v);$('mode').textContent=v?'Desktop-Modus':'Touch-Modus';clearControls();if(v)document.exitPointerLock?.();}
-let token=sessionStorage.getItem('second_live_token')||'';let protectedGame=false; $('token').value=token;
+let token=sessionStorage.getItem('second_live_token')||'';let protectedGame=false,personalCapture=false,personalProfile=null; $('token').value=token;
 const api=async(path,data)=>{let r=await fetch(path,{headers:{...(protectedGame?{'X-SecondLive-Token':token}:{}),'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});let j=await r.json();if(!r.ok)throw Error(j.error||r.status);return j;};
 function syncWallState(next){
   for(const [id,w] of Object.entries(WALLS)){
@@ -112,7 +112,7 @@ function syncDecorState(next){
   }
   renderer?.syncDecor?.(next);physicsWorld?.syncDecor?.(next);
 }
-function sync(s){for(const [id,o] of Object.entries(spec)){let hp=s.objects[id];if(!bodies[id]||((state.objects[id]||0)===0&&hp>0)){bodies[id]={p:[...o.p],v:[0,0,0]};debris=debris.filter(d=>d.source!==id);}if(state.objects[id]>0&&hp===0){let p=id==='window'?[-4.45,1.52,-1]:bodies[id].p;for(let i=0;i<8;i++)debris.push({source:id,p:[...p],v:[(Math.random()-.5)*4,2+Math.random()*3,(Math.random()-.5)*4],s:id==='window'?[.035,.07+Math.random()*.09,.09+Math.random()*.12]:[.10+Math.random()*.15,.045+Math.random()*.08,.10+Math.random()*.18],c:rgb(o.c),m:id==='window'?'glass':mat(o.c),r:Math.random()*6});if(held===id)held=null;}}syncWallState(s.walls||{});syncDecorState(s.decor||{});state=s; $('worldstate').textContent=s.unlocked?'Testbereich freigeschaltet':'Welt noch nicht erschlossen';}
+function sync(s){for(const [id,o] of Object.entries(spec)){let hp=s.objects[id];if(!bodies[id]||((state.objects[id]||0)===0&&hp>0)){bodies[id]={p:[...o.p],v:[0,0,0]};debris=debris.filter(d=>d.source!==id);}if(state.objects[id]>0&&hp===0){let p=id==='window'?[-4.45,1.52,-1]:bodies[id].p;for(let i=0;i<8;i++)debris.push({source:id,p:[...p],v:[(Math.random()-.5)*4,2+Math.random()*3,(Math.random()-.5)*4],s:id==='window'?[.035,.07+Math.random()*.09,.09+Math.random()*.12]:[.10+Math.random()*.15,.045+Math.random()*.08,.10+Math.random()*.18],c:rgb(o.c),m:id==='window'?'glass':mat(o.c),r:Math.random()*6});if(held===id)held=null;}}syncWallState(s.walls||{});syncDecorState(s.decor||{});state=s; $('worldstate').textContent=personalCapture?'Privater Startraum'+(personalProfile?.region?' · '+personalProfile.region:''):s.unlocked?'Testbereich freigeschaltet':'Welt noch nicht erschlossen';}
 let mutationVersion=0;async function refresh(){const v=mutationVersion;let s=await api('/api/game');if(!busy&&v===mutationVersion)sync(s);}
 async function action(action,id,mark){if(busy)return;busy=true;mutationVersion++;try{const result=await api('/api/game',{action,id,...(mark?{mark}:{})});sync(result);$('notice').textContent=action==='repair'||action==='repair_surface'?'Oberfläche repariert':action==='unlock'?'Testbereich freigeschaltet':result.wall_result?.stage===REMOVED?'Bruchstück entfernt':result.wall_result?'Fläche beschädigt · Stufe '+result.wall_result.stage+'/'+REMOVED:result.decor_result?.stage===REMOVED?'Einrichtung zerstört':result.decor_result?'Einrichtung beschädigt · Stufe '+result.decor_result.stage+'/'+REMOVED:result.mark_saved===false?'Treffer registriert · Markierungslimit erreicht':'Treffer gespeichert';}catch(e){$('notice').textContent=e.message;}finally{busy=false;}}
 function dir(){let a=player.yaw,p=player.pitch;return [-Math.sin(a)*Math.cos(p),-Math.sin(p),-Math.cos(a)*Math.cos(p)];}
@@ -128,8 +128,9 @@ function phone(){if(renderer?.xrMode?.active){renderer.xrMode.end().then(()=>pho
 function interact(){if(Math.abs(player.x)<1.7&&player.z<-3.2&&!state.unlocked){phone();return;}let a=aim();if(held){let d=dir();bodies[held].v=d.map(v=>v*6);held=null;}else if(a.id&&a.dist<3&&state.objects[a.id]>0&&!['window','sofa'].includes(a.id))held=a.id;}
 function groundAt(x,z){if(z<-5&&state.unlocked)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
 function coll(x,z){if(Math.abs(x)>4.65||z>4.65||z<(state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+1.6&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,.85,1.45].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&state.objects[id]>0&&b.p[1]-spec[id].s[1]/2<1.5&&Math.abs(x-b.p[0])<spec[id].s[0]/2+.28&&Math.abs(z-b.p[2])<spec[id].s[2]/2+.28);}
-$('start').onclick=async()=>{if(!graphicsReady)return;if(protectedGame)token=$('token').value;try{await refresh();if(protectedGame)sessionStorage.setItem('second_live_token',token);$('welcome').hidden=true;started=true;active=true;document.body.classList.add('playing');if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});}catch(e){$('loginerror').textContent=e.message;}};
-$('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('unlock').onclick=()=>action('unlock');$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';}catch(e){$('notice').textContent=e.message;}};
+let enteringGame=false;async function enterGame(useGPS=false){if(!graphicsReady||enteringGame)return;enteringGame=true;if(protectedGame)token=$('token').value;try{if(personalCapture){personalProfile=await api('/api/session',{});if(useGPS&&!personalProfile.region){try{if(!navigator.geolocation)throw Error('GPS benötigt HTTPS');const location=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lon:p.coords.longitude,accuracy:p.coords.accuracy}),reject,{enableHighAccuracy:true,maximumAge:0,timeout:20000}));personalProfile=await api('/api/capture/locate',{location});}catch(e){$('notice').textContent='GPS nicht verfügbar – privater Raum. '+(e.message||'');}}}await refresh();if(protectedGame)sessionStorage.setItem('second_live_token',token);$('welcome').hidden=true;started=true;active=true;document.body.classList.add('playing');if(!mobile)canvas.requestPointerLock?.()?.catch?.(()=>{});}catch(e){$('loginerror').textContent=e.message;}finally{enteringGame=false;}}
+$('start').onclick=()=>enterGame(false);if($('start-gps'))$('start-gps').onclick=()=>enterGame(true);
+$('closephone').onclick=()=>{$('phone').hidden=true;clearControls();active=true;};$('unlock').onclick=()=>{if(personalCapture){location.href='/scanner.html';return;}action('unlock');};$('refresh').onclick=async()=>{try{await refresh();$('notice').textContent='Weltstatus aktualisiert';}catch(e){$('notice').textContent=e.message;}};
 canvas.onclick=()=>{if(mobile||!canPlay())return;if(document.pointerLockElement!==canvas){canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;}};
 canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.pointerLockElement===canvas&&canPlay())pressTrigger();});
 window.addEventListener('pointerup',e=>{if(triggerPointer===null||triggerPointer===e.pointerId)releaseTrigger();});
@@ -223,7 +224,7 @@ function changeProfile(){sessionStorage.setItem('sl_quality',qualityChoice.value
 qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListener('change',changeProfile);
 (async()=>{
   try{
-    const health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());protectedGame=health.requires_game_token===true; $('game-auth').hidden=!protectedGame;
+    const health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());protectedGame=health.requires_game_token===true; personalCapture=health.world_capture===true; $('game-auth').hidden=!protectedGame;if(personalCapture){$('start').textContent='Privat ohne GPS starten';if($('start-gps'))$('start-gps').hidden=false;$('unlock').textContent='Scanauftrag / 3D-Vorschau öffnen';}
     const q=qualityChoice.value==='auto'?(matchMedia('(pointer:coarse)').matches||innerWidth<800?'1k':'2k'):qualityChoice.value;
     renderer=new RoomRenderer(canvas,q,lightChoice.value,t=>status.textContent=t);
     await renderer.load(spec,objects);
@@ -237,7 +238,7 @@ qualityChoice.addEventListener('change',changeProfile);lightChoice.addEventListe
     status.textContent='Rapier-Physik wird geladen …';
     physicsWorld=await RoomPhysics.create(room,spec);
     status.textContent='Fotomaterialien und Rapier-Physik bereit';
-    graphicsReady=true;$('start').disabled=false;
+    graphicsReady=true;$('start').disabled=false;if($('start-gps'))$('start-gps').disabled=false;
     prev=performance.now();renderer.setLoop(frame);setupXR();
   }catch(e){console.error(e);status.textContent='Grafik konnte nicht geladen werden: '+e.message;$('error').hidden=false;$('error').textContent='WebGL 2 oder lokale Grafikdateien fehlen. Bitte Docker-Build und Browser prüfen.';}
 })();

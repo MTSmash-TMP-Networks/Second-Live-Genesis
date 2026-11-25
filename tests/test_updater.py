@@ -211,7 +211,7 @@ class ProbeTest(unittest.TestCase):
     def test_real_python_health_endpoint_from_probe(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); fixture=root/'app'; fixture.mkdir(); install=root/'install';install.mkdir()
-            for name in ('server.py','updater_api.py','wall_damage.py'):shutil.copy2(ROOT/name,fixture/name)
+            for name in ('server.py','updater_api.py','wall_damage.py','world_capture.py','capture_compute.py'):shutil.copy2(ROOT/name,fixture/name)
             layout=fixture/'web/engine/wall_layout.json';layout.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ROOT/'web/engine/wall_layout.json',layout)
             for rel in ('web/assets/polyhaven/manifest.json','web/engine/renderer.bundle.js'):
                 path=fixture/rel;path.parent.mkdir(parents=True,exist_ok=True);path.write_text('{}')
@@ -221,7 +221,7 @@ class ProbeTest(unittest.TestCase):
                 if args[:2]==['docker','rm']:return ''
                 self.assertEqual(args[:2],['docker','run'])
                 self.assertIn('--network',args);self.assertIn('none',args)
-                env={**os.environ,'SECOND_LIVE_BIND':'127.0.0.1','SECOND_LIVE_PORT':str(port),'SECOND_LIVE_REVISION':NEW,'SECOND_LIVE_DATA_DIR':str(fixture/'data'),'SECOND_LIVE_TOKEN':''}
+                env={**os.environ,'SECOND_LIVE_BIND':'127.0.0.1','SECOND_LIVE_PORT':str(port),'SECOND_LIVE_REVISION':NEW,'SECOND_LIVE_DATA_DIR':str(fixture/'data'),'SECOND_LIVE_TOKEN':'','SECOND_LIVE_WORKER':'0'}
                 # Only the fixture uses an ephemeral local port, rather than the
                 # container's fixed loopback port. The real health logic runs.
                 code=args[-2].replace('127.0.0.1:8765','127.0.0.1:'+str(port))

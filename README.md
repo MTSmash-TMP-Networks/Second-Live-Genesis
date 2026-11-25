@@ -1,6 +1,6 @@
 # Second Live – World Genesis
 
-**v0.6.9 · Avatar Grip / Dauerfeuer und LAN-Gastmodus**
+**v0.7.0 · World Capture Engine / CPU-Testversion**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spieler sollen ihre gemeinsame Welt aus realen Aufnahmen erschaffen, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
 
@@ -18,6 +18,17 @@ chmod +x start.sh
 Die `.env`, ein zufälliger Scanner-/optionaler Spielschlüssel sowie ein unabhängiger Update-Admin-Schlüssel werden automatisch angelegt. Vorhandene Schlüssel, Port, HTTPS-Einstellungen und Compose-Projektname bleiben unverändert. Das Spiel ist unter `http://localhost:8765` bzw. `http://SERVER-IP:8765` im WLAN erreichbar. `start.sh --lan` öffnet eine bestehende Loopback-Bindung. Docker und Firewall werden nicht automatisch installiert oder verändert. Bei nicht interaktivem Start stehen die Schlüssel nur in `.env`.
 
 **Update von älteren ZIP-Versionen:** Dateien in den bisherigen Projektordner kopieren, `.env` und Docker-Volume unverändert lassen; `chmod +x start.sh && ./start.sh`. Ordnername/Compose-Projektname beibehalten, damit das existierende Datenvolume verwendet wird. Nicht `docker compose down -v` ausführen.
+
+## World Capture – erster CPU-Test
+
+Die neue Version legt automatisch eine persönliche Gastidentität und einen separaten Startraum an. Der bisherige globale Spielstand bleibt im Datenvolume erhalten; neue Räume starten mit intakter Vorlage. Browser-Cookies identifizieren den Spieler. Ohne Konto gibt es keine automatische Wiederherstellung einer gelöschten Sitzung. Kopplung über einen einmaligen QR-Code ist möglich. GPS ist freiwillig; private Scans benötigen keinen Standort. Gemeinsame Testregionen verwenden grobe Geohash-Zellen (Länge 7), nicht exakte Raum-/Gebäudegrenzen. Veröffentlichte Vorschauen sperren neue Scanaufträge für diese Region; Entfernen durch den Eigentümer gibt sie frei. Keine produktive öffentliche Welt oder Multiplayer-Synchronisierung.
+
+- Im Spiel das Smartphone öffnen, World Capture wählen. Für Handyaufnahmen im lokalen Netz HTTPS aktivieren (`./start.sh --https --lan-ip SERVER-IP`, tatsächliche IP einsetzen). Nur auf eigenen Testgeräten die lokale CA nach Prüfung als vertrauenswürdig installieren. QR-Kopplung mit der vom Handy erreichbaren HTTPS-Adresse, nicht localhost.
+- Privaten Scan wählen, Zustimmung bestätigen, Auftrag reservieren und Kamera starten. Langsam seitlich bewegen, verschiedene überlappende Perspektiven erfassen. Richtungs- und Qualitätsanzeige sind 2D-/Sensordaten-Heuristiken, kein metrisches AR-Tracking. Automatische Aufnahmen abschaltbar. Bilder einzeln ansehen/löschen; optional Fotoimport. Mindestens 8, maximal 60 Aufnahmen; 8 sind keine Rekonstruktionsgarantie. Bei einem kleinen texturierten Raum etwa 20–40 gute Ansichten als Testbudget ausprobieren.
+- Auftrag zur Berechnung einreichen. Der separate Worker-Prozess läuft im vorhandenen Spielcontainer auf CPU (4 Threads), prüft die Bilder mit OpenCV und führt COLMAP CPU-SfM aus. Depth Anything V2 Small (ONNX) schätzt relative Tiefe, die bei genügend passenden Messpunkten an die COLMAP-Geometrie angenähert wird. Das optionale SegFormer-ADE20K-Modell ist nur für nichtkommerzielle Evaluation aktiviert. Beide Modelle werden bei Bedarf mit geprüften Hashes in das Datenvolume geladen; keine Fotos werden an externe KI-Dienste gesendet.
+- Die 3D-Vorschau ist experimentell, in relativen Einheiten. Noch keine verlässlich metrische oder begehbare Welt, kein natives ARKit/ARCore, keine automatische Zuordnung neuer Collider oder Physikobjekte. Bei unzureichender Bildüberlappung wird der Auftrag als fehlgeschlagen angezeigt und kann ergänzt werden. Erst explizite Bestätigung markiert die Vorschau als erzeugt. Andere Testspieler erhalten ausschließlich farblose Geometrie, keine Originalfotos oder Farbtexturen.
+
+Weitere Details: [World Capture CPU](docs/WORLD-CAPTURE-CPU.md). Der Host-Updater und UPDATE_PROTOCOL bleiben unverändert. Der größere Docker-Build lädt COLMAP und Python-Abhängigkeiten. Es wird keine GPU für den Testbetrieb vorausgesetzt. Die CPU-/CUDA-Provider-Auswahl ist vorbereitet; CUDA benötigt später ein passendes Linux-NVIDIA-Image mit GPU-Zugriff und kompatiblen Treibern/Laufzeitbibliotheken. Kein GPU-Betrieb auf dem Mac zugesichert.
 
 ## System-Update direkt im Spiel
 

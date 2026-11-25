@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0 – World Capture Engine (CPU-Prototyp)
+- Individuelle persistente Gastidentität, private Starträume, freiwilliger geografischer Anker, exklusive Scanaufträge und QR-Kopplung.
+- Automatische qualitätsgeführte Kameraaufnahme, Fotoauswahl, Aufnahme-/Verarbeitungsstatus, lokale Bildanalyse.
+- CPU-Worker mit COLMAP-SfM, optionaler ONNX-Tiefe und ausdrücklich optionaler nichtkommerzieller Semantik-Evaluation. Experimentelle 3D-Vorschau, keine begehbare Rekonstruktion.
+- Alte globale Spielwelt bleibt erhalten; Host-Updater und Update-Protokoll unverändert.
+
 ## 0.6.9 – Avatar Grip und LAN-Gastmodus
 - Geometriebezogene Handanker, stabiler Fingerbogen und Ärmel am berechneten Handgelenk.
 - Drittes virtuelles Spielobjekt M16, optionaler texturierter CC-BY-Import mit CC0-Ersatzquelle, Inventarvorschau, fiktiver Dauerfeuermodus auf Desktop und Touch.

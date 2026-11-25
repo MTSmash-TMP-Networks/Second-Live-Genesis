@@ -1,19 +1,18 @@
-Second Live v0.6.9 - Avatar Grip / Dauerfeuer / LAN-Gastmodus
+Second Live v0.7.0 - World Capture CPU
 
-Lokal: 76 Python-Tests und 13 Subtests erfolgreich. Einschliesslich
-Gastzugang, Schutz der Scan-/Admin-API, Cross-Origin-Sperre fuer
-Gastmutationen, optionalem Modellimport mit Archivgrenzen und Ersatzquelle.
-Node: Desktop-/Mobile-Client mit simuliertem Renderer, Dauerfeuer,
-Loslassen/Pointer-Cancel, Inventar/Reload/Menues; 11 polygonale Hauptflaechen;
-synthetischer Legacy-Handmesh-Test; JS-Syntax erfolgreich.
+Lokal: 93 Python-Tests und 13 Subtests erfolgreich.
+Einschliesslich persoenlicher Spielstaende, GPS-Anker, Scanreservierung,
+Foto-Review und Loeschen, Zugriffsschutz, QR-Kopplung, Job-Recovery,
+Tiefenprojektion und bestehender Spiel-/Update-Tests.
+Node: Capture-Qualitaetsheuristik, simulierte Desktop-/Mobile-Clients,
+11 Bruchflaechen, Legacy-Handmesh, JS-Syntax erfolgreich.
+Echter lokaler Worker-Prozess: JPEG mit OpenCV analysiert.
 
-Die echte WebXR-Handpose wird zusaetzlich beim Docker-Build mit dem
-Original-GLB geprueft, sofern die optionalen Handassets verfuegbar sind.
-Der Test prueft den Palm-Anker und die Fingerkruemmung. Docker-Build,
-Original-Modell-Download, echte WebGL- und VR-Abnahme hier nicht ausgefuehrt
-(Docker und externe Downloadverbindungen nicht verfuegbar).
-Dauerfeuer ist ein fiktiver Spieleffekt, keine reale Ballistik.
-Schadensmodell und vorhandene Daten bleiben unveraendert.
-Gastspiel nur fuer vertrauenswuerdiges LAN; alle erreichbaren Gaeste koennen
-die gemeinsame Testwelt veraendern. Scanner und Updater bleiben geschuetzt.
-UPDATE_PROTOCOL und Host-Updater unveraendert.
+NICHT geprueft: Docker-Build (Docker fehlt), echte Downloads und
+ONNX-Inferenz (externe Downloads/Runtime hier nicht verfuegbar), echter
+COLMAP-Mehrbildlauf (COLMAP fehlt), WebGL und mobiler Kameralauf
+(Chromium-Lokalzugriff durch Administratorrichtlinie blockiert), VR,
+native AR, CUDA. Kein begehbarer rekonstruierter Raum. GPU-Provider
+vorbereitet; CPU-Image ohne CUDA-Runtime. SegFormer nur optionale
+nichtkommerzielle Evaluation. Kein oeffentlicher Produktivbetrieb.
+UPDATE_PROTOCOL und Host-Updater unveraendert. Alte globale DB erhalten.

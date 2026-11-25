@@ -5,6 +5,8 @@ RUN npm install --no-audit --no-fund --save-exact three@0.170.0 esbuild@0.25.10 
 COPY web/engine/renderer.js web/engine/physics.js web/engine/architecture.js web/engine/xr.js web/engine/room_decor.js web/engine/shotfx.js web/engine/impact_marks.js web/engine/display_prop.js web/engine/wall_layout.js web/engine/wall_mesh.js web/engine/hand_mesh.js web/engine/avatar_hands.js ./
 COPY web/engine/wall_layout.json /build/wall_layout.json
 COPY scripts/physics_smoke.mjs scripts/visual_smoke.mjs ./
+COPY web/engine/capture-view.js ./capture-view.js
+RUN ./node_modules/.bin/esbuild capture-view.js --bundle --platform=browser --format=esm --target=es2020 --minify --outfile=/build/capture-view.bundle.js
 # Rapier 0.17.3 advertises a CJS entry that esbuild may interpret as ESM.
 # Bypass package entry resolution for both builds; use the same embedded-WASM ESM file.
 RUN test -s node_modules/@dimforge/rapier3d-compat/rapier.es.js
@@ -46,11 +48,18 @@ COPY --from=hands /build/polyhaven/hands /build/hands
 COPY scripts/avatar_smoke.mjs ./avatar_smoke.mjs
 RUN ./node_modules/.bin/esbuild avatar_smoke.mjs --bundle --platform=node --format=esm --outfile=/build/avatar_smoke.bundle.mjs && node /build/avatar_smoke.bundle.mjs
 
-FROM python:3.13-slim
+# CPU reconstruction is available on both amd64 and arm64 Docker hosts.
+FROM python:3.13-slim-bookworm
 WORKDIR /app
-COPY server.py updater_api.py wall_damage.py /app/
+RUN apt-get update && apt-get install -y --no-install-recommends colmap libgomp1 && rm -rf /var/lib/apt/lists/*
+ENV QT_QPA_PLATFORM=offscreen
+ARG SECOND_LIVE_ONNX_PACKAGE=onnxruntime==1.22.0
+RUN pip install --no-cache-dir numpy==2.2.6 Pillow==11.3.0 qrcode==8.2 opencv-python-headless==4.12.0.88 "${SECOND_LIVE_ONNX_PACKAGE}" && python -c "import cv2,numpy,PIL,onnxruntime; assert 'CPUExecutionProvider' in onnxruntime.get_available_providers()" && colmap -h >/dev/null
+ENV SECOND_LIVE_COMPUTE=cpu SECOND_LIVE_COMPUTE_THREADS=4
+COPY server.py updater_api.py wall_damage.py world_capture.py capture_compute.py /app/
 COPY web/ /app/web/
 COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bundle.js
+COPY --from=renderer /build/capture-view.bundle.js /app/web/engine/capture-view.bundle.js
 COPY --from=renderer /build/THREE-LICENSE.txt /app/web/engine/THREE-LICENSE.txt
 COPY --from=gameprops /build/polyhaven /app/web/assets/polyhaven/
 ARG SECOND_LIVE_REVISION=local

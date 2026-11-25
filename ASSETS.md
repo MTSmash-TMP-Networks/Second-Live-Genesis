@@ -66,3 +66,9 @@ Die ausgewählten Poly-Haven-IDs `residential_garden`, `service_pistol` und `bol
 - Bevorzugt: „M16 rifle“ von Osmic (CC BY 3.0), https://opengameart.org/content/m16-rifle, Originalarchiv https://opengameart.org/sites/default/files/m16.zip, https://creativecommons.org/licenses/by/3.0/. Anpassungen: bereinigtes OBJ, Darstellungsmaterial und Skalierung für Second Live. Namensnennung im Inventar und Asset-Manifest.
 - Ersatzquelle: „Low Poly Weapon Pack“ von byzmod3d, CC0, https://opengameart.org/content/low-poly-weapon-pack, https://opengameart.org/sites/default/files/m16.obj.
 - Beide Downloads sind optional und finden ausschließlich im Docker-Build statt. Archive werden ohne Extraktion beliebiger Dateipfade gelesen; Größen und Geometrie begrenzt, externe Materialbibliotheken entfernt und lokale Prüfsummen erzeugt. Bei Ausfall beider Quellen bleibt eine stilisierte lokale Spielrequisite verfügbar. Kein Fertigungsmodell oder reale Waffensimulation.
+
+## World Capture: KI-Modelle
+
+- Depth Anything V2 Small: https://github.com/DepthAnything/Depth-Anything-V2 (Apache 2.0 für Small), ONNX-Konvertierung https://huggingface.co/onnx-community/depth-anything-v2-small. Modell-URL und SHA256 in capture_compute.py fixiert.
+- SegFormer B0 ADE20K: https://huggingface.co/Xenova/segformer-b0-finetuned-ade-512-512 und https://huggingface.co/nvidia/segformer-b0-finetuned-ade-512-512. Nichtkommerzielle Forschung/Evaluation, ausdrücklich optional und standardmäßig deaktiviert. Vor kommerzieller Nutzung durch ein entsprechend lizenziertes Modell ersetzen.
+- Modelle werden nicht im Git-Repository verteilt, sondern vom lokalen Worker bei Bedarf heruntergeladen und geprüft. Bilddaten bleiben im lokalen Datenvolume.

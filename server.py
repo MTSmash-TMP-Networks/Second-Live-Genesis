@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import binascii
 from contextlib import closing
 from datetime import datetime, timezone
@@ -20,13 +21,15 @@ from urllib.parse import unquote, urlsplit
 import uuid
 from updater_api import UpdateBridge
 import wall_damage
+from http.cookies import SimpleCookie, CookieError
+from world_capture import CaptureStore, CaptureError
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
 MAX_BODY = 9 * 1024 * 1024
 MAX_IMAGE = 6 * 1024 * 1024
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
-SAFE_FILES = {"/updater.js": "updater.js", **{f"/assets/{n}.jpg": f"assets/{n}.jpg" for n in ("wood", "wall", "fabric")},"/scanner.html": "scanner.html", "/game.js": "game.js", "/bootstrap.js": "bootstrap.js", "/engine/renderer.bundle.js": "engine/renderer.bundle.js", "/engine/THREE-LICENSE.txt": "engine/THREE-LICENSE.txt", "/engine/RAPIER-LICENSE.txt": "engine/RAPIER-LICENSE.txt", "/game.css": "game.css", "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css", "/manifest.webmanifest": "manifest.webmanifest", "/icon.svg": "icon.svg"}
+SAFE_FILES = {"/capture.js":"capture.js", "/capture-quality.js":"capture-quality.js", "/capture.css":"capture.css", "/engine/capture-view.bundle.js":"engine/capture-view.bundle.js", "/updater.js": "updater.js", **{f"/assets/{n}.jpg": f"assets/{n}.jpg" for n in ("wood", "wall", "fabric")},"/scanner.html": "scanner.html", "/game.js": "game.js", "/bootstrap.js": "bootstrap.js", "/engine/renderer.bundle.js": "engine/renderer.bundle.js", "/engine/THREE-LICENSE.txt": "engine/THREE-LICENSE.txt", "/engine/RAPIER-LICENSE.txt": "engine/RAPIER-LICENSE.txt", "/game.css": "game.css", "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/style.css": "style.css", "/manifest.webmanifest": "manifest.webmanifest", "/icon.svg": "icon.svg"}
 
 
 def clean_location(value):
@@ -276,11 +279,12 @@ class GameStore:
         return result
 
 
-def make_handler(store: ScanStore, token: str, updater=None, guest_game=False):
+def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, world_capture=False):
     updater = updater or UpdateBridge(None, "")
-    game = GameStore(store.path)
+    game = GameStore(store.path) # preserve the original legacy world unchanged in personal mode
+    capture = CaptureStore(store.path) if world_capture else None
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.6.9"
+        server_version = "SecondLive/0.7.0"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -298,6 +302,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False):
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.headers_common(cache_control)
+            if getattr(self,"session_cookie",None): self.send_header("Set-Cookie",self.session_cookie)
             self.end_headers()
             self.wfile.write(body)
 
@@ -317,8 +322,8 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False):
             return True
 
         def require_game(self):
-            if not guest_game:
-                return self.require_auth()
+            if not guest_game and not self.require_auth():
+                return False
             # The LAN prototype deliberately shares the game world with guests,
             # but rejects cross-site browser mutations and keeps scans/admin private.
             if self.command == "POST":
@@ -328,6 +333,75 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False):
                     return False
             return True
 
+        def player_cookie(self):
+            try:
+                jar=SimpleCookie();jar.load(self.headers.get('Cookie',''));return jar['sl_player'].value if 'sl_player' in jar else None
+            except CookieError: return None
+
+        def player(self):
+            player=capture.identify(self.player_cookie()) if capture else None
+            if not player: raise CaptureError('Persoenliche Sitzung fehlt; Spiel erneut betreten',401)
+            return player
+
+        def new_session(self):
+            player,key=capture.session(self.player_cookie())
+            if key:self.set_player_cookie(key)
+            return player
+
+        def set_player_cookie(self,key):
+            # LAN HTTP is explicitly a development mode; HTTPS via Caddy gets Secure.
+            secure='; Secure' if self.headers.get('X-Forwarded-Proto','').lower()=='https' else ''
+            self.session_cookie='sl_player='+key+'; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000'+secure
+
+        def capture_reply(self,fn):
+            try:self.send_json(200,fn())
+            except CaptureError as e:self.send_json(e.status,{'error':str(e)})
+            except (ValueError,TypeError,KeyError) as e:self.send_json(400,{'error':'Ungueltiger Auftrag: '+str(e)[:200]})
+            except OSError:self.send_json(503,{'error':'Lokaler Datenspeicher nicht verfuegbar'})
+
+        def read_capture_body(self):
+            try: n=int(self.headers.get('Content-Length','0'))
+            except ValueError: n=0
+            if not 0<n<=3_100_000:raise CaptureError('Ungueltige Anfragegroesse',413)
+            if self.headers.get('Content-Type','').split(';')[0].strip()!='application/json':raise CaptureError('JSON erwartet',415)
+            data=json.loads(self.rfile.read(n))
+            if not isinstance(data,dict):raise CaptureError('JSON-Objekt erwartet',400)
+            return data
+
+        def capture_post(self,path):
+            if not self.require_game():return
+            def handle():
+                data=self.read_capture_body()
+                if path=='/api/session':return capture.profile(self.new_session())
+                if path=='/api/session/pair':
+                    player,key=capture.redeem(data.get('code'));self.set_player_cookie(key);return capture.profile(player)
+                player=self.player()
+                if path=='/api/capture/locate':return capture.locate(player,data.get('location'))
+                op=data.get('action');scope=data.get('scope','private');sid=data.get('id')
+                if op=='status':return capture.status(player,scope)
+                if op=='pair':
+                    from urllib.parse import urlencode
+                    import qrcode
+                    address=data.get('address','')
+                    if not isinstance(address,str) or len(address)>200:raise CaptureError('Ungueltige Server-Adresse',400)
+                    parsed=urlsplit(address)
+                    if parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ('','/','/scanner.html'):raise CaptureError('HTTP(S)-Server-Adresse ohne Zugangsdaten erwartet',400)
+                    code=capture.pair_code(player);link=f'{parsed.scheme}://{parsed.netloc}/scanner.html#'+urlencode({'pair':code,'scope':scope if scope in ('private','shared') else 'private'})
+                    buf=io.BytesIO();qrcode.make(link).save(buf,format='PNG')
+                    return {'url':link,'qr':'data:image/png;base64,'+base64.b64encode(buf.getvalue()).decode(),'expires_in':300}
+                if op=='reserve':
+                    if data.get('consent') is not True:raise CaptureError('Einwilligung zum Scan erforderlich',400)
+                    return capture.reserve(player,scope,data.get('location'),data.get('evaluation') is True)
+                if op=='frame':return capture.frame(player,sid,data.get('photo'))
+                if op=='remove_frame':return capture.remove_frame(player,sid,data.get('frame'))
+                if op in ('submit','retry','publish','cancel'):return capture.transition(player,sid,op)
+                if op=='preview':return capture.preview(player,sid)
+                raise CaptureError('Unbekannte Scan-Aktion',400)
+            self.capture_reply(handle)
+
+        def personal_game(self):
+            return GameStore(capture.home_path(self.player())) if capture else game
+
         def require_admin(self):
             if updater.authorized(self.headers.get("X-SecondLive-Admin", "")):
                 return True
@@ -336,6 +410,14 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False):
 
         def do_GET(self):
             path = unquote(urlsplit(self.path).path)
+            if capture and path.startswith('/api/capture/photo/'):
+                try:
+                    parts=path.split('/')
+                    if len(parts)!=6:raise CaptureError('Foto nicht gefunden',404)
+                    self.send_data(200,capture.frame_image(self.player(),parts[4],parts[5]),'image/jpeg')
+                except CaptureError as e:self.send_json(e.status,{'error':str(e)})
+                except OSError:self.send_json(404,{'error':'Foto nicht gefunden'})
+                return
             if path in SAFE_FILES:
                 filepath = WEB / SAFE_FILES[path]
                 if not filepath.is_file():
@@ -358,11 +440,11 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False):
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.6.9", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.7.0", "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "world_capture": bool(capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path == "/api/game":
-                if self.require_game(): self.send_json(200, game.state())
+                if self.require_game(): self.capture_reply(lambda:self.personal_game().state())
             elif path == "/api/scans":
                 if self.require_auth():
                     self.send_json(200, {"scans": store.list()})
@@ -385,6 +467,9 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False):
                 self.send_json(404, {"error": "Nicht gefunden"})
 
         def do_POST(self):
+            path=urlsplit(self.path).path
+            if capture and path in ("/api/session","/api/session/pair","/api/capture/locate","/api/capture"):
+                self.capture_post(path);return
             if urlsplit(self.path).path == "/api/update":
                 if not self.require_admin(): return
                 try:
@@ -415,7 +500,13 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False):
                 return
             try:
                 data = json.loads(self.rfile.read(content_length).decode("utf-8"))
-                row = game.action(data, store) if urlsplit(self.path).path == "/api/game" else store.add(data)
+                if path=="/api/game":
+                    if capture and isinstance(data,dict) and data.get('action')=='unlock': raise CaptureError('Reale Rekonstruktion muss zuerst geprueft werden; alte Testfreigabe deaktiviert',409)
+                    row=self.personal_game().action(data,store)
+                else: row=store.add(data)
+            except CaptureError as exc:
+                self.send_json(exc.status, {"error":str(exc)})
+                return
             except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
                 self.send_json(400, {"error": str(exc)})
                 return
@@ -434,18 +525,26 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False):
     return Handler
 
 
-def create_server(bind="127.0.0.1", port=8765, data_dir=None, token="", updater=None, guest_game=False):
+def create_server(bind="127.0.0.1", port=8765, data_dir=None, token="", updater=None, guest_game=False, world_capture=False):
     if bind not in ("localhost", "127.0.0.1", "::1") and not token:
         raise ValueError("SECOND_LIVE_TOKEN muss fuer Netzwerkfreigabe gesetzt sein")
     store = ScanStore(Path(data_dir) if data_dir else ROOT / "data")
-    return ThreadingHTTPServer((bind, int(port)), make_handler(store, token, updater, guest_game))
+    return ThreadingHTTPServer((bind, int(port)), make_handler(store, token, updater, guest_game, world_capture))
 
 
 def main():
     bind = os.getenv("SECOND_LIVE_BIND", "127.0.0.1")
     port = int(os.getenv("SECOND_LIVE_PORT", "8765"))
     token = os.getenv("SECOND_LIVE_TOKEN", "")
-    srv = create_server(bind, port, os.getenv("SECOND_LIVE_DATA_DIR"), token, UpdateBridge(os.getenv("SECOND_LIVE_UPDATE_BRIDGE"), os.getenv("SECOND_LIVE_UPDATE_ADMIN_TOKEN")), guest_game=os.getenv("SECOND_LIVE_GUEST_GAME", "1") == "1")
+    data_dir=Path(os.getenv("SECOND_LIVE_DATA_DIR",str(ROOT/"data")))
+    personal=os.getenv("SECOND_LIVE_WORLD_CAPTURE","1")=="1"
+    srv = create_server(bind, port, data_dir, token, UpdateBridge(os.getenv("SECOND_LIVE_UPDATE_BRIDGE"), os.getenv("SECOND_LIVE_UPDATE_ADMIN_TOKEN")), guest_game=os.getenv("SECOND_LIVE_GUEST_GAME", "1") == "1",world_capture=personal)
+    import subprocess,sys,signal
+    def terminate(_sig,_frame):raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM,terminate)
+    worker=None
+    if personal and os.getenv("SECOND_LIVE_WORKER","1")=="1":
+        worker=subprocess.Popen([sys.executable,str(ROOT/'capture_compute.py'),str(data_dir)])
     print(f"Second Live Scanner: http://{bind}:{srv.server_port} (secure token: {'yes' if token else 'no, localhost only'})", flush=True)
     try:
         srv.serve_forever()
@@ -453,6 +552,10 @@ def main():
         pass
     finally:
         srv.server_close()
+        if worker and worker.poll() is None:
+            worker.terminate()
+            try:worker.wait(timeout=5)
+            except subprocess.TimeoutExpired:worker.kill();worker.wait()
 
 
 if __name__ == "__main__":
