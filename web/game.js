@@ -822,7 +822,7 @@ function applyFreeSnapshot(s,result,initial=false){
    renderer.shot('pistol',npc.shot,freeView.effects);audio.play('shot',null,0);
   }
  }
- s.npcShots=nextShots;freeView.sync([...s.peers,...s.npcs]);s.lastOK=performance.now();freeView.syncClock(result.dayPhase,s.lastOK);
+ s.npcShots=nextShots;freeView.sync([...s.peers,...s.npcs,...(result.corpses||[])]);s.lastOK=performance.now();freeView.syncClock(result.dayPhase,s.lastOK);
  if(result.notice)$('notice').textContent=result.notice;
  updateWorldStatus();updateFreeUI();
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.3 – Fracture & NPC Motion
+- Dorfwände, Dach und Boden verwenden die jittered Voronoi-Zellen aus der Hotel-Physik anstelle rechteckiger Brüche. Original-GLB-Texturen bleiben erhalten; Bruchflächen zeigen die Materialtiefe. Strahlen, Kollisions- und Wiederaufbauprüfungen verwenden die zugehörigen Polygonprismen. Die bisherigen Zell-IDs und gespeicherten Schadensstufen bleiben erhalten (die Form bereits beschädigter Bereiche kann sich ändern).
+- Feste 20-Hz-NPC-Simulationsschritte, zeitgestempelte Positionspakete und verzögerte Client-Interpolation mit etwa 340 ms Puffer. Laufanimation und Blickrichtung werden geglättet, auch bei unregelmäßigen Serverpaketen.
+- Besiegte NPCs fallen animiert um und bleiben 10 Sekunden liegen. Sie sind nicht mehr angreifbar und blockieren die Welt nicht. Der bisherige Respawn nach 15 Sekunden bleibt unverändert. Keine Blut- oder Gore-Effekte; keine vollständige Ragdoll-Simulation.
+
 ## 0.15.2 – Living Village
 - Trainings-NPCs melden Bewegungszustand und Geschwindigkeit. Geglättete Positionen und Blickrichtungen, laufgeschwindigkeitsabhängige Animation und kurze Bewegungsfortsetzung zwischen Serverpaketen verhindern das bisherige ständige Umschalten zwischen Idle und Walk.
 - Sechs Dorfgebäude erhalten jeweils 268 einzeln zerstörbare Außenhüllenzellen. Die vier Hotel-Schadensstufen werden auch auf die Original-GLBs angewendet. R repariert anvisierte Teile, Umschalt+R baut ein beschädigtes Gebäude wieder auf, sofern keine Spieler oder Bauobjekte im wiederherzustellenden Teil stehen. Schadenszustände werden serverseitig gespeichert; zerstörte Zellen verlieren ihre Kollision. Das Raster ist eine vereinfachte Spielphysik, kein vollständiger Statik-/Rapier-Gebäudeabriss.

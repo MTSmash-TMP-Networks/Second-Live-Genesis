@@ -4,9 +4,11 @@ import random
 import sqlite3
 import time
 from contextlib import closing
-from village_structure import VillageStructure
+from village_structure import VillageStructure, prism_ray
 
 TREE_REGROW_SECONDS=24*60*60
+NPC_STEP=.05
+NPC_CORPSE_SECONDS=10.
 CENTER=(-65.,-30.)
 FOREST_ROADS=[
     {'x':-65,'z':-30,'w':7,'d':57,'kind':'street'},
@@ -59,7 +61,7 @@ class Village:
     def __init__(self,path,blocks,clock,wall_clock=time.time):
         self.path=path
         self.rows={}
-        self.last_tick=clock()
+        self.last_tick=clock();self.motion_time=self.last_tick;self.motion_accumulator=0.
         self.wall_clock=wall_clock;self.next_regrow_check=0.
         self.regrow_at={}
         with closing(sqlite3.connect(path)) as db,db:
@@ -91,7 +93,7 @@ class Village:
             if home is None:continue
             self.npcs.append({'slot':-100-i,'nickname':f'Test-NPC {i+1}','avatar':{'model':i+1,'height':1},
                 'position':home[:],'home':home,'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,
-                'target':None,'velocity':[0.,0.,0.],'moving':False,'route':i%2,'next_action':self.last_tick,'respawn':0.,'shot_seq':0,'shot':None})
+                'target':None,'velocity':[0.,0.,0.],'moving':False,'route':i%2,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None})
     def solids(self):
         yield from (row for row in self.rows.values() if row['kind']=='tree' and row['hp']>0)
         yield from self.structure.solids()
@@ -99,7 +101,11 @@ class Village:
         yield from (row for row in self.rows.values() if row['kind']=='tree' and row['hp']>0)
         yield from self.structure.targets(origin,reach)
     def snapshot(self):
-        return [{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','weapon','hp','life','score','shot_seq','shot','velocity','moving')} for r in self.npcs if r['hp']>0]
+        return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','weapon','hp','life','score','shot_seq','shot','velocity','moving')},'motionTime':self.motion_time} for r in self.npcs if r['hp']>0]
+    def corpses(self,now):
+        return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life')},
+                 'weapon':None,'dead':True,'deadAge':max(0.,now-r['dead_at'])}
+                for r in self.npcs if r['hp']<=0 and r['dead_at'] is not None and now-r['dead_at']<NPC_CORPSE_SECONDS]
     def damage_tree(self,row,damage):
         if row['kind']!='tree':return 'Gebaeude'
         hp=max(0,row['hp']-damage)
@@ -129,18 +135,26 @@ class Village:
     def damage_npc(self,npc,player,damage,now):
         npc['hp']=max(0,npc['hp']-damage)
         if not npc['hp']:
-            npc.update(target=None,weapon=None,respawn=now+15,shot=None,velocity=[0.,0.,0.],moving=False)
+            npc.update(target=None,weapon=None,respawn=now+15,dead_at=now,shot=None,velocity=[0.,0.,0.],moving=False)
             return True
         if npc['target']!=player:npc['next_action']=now+1.0
         npc.update(target=player,weapon='pistol')
         return False
-    def tick(self,now,players,blocked,ray_box,block_boxes,body_box,spawn):
-        dt=max(0.,min(.5,now-self.last_tick));self.last_tick=now
-        if dt<=0:return
+    def tick(self,now,players,blocked,ray_box,solid_rows,body_box,spawn):
+        # Requests may arrive in bursts; advance NPC simulation at a stable 20 Hz.
+        elapsed=max(0.,min(.5,now-self.last_tick));self.last_tick=now
+        self.motion_accumulator=min(.55,self.motion_accumulator+elapsed)
+        count=0
+        while self.motion_accumulator+1e-8>=NPC_STEP and count<11:
+            self.motion_accumulator=max(0.,self.motion_accumulator-NPC_STEP)
+            self.motion_time=max(self.motion_time,now-self.motion_accumulator)
+            self._step(self.motion_time,NPC_STEP,players,blocked,ray_box,solid_rows,body_box,spawn)
+            count+=1
+    def _step(self,now,dt,players,blocked,ray_box,solid_rows,body_box,spawn):
         for npc in self.npcs:
             if npc['hp']<=0:
                 if now>=npc['respawn'] and not blocked(npc['home']):
-                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False)
+                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None)
                 else:continue
             p=npc['position'];home=npc['home'];before=p[:]
             npc.update(velocity=[0.,0.,0.],moving=False)
@@ -176,7 +190,7 @@ class Village:
             delta=[b-a for a,b in zip(origin,aim)];distance=math.sqrt(sum(v*v for v in delta))
             if not .3<distance<=8:continue
             direction=[v/distance for v in delta]
-            if any(ray_box(origin,direction,b,s,distance)<distance-.05 for b,s in block_boxes()):continue
+            if any(prism_ray(origin,direction,o,distance)<distance-.05 for o in solid_rows()):continue
             if any(ray_box(origin,direction,*body_box(r['position']),distance)<distance-.35 for r in players.values() if r is not target):continue
             npc['shot_seq']+=1;npc['shot']={'origin':origin,'direction':direction,'distance':distance,'impact':True}
             target['hp']=max(0,target['hp']-12)

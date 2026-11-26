@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import layout from './free_world_layout.json';
 import {RoomModels} from './room_customization.js';
 import {VillageView} from './village.js';
-import {villageNpcFrame} from './village_damage.js';
+import {VillageNpcMotion,villageFallPose,villagePrismOverlap,villagePrismRay,villagePrismTop} from './village_damage.js';
 import {ShotEffects} from './shotfx.js';
 import {createCharacter,animateCharacter,disposeCharacter,normalizeCharacter} from './character.js';
 import {resetRoomAvatarPose,applyRoomAvatarPose,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
@@ -29,7 +29,7 @@ export function freeRayBox(origin,direction,min,size,limit=layout.reach){
 export function freeRay(origin,direction,blocks,limit=layout.reach,includeDestroyed=false){
  let best=null;
  const consider=(hit,id=null)=>{if(hit&&hit.dist>=0&&(!best||hit.dist<best.dist))best={...hit,id};};
- for(const block of blocks){if(!includeDestroyed&&(block.hp??100)<=0)continue;consider(freeRayBox(origin,direction,...freeBox(block),limit),block.id);}
+ for(const block of blocks){if(!includeDestroyed&&(block.hp??100)<=0)continue;consider(block.poly?villagePrismRay(origin,direction,block,limit):freeRayBox(origin,direction,...freeBox(block),limit),block.id);}
  // The six interior faces accept blocks (not an invisible room shell).
  for(let i=0;i<3;i++)for(const side of [-1,1]){
   if(i===1&&side>0)continue; // Open sky, not a placeable invisible ceiling.
@@ -44,12 +44,12 @@ export function freeRay(origin,direction,blocks,limit=layout.reach,includeDestro
 }
 export function freePlacement(hit,dims,blocks,players=[]){
  if(!hit)return null;
- const axis=hit.normal.findIndex(v=>v!==0);
+ const axis=hit.normal.reduce((best,v,i)=>Math.abs(v)>Math.abs(hit.normal[best])?i:best,0);
  if(axis<0)return null;
  const cell=hit.point.map((v,i)=>i===axis?Math.round(v/G)-(hit.normal[i]<0?dims[i]:0):Math.floor(v/G-dims[i]/2+.5));
  if(!validFreeGrid(cell,dims))return null;
  const min=cell.map(x=>x*G),size=dims.map(x=>x*G);
- if(blocks.some(b=>freeOverlap(min,size,...freeBox(b))))return null;
+ if(blocks.some(b=>b.poly?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))))return null;
  if(players.some(p=>freeOverlap(min,size,[p[0]-.28,p[1]+.015,p[2]-.28],[.56,1.6,.56])))return null;
  return {cell,dims:[...dims]};
 }
@@ -59,7 +59,7 @@ export function freeModelPlacement(p,extent,rotation,blocks,players=[]){
  const pose={p:p.map(v=>Math.round(v*10000)/10000),extent:Math.round(extent*100)/100,rotation};
  const [min,size]=freeBox({pose});
  if(min.some((v,i)=>v<[-H,0,-H][i]-.000001||v+size[i]>[H,Y,H][i]+.000001)||freeOverlap(min,size,[-3,0,H-6],[6,Y,6]))return null;
- if(blocks.some(b=>freeOverlap(min,size,...freeBox(b))))return null;
+ if(blocks.some(b=>b.poly?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))))return null;
  if(players.some(p=>freeOverlap(min,size,[p[0]-.28,p[1]+.015,p[2]-.28],[.56,1.6,.56])))return null;
  return {pose};
 }
@@ -77,11 +77,11 @@ export function freeSecretDoorAt(origin,direction,blocks=[]){
 }
 export function freeBlocked(blocks,x,y,z,height=1.6){
  if(Math.abs(x)>H-.28||Math.abs(z)>H-.28||y+height>Y+.001)return true;
- return blocks.some(b=>(b.hp??100)>0&&freeOverlap([x-.25,y+.015,z-.25],[.5,height-.015,.5],...freeBox(b)));
+ const min=[x-.25,y+.015,z-.25],size=[.5,height-.015,.5];return blocks.some(b=>(b.hp??100)>0&&(b.poly?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))));
 }
 export function freeGround(blocks,x,y,z){
  let ground=0;
- for(const b of blocks){if((b.hp??100)<=0)continue;const [min,s]=freeBox(b),top=min[1]+s[1];
+ for(const b of blocks){if((b.hp??100)<=0)continue;if(b.poly){ground=Math.max(ground,villagePrismTop(b,x,y,z));continue;}const [min,s]=freeBox(b),top=min[1]+s[1];
   if(top<=y+.025&&x>min[0]-.22&&x<min[0]+s[0]+.22&&z>min[2]-.22&&z<min[2]+s[2]+.22)ground=Math.max(ground,top);
  }
  return ground;
@@ -259,7 +259,12 @@ export class FreeWorldView{
    if(a&&a.signature!==signature){clearRoomAvatarProps(a.g);disposeCharacter(a.g);a=null;}
    if(!a){const g=this.avatar(p);g.position.set(...p.position);g.rotation.y=p.yaw;a={g,signature};this.peers.set(p.slot,a);}
    const now=performance.now();
-   if(p.slot<0){a.movingUntil=p.moving?now+420:Math.min(a.movingUntil||0,now+150);a.received=now;}
+   if(p.slot<0){
+    if(p.dead){
+     if(a.deadSince===undefined){a.deadSince=now-Math.max(0,p.deadAge||0)*1000;clearRoomAvatarProps(a.g);resetRoomAvatarPose(a.g);}
+     else a.deadSince=Math.min(a.deadSince,now-Math.max(0,p.deadAge||0)*1000);
+    }else{a.motion??=new VillageNpcMotion();a.motion.push(p,now);}
+   }
    a.target=p;
   }
   for(const [slot,a] of this.peers)if(!seen.has(slot)){clearRoomAvatarProps(a.g);disposeCharacter(a.g);this.peers.delete(slot);}
@@ -269,19 +274,29 @@ export class FreeWorldView{
   for(const {row,size} of this.models.physicsModels()){const a=row.rotation*Math.PI/360;this.models.drawBody(row.id,{p:[row.x,row.y+Math.max(.015,size[1]*row.extent)/2,row.z],q:[0,Math.sin(a),0,Math.cos(a)]},row.hp);}
   const t=1-Math.exp(-dt*12);
   for(const a of this.peers.values()){
-   const g=a.g,p=a.target;let moving;
+   const g=a.g,p=a.target;let moving,animationDt=dt;
+   if(p.dead){
+    const age=Math.max(0,(performance.now()-a.deadSince)/1000),pose=villageFallPose(age,p.slot%2===0?1:-1);
+    g.position.x+=(p.position[0]-g.position.x)*t;g.position.z+=(p.position[2]-g.position.z)*t;
+    g.position.y=p.position[1]+pose.lift;g.visible=age<10;
+    g.rotation.set(pose.tilt,p.yaw,0,'YXZ');
+    if(g.userData.nameTag)g.userData.nameTag.visible=false;
+    // Relax the walking pose during the fall, then hold it completely still.
+    if(!pose.fallen||!a.rested){resetRoomAvatarPose(g);animateCharacter(g,dt,false,'walk');a.rested=pose.fallen;}
+    continue;
+   }
    if(p.slot<0){
-    const now=performance.now(),age=Math.max(0,(now-(a.received??now))/1000);
-    const pose=villageNpcFrame(g.position.toArray(),g.rotation.y,p,age,dt,Math.max(0,((a.movingUntil||0)-now)/1000));
-    g.position.set(...pose.position);g.rotation.y=pose.yaw;moving=pose.moving;
-    g.userData.villageNpc=true;
-    const desired=pose.speed>.04?pose.playback:(g.userData.villagePlayback||1);
-    g.userData.villagePlayback=(g.userData.villagePlayback||1)+(desired-(g.userData.villagePlayback||1))*t;
+    const pose=a.motion?.frame(performance.now(),dt);
+    if(!pose)continue;
+    g.position.set(...pose.position);animationDt=pose.delta;
+    g.rotation.y+=Math.atan2(Math.sin(pose.yaw-g.rotation.y),Math.cos(pose.yaw-g.rotation.y))*(1-Math.exp(-animationDt*12));
+    moving=pose.moving;g.userData.villageNpc=true;
+    g.userData.villagePlayback=(g.userData.villagePlayback||1)+(pose.playback-(g.userData.villagePlayback||1))*t;
    }else{
     const d=new THREE.Vector3(...p.position);moving=g.position.distanceTo(d)>.035;
     g.position.lerp(d,t);g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;
    }
-   resetRoomAvatarPose(g);animateCharacter(g,dt,moving,p.stance);applyRoomAvatarPose(g,null,p.weapon);updateRoomAvatarProp(g,models,p.weapon);
+   resetRoomAvatarPose(g);animateCharacter(g,animationDt,moving,p.stance);applyRoomAvatarPose(g,null,p.weapon);updateRoomAvatarProp(g,models,p.weapon);
   }
   if(third&&profile){
    if(!this.local)this.local=this.avatar(profile);

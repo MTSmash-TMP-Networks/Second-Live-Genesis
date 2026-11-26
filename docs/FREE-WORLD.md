@@ -1,4 +1,4 @@
-# Free World (0.15.2)
+# Free World (0.15.3)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -40,3 +40,6 @@ Install the separately supplied prepared `Second-Live-Quaternius-Village-Models.
 
 ## Living village (0.15.2)
 Training NPCs transmit explicit walking state and velocity. The client smooths the positions and heading and adjusts the walk cycle to movement speed. Each building has 268 damageable shell cells, using the same four damage stages as the hotel but a simplified grid, not its exact Voronoi wall geometry or full rigid-body building collapse. The original installed GLB textures stay visible on intact fragments. Destroyed cells stop colliding and their temporary debris is visual. Aim at damaged or destroyed parts and press R; Shift+R rebuilds the whole building. Shared repairs are refused when a restored cell would overlap a player, NPC or existing construction. Interior geometry remains limited to what the installed GLB contains. Damage is persisted. Street surfaces, sidewalks, curbs, crossing, lights and tree geometry were redesigned without extra downloads. Fallen trees regain 100 HP after 24 real-world hours; their due time persists across restarts. Old stumps acquire a new deadline at the first database migration. A blocked trunk volume postpones regrowth until empty. World day/night length remains unchanged. All existing original village models stay installed.
+
+## Voronoi fractures and NPC motion (0.15.3)
+Village walls and slabs use the hotel's deterministic jittered Voronoi site/polygon algorithm. Six nonoverlapping shell surfaces retain the 268 legacy IDs per building. Existing damage remains assigned to the same IDs, although the old rectangular outlines become irregular. The original GLBs use nearest-site masking, and the hotel boundary function generates textured exposed fracture faces. Host and client use the same polygon-prism ray and overlap tests. This is game-surface destruction, not full structural collapse. NPC simulation advances in 50 ms steps; timestamped samples are interpolated behind the latest update by about 340 ms. Defeated NPCs fall over and stay visible for 10 seconds, are excluded from live targeting and collision, and respawn after 15 seconds if their home is clear. The fall is animated, not a ragdoll physics system.

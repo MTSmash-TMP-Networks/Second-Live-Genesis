@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.2 · Living Village**
+**v0.15.3 · Fracture & NPC Motion**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.3 – Realistischere Brüche und NPC-Bewegungen
+
+Die Dorfgebäude verwenden die unregelmäßigen Voronoi-Bruchzellen des Hotels mit Materialtiefe, statt rechteckiger Ausschnitte. Die vorhandenen Texturen und Schadens-IDs bleiben erhalten. NPCs nutzen feste Simulationsschritte und eine gepufferte Darstellung. Besiegte NPCs fallen um und bleiben 10 Sekunden liegen, bevor sie verschwinden; nach 15 Sekunden erfolgt der Respawn.
 
 ## Neu in 0.15.2 – Living Village
 

@@ -441,41 +441,54 @@ console.log('Phone flashlight: actual Three.js spotlight, aim, scene switch, sha
 }
 console.log('Hidden village metric scenery collider checks passed');
 
-import {villageParts,villageColliders,villagePartIndex,villageNpcFrame,patchVillageShader,VillageDamageMask,VillageRubble} from './village_damage.js';
+import {villageParts,villageFaces,villageColliders,villagePartIndex,villagePrismRay,villagePrismOverlap,VillageNpcMotion,villageFallPose,patchVillageShader,VillageDamageMask,VillageRubble} from './village_damage.js';
 import {villageTreeParts,VillageForest,VillageRoads} from './village_landscape.js';
 {
  const row={id:'building-test',kind:'house',bounds:[[0,0,0],[10,7.5,10]],damage:{}};
  assert.equal(villageParts(row).length,268);
  assert.equal(villageColliders(row).length,6);
- const cell=villageParts(row).find(p=>p.index===villagePartIndex(7,2,3));
- assert.ok(cell);
- assert.ok(freeBlocked(villageColliders(row),9.5,1.6,4.4,1));
- row.damage[cell.index]=3;assert.ok(freeBlocked(villageColliders(row),9.5,1.6,4.4,1));
- row.damage[cell.index]=4;assert.ok(!freeBlocked(villageColliders(row),9.5,1.6,4.4,1));
+
+ const cell=villageParts(row).find(p=>p.index===villagePartIndex(7,2,3));assert.ok(cell);
+ assert.ok(cell.poly.length>=3&&cell.poly.some((p,i)=>{const q=cell.poly[(i+1)%cell.poly.length];return Math.abs(p[0]-q[0])>.01&&Math.abs(p[1]-q[1])>.01;}));
+ const [u,v,n]=cell.axes,point=[0,0,0];point[u]=cell.site[0];point[v]=cell.site[1];point[n]=cell.bounds[0][n]+cell.bounds[1][n]/2;
+ const origin=[...point];origin[0]=12;const direction=[-1,0,0];
+ assert.ok(villagePrismRay(origin,direction,cell,8));
+ assert.equal(freeRay(origin,direction,villageParts(row)).id,cell.id);
+ assert.ok(villagePrismOverlap(point.map(n=>n-.01),[.02,.02,.02],cell));
+ row.damage[cell.index]=3;assert.equal(villageColliders(row).length,6);
+ row.damage[cell.index]=4;assert.ok(!villageColliders(row).some(c=>c.poly?villagePrismOverlap(point.map(n=>n-.01),[.02,.02,.02],c):c.bounds[0].every((n,i)=>point[i]>n&&point[i]<n+c.bounds[1][i])));
  assert.equal(villageParts(row).find(p=>p.id===cell.id).hp,0);
  const mask=new VillageDamageMask(row);
- assert.equal(mask.data[cell.index*4],255);
+ const entry=villageFaces(row).flatMap((f,face)=>f.parts.map((p,j)=>({p,offset:(face*65+j+1)*4}))).find(v=>v.p.index===cell.index);
+ assert.equal(mask.data[entry.offset+3],4);
+ assert.ok(mask.cuts.geometry.attributes.position.count>0);
  const group=new THREE.Group(),mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());group.add(mesh);
  const release=mask.attach(group);
  const shader={uniforms:{},vertexShader:'void main(){vec3 transformed=position; #include <project_vertex>}',fragmentShader:'void main(){#include <clipping_planes_fragment> #include <color_fragment>}'};
  mesh.material.onBeforeCompile(shader,null);
  assert.ok(shader.fragmentShader.includes('if(villageStage>3.5)discard'));
  assert.ok(shader.vertexShader.includes('modelMatrix*vec4(transformed,1.0)'));
- assert.ok(shader.uniforms.villageDamage.value===mask.texture);
- row.damage={};mask.update(row);assert.equal(mask.data[cell.index*4],0);
- assert.equal(villageColliders(row).length,6);
- release();mask.dispose();
- // Keep the walking state between 250 ms server packets rather than repeatedly switching to idle.
- let position=[0,0,0],yaw=0;
- for(let i=0;i<120;i++){
-  const time=i/60,stamp=Math.floor(time*4)/4;
-  const packet={position:[stamp*1.15,0,0],velocity:[1.15,0,0],moving:true,yaw:-Math.PI/2};
-  const n=villageNpcFrame(position,yaw,packet,time-stamp,1/60);
-  assert.ok(n.moving&&n.position[0]>=position[0]-1e-8);
-  position=n.position;yaw=n.yaw;
+ assert.ok(!shader.vertexShader.includes('\\n')&&!shader.fragmentShader.includes('\\n'));
+ assert.ok(shader.uniforms.villageSites.value===mask.texture);
+ row.damage={};mask.update(row);assert.equal(mask.data[entry.offset+3],0);
+ assert.equal(mask.cuts.geometry.attributes.position.count,0);
+ assert.equal(villageColliders(row).length,6);release();mask.dispose();
+ // 4 Hz server snapshots with alternating delay, including 20 FPS frames.
+ const motion=new VillageNpcMotion();let position=0,last=0;
+ const arrivals=Array.from({length:17},(_,i)=>({stamp:i*.25,arrive:i*.25+[.025,.085,.012,.095][i%4]}));
+ let j=0;
+ for(let i=0;i<230;i++){
+  const time=i/60+(i%7===0?.014:0);
+  if(time<last)continue;
+  while(j<arrivals.length&&arrivals[j].arrive<=time){const stamp=arrivals[j++].stamp;motion.push({motionTime:stamp,position:[stamp*1.15,0,0],velocity:[1.15,0,0],moving:true,yaw:-Math.PI/2},time*1000);}
+  const n=motion.frame(time*1000,time-last);last=time;if(!n)continue;
+  assert.ok(n.position[0]>=position-.0001&&n.position[0]-position<.17);position=n.position[0];
+  if(time>.8)assert.ok(n.moving);
  }
- assert.ok(position[0]>2.1&&position[0]<2.5);
- assert.ok(!villageNpcFrame(position,yaw,{position,velocity:[0,0,0],moving:false,yaw},.7,1/60).moving);
+ assert.ok(position>3.7&&position<4.5);
+ assert.equal(villageFallPose(0).tilt,0);assert.ok(villageFallPose(.3).tilt>0&&villageFallPose(.3).tilt<Math.PI/2);
+ assert.ok(villageFallPose(.78).fallen);assert.equal(villageFallPose(8).tilt,Math.PI/2);
+
 }
 {
  const scene=new THREE.Scene(),trees=new THREE.Group();scene.add(trees);

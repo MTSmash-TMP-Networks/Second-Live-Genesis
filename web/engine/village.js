@@ -122,7 +122,7 @@ export class VillageView{
    }
    const entry={row,key:row.kind+'-'+(row.variant<3?'a':'b'),fallback:this.fallbackBuilding(row),imported:null,mask:new VillageDamageMask(row)};
    entry.release=entry.mask.attach(entry.fallback);
-   this.buildings.set(row.id,entry);this.buildingRoot.add(entry.fallback);this.installModel(entry);
+   this.buildings.set(row.id,entry);this.buildingRoot.add(entry.fallback,entry.mask.cuts);this.installModel(entry);
   }
   this.forest.set(rows.filter(r=>r.kind==='tree'));
  }

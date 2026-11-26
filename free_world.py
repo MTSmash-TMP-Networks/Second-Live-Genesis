@@ -5,6 +5,7 @@ from pathlib import Path
 from world_capture import CaptureError
 from room_models import image_size, MAX_FILE, validate_glb
 from village import Village, ROADS
+from village_structure import prism_overlap, prism_ray
 
 L=json.loads((Path(__file__).resolve().parent/'web/engine/free_world_layout.json').read_text('utf8'))
 HALF=int(L['half']/L['grid']);HEIGHT=int(L['height']/L['grid'])
@@ -99,10 +100,12 @@ class FreeWorld:
                 self.blocks[i]={'id':i,'owner':owner,'ownerSlot':slot,'cell':json.loads(cell),'dims':json.loads(dims),'texture':texture,'hp':hp,'model':model,'pose':json.loads(pose) if pose else None,'version':version}
         self.village=Village(self.path,[block_bounds(b) for b in self.blocks.values()],self.clock)
         self.revision=1
-    def solid_boxes(self):
+    def solid_rows(self):
         for b in self.blocks.values():
-            if b['hp']>0:yield block_bounds(b)
-        for b in self.village.solids():yield b['bounds']
+            if b['hp']>0:yield {'bounds':block_bounds(b)}
+        yield from self.village.solids()
+    def solid_boxes(self):
+        for b in self.solid_rows():yield b['bounds']
     def regrow_village(self):
         def occupied():
             for b in self.blocks.values():yield block_bounds(b)
@@ -112,7 +115,7 @@ class FreeWorld:
         if self.village.regrow(occupied()):self.revision+=1
     def tick_village(self,now):
         self.regrow_village()
-        self.village.tick(now,self.players,self.blocked,ray_box,self.solid_boxes,self.body_box,SPAWN)
+        self.village.tick(now,self.players,self.blocked,ray_box,self.solid_rows,self.body_box,SPAWN)
     def prune(self,now):
         for player,row in list(self.players.items()):
             if now-row['seen']>=L['leaseSeconds']:self.players.pop(player,None)
@@ -131,6 +134,7 @@ class FreeWorld:
         peers=[{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life','score','weapon')} for key,r in self.players.items() if key!=player]
         out={'slot':row['slot'],'hp':row['hp'],'life':row['life'],'score':row['score'],'position':row['position'],'yaw':row['yaw'],'corrected':corrected,'peers':peers,'online':len(self.players),'revision':self.revision,'notice':notice,'textures':self.own_textures(player),'dayPhase':(time.time()%L['daySeconds'])/L['daySeconds']}
         out['npcs']=self.village.snapshot()
+        out['corpses']=self.village.corpses(self.clock())
         if revision!=self.revision:
             out['scenery']=[{**r,**({'damage':dict(r['damage'])} if 'damage' in r else {})} for r in self.village.rows.values()]
             out['villageRoads']=ROADS
@@ -148,7 +152,7 @@ class FreeWorld:
     def blocked(self,p,height=1.6):
         if abs(p[0])>L['half']-.28 or abs(p[2])>L['half']-.28 or p[1]<0 or p[1]+height>L['height']+.001:return True
         b,s=self.body_box(p,height)
-        return any(overlap(b,s,*box) for box in self.solid_boxes())
+        return any(prism_overlap(b,s,o) for o in self.solid_rows())
     def update(self,row,data,now):
         if type(data.get('life')) is not int or data['life']!=row['life']:return True
         p=vec(data.get('position'));yaw=data.get('yaw');stance=data.get('stance','walk')
@@ -168,7 +172,7 @@ class FreeWorld:
         b,s=block_bounds({'cell':cell,'dims':dims,'pose':pose})
         need(distance_to_box([row['position'][0],row['position'][1]+1.4,row['position'][2]],b,s)<=L['reach'],'Objekt ausser Reichweite')
         need(not any(x['id']!=exclude and overlap(b,s,*block_bounds(x)) for x in self.blocks.values()),'Stellplatz belegt',409)
-        need(not any(overlap(b,s,*o['bounds']) for o in self.village.solids()),'Baum oder Gebaeude im Stellplatz',409)
+        need(not any(prism_overlap(b,s,o) for o in self.village.solids()),'Baum oder Gebaeude im Stellplatz',409)
         for other in [*self.players.values(),*self.village.snapshot()]:
             need(not overlap(b,s,*self.body_box(other['position'],1.6)),'Spieler im Stellplatz',409)
 
@@ -253,7 +257,7 @@ class FreeWorld:
             need(any(p['stage']>0 for p in repairs),'Gebaeudeteil bereits intakt',409)
             occupied=[block_bounds(b) for b in self.blocks.values()]
             occupied += [self.body_box(r['position'],1.12 if r.get('stance')=='crouch' else 1.6) for r in [*self.players.values(),*self.village.snapshot()]]
-            need(not any(overlap(*p['bounds'],*box) for p in repairs if p['stage']>=4 for box in occupied),'Wiederaufbau blockiert: Spieler oder Bauobjekt im Gebaeudeteil',409)
+            need(not any(prism_overlap(*box,p) for p in repairs if p['stage']>=4 for box in occupied),'Wiederaufbau blockiert: Spieler oder Bauobjekt im Gebaeudeteil',409)
             notice=structure.repair(part,whole);self.revision+=1;row['edit_at']=now
             return notice
         need(type(i) is int and i in self.blocks,'Objekt nicht vorhanden',404)
@@ -287,7 +291,7 @@ class FreeWorld:
                         if o['id']==b['id'] or o['hp']<=0:continue
                         op,os=block_bounds(o)
                         if abs(op[1]+os[1]-pos[1])<.0001 and all(pos[j]<op[j]+os[j] and pos[j]+size[j]>op[j] for j in (0,2)):supported=True
-                    if not occupied and supported and not any(overlap(pos,size,*o['bounds']) for o in self.village.solids()) and not any(overlap(pos,size,*self.body_box(r['position'])) for r in [*self.players.values(),*self.village.snapshot()]):cell,dims,pose=tc,td,tp
+                    if not occupied and supported and not any(prism_overlap(pos,size,o) for o in self.village.solids()) and not any(overlap(pos,size,*self.body_box(r['position'])) for r in [*self.players.values(),*self.village.snapshot()]):cell,dims,pose=tc,td,tp
                 except CaptureError:pass
         with closing(sqlite3.connect(self.path)) as db,db:db.execute('UPDATE blocks SET hp=?,cell=?,dims=?,pose=?,version=version+1 WHERE id=?',(hp,json.dumps(cell),json.dumps(dims),json.dumps(pose) if pose else None,b['id']))
         b.update(hp=hp,cell=cell,dims=dims,pose=pose,version=b['version']+1);self.revision+=1
@@ -309,7 +313,7 @@ class FreeWorld:
             if t<stop:stop=t;target_block=b
         target=None;target_scenery=None;target_npc=None
         for b in self.village.targets(origin,reach):
-            t=ray_box(origin,direction,*b['bounds'],reach)
+            t=prism_ray(origin,direction,b,reach)
             if t<stop:stop=t;target_block=None;target_scenery=b
         for npc in self.village.npcs:
             if npc['hp']<=0:continue

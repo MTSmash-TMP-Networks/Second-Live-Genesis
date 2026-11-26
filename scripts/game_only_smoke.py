@@ -417,7 +417,7 @@ class GameOnlyTest(unittest.TestCase):
 
     def test_village_structural_damage_repair_persistence(self):
         from free_world import FreeWorld
-        from village_structure import parts_for, part_index
+        from village_structure import parts_for, part_index, prism_overlap, prism_ray
         now=[100.]
         profile={'slot':0,'nickname':'Builder','avatar':DEFAULT_AVATAR}
         with tempfile.TemporaryDirectory() as tmp:
@@ -427,6 +427,9 @@ class GameOnlyTest(unittest.TestCase):
             structure=world.village.structure
             self.assertEqual(len(list(parts_for(row))),268)
             self.assertEqual(len(structure.colliders[row['id']]),6)
+            parts=list(parts_for(row))
+            self.assertEqual(len({p['index'] for p in parts}),268)
+            self.assertTrue(any(abs(a[0]-b[0])>.01 and abs(a[1]-b[1])>.01 for p in parts for a,b in zip(p['poly'],p['poly'][1:]+p['poly'][:1])))
             # Street-facing wall, at the lowest two accessible wall levels.
             part=structure.parts[row['id']+':'+str(part_index(7,1,3))]
             b,s=part['bounds'];z=b[2]+s[2]/2
@@ -442,6 +445,11 @@ class GameOnlyTest(unittest.TestCase):
             structure.damage(part,4)
             part=structure.parts[part['id']]
             self.assertEqual(part['hp'],0)
+            u,v,n=part['axes'];point=[0.,0.,0.]
+            point[u],point[v]=part['site'];point[n]=part['bounds'][0][n]+part['bounds'][1][n]/2
+            tiny=[x-.01 for x in point]
+            self.assertTrue(prism_overlap(tiny,[.02]*3,part))
+            self.assertFalse(any(prism_overlap(tiny,[.02]*3,p) for p in structure.colliders[row['id']]))
             again=FreeWorld(tmp,lambda:now[0])
             self.assertEqual(again.village.structure.parts[part['id']]['stage'],4)
             world.repair('builder',player,{'id':part['id']},now[0])
@@ -491,6 +499,11 @@ class GameOnlyTest(unittest.TestCase):
             self.assertGreater(npc['shot_seq'],0)
             self.assertTrue(world.village.damage_npc(npc,'a',100,now[0]))
             self.assertNotIn(npc['slot'],[n['slot'] for n in world.village.snapshot()])
+            corpse=world.village.corpses(now[0])[0]
+            self.assertEqual(corpse['slot'],npc['slot']);self.assertTrue(corpse['dead'])
+            self.assertEqual(corpse['deadAge'],0.)
+            self.assertEqual(world.village.corpses(now[0]+9.)[0]['deadAge'],9.)
+            self.assertEqual(world.village.corpses(now[0]+10.),[])
             now[0]+=16;world.tick_village(now[0])
             self.assertEqual(npc['hp'],100);self.assertIsNone(npc['target'])
         with tempfile.TemporaryDirectory() as tmp:
