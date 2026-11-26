@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.15.14 – Shared Seating
+- Stühle in den Dorfhäusern und im Café mit E bzw. Touch benutzbar. Gemeinsame Sitzplatzbelegung, serverseitig geprüfte Sitzposition und freier Aufstehplatz. Sitzpose aus dem Hotel auf die vorhandene Stuhlhöhe und Ausrichtung angepasst, inklusive abgesenkter Kamera und Darstellung für Mitspieler. Aufstehen bei zerstörtem Sitz oder Boden; Freigabe bei Respawn und Verbindungsende. Keine Änderungen am Hotel, NPC-Routen oder den Gebäudemodellen.
+
 ## 0.15.13 – Living Interiors
 - Alle sechs vorhandenen Erdgeschosse erhalten 80 detaillierte Einrichtungsgegenstände: Wohn-, Schlaf- und Essbereich, Küche, Marktregale mit Waren und Kasse sowie Café-Tische, Stühle und Kaffee-Theke. Prozedurale Modelle mit Holz- und Stofftexturen, ohne neue externe Downloads. Bestehende Gebäudemodelle bleiben erhalten.
 - Einrichtung besitzt gemeinsame Kollisionsvolumen, persistente Schadenszustände, lokale Einschussmarkierungen und Wiederaufbau über R bzw. Umschalt+R. Die alten Wand- und Tür-IDs bleiben unverändert; bei bestehenden Spielerbauten wird kollidierende Standard-Einrichtung ausgelassen.

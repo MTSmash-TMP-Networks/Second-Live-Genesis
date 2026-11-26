@@ -803,6 +803,57 @@ class GameOnlyTest(unittest.TestCase):
             self.assertEqual(migrated.structure.parts[key]['stage'],4)
             self.assertFalse(any(p['id']==key for p in migrated.solids()))
 
+    def test_free_world_shared_chair_seating(self):
+        from free_world import FreeWorld, chair_pose
+        from village_structure import furniture_parts
+        now=[100.]
+        profile=lambda slot:{'slot':slot,'nickname':'Guest','avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            world=FreeWorld(tmp,lambda:now[0])
+            a=world.enter('a',profile(0));b=world.enter('b',profile(1))
+            pa,pb=world.players['a'],world.players['b']
+            row=world.village.structure.rows['building-0-0']
+            chair=next(p for p in furniture_parts(row) if p['type']=='chair')
+            seat=chair_pose(chair);x,y,z=seat['position']
+            def request(who,session,op,**kw):
+                return world.request(who,{'action':op,'lease':session['lease'],'life':world.players[who]['life'],**kw})
+            with self.assertRaises(CaptureError):request('a',a,'sit',id=chair['id'])
+            pa['position']=[x,y,z+.85]
+            pb['position']=[x,y,z-.85]
+            now[0]+=1.
+            result=request('a',a,'sit',id=chair['id'])
+            self.assertEqual(result['seat'],seat)
+            self.assertEqual(result['position'],seat['position'])
+            self.assertEqual(pa['weapon'],None)
+            with self.assertRaises(CaptureError):request('b',b,'sit',id=chair['id'])
+            state=request('a',a,'update',position=[x+1,y,z],yaw=.4,stance='sprint',weapon='rifle')
+            self.assertTrue(state['corrected'])
+            self.assertEqual(state['position'],seat['position'])
+            self.assertIsNone(pa['weapon'])
+            self.assertEqual(state['seat']['yaw'],seat['yaw'])
+            self.assertEqual(world.snapshot('b',pb)['peers'][0]['seat'],seat)
+            self.assertNotIn('seat_return',world.snapshot('b',pb)['peers'][0])
+            with self.assertRaises(CaptureError):request('a',a,'pulse',weapon='rifle',direction=[1,0,0])
+            # A blocked exit leaves the seat occupied; a later valid exit works.
+            with patch.object(world,'seat_space_clear',return_value=False):
+                with self.assertRaises(CaptureError):request('a',a,'stand')
+                self.assertEqual(pa['seat'],seat)
+            result=request('a',a,'stand')
+            self.assertIsNone(result['seat'])
+            self.assertEqual(result['position'],[x,y,z+.85])
+            self.assertFalse(world.blocked(result['position']))
+            request('b',b,'sit',id=chair['id'])
+            world.village.structure.damage(chair,4)
+            self.assertIsNone(world.snapshot('b',pb)['seat'])
+            self.assertFalse(world.blocked(pb['position']))
+            with self.assertRaises(CaptureError):request('a',a,'sit',id=chair['id'])
+            world.village.structure.repair(world.village.structure.parts[chair['id']])
+            pb['position']=[x,y,z-2.]
+            request('a',a,'sit',id=chair['id'])
+            request('a',a,'abandon')
+            pb['position']=[x,y,z-.85]
+            self.assertEqual(request('b',b,'sit',id=chair['id'])['seat']['id'],chair['id'])
+
     def test_free_world_manual_door_interaction(self):
         from free_world import FreeWorld
         from world_capture import CaptureError

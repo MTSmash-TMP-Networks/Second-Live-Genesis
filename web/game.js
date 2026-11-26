@@ -206,7 +206,7 @@ function setScopeZoom(on){
  document.body.classList.toggle('scope-zoom',scopeZoom);
 }
 function toggleScope(){if(equipped!=='rifle'||held||posture||reloadId||!canPlay()||renderer?.xrMode?.active)return;if(!first)first=true;setScopeZoom(!scopeZoom);}
-function chooseWeapon(id){if(freeState?.editing)return;if((held||posture||lobbyState||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;if(freeState){freeHeld=null;updateFreeUI();}updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Einzelfeuer':equipped==='rifle'?'Scharfschützengewehr · Einzelschuss · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer':'Unbewaffnet';}
+function chooseWeapon(id){if(freeState?.editing)return;if((held||posture||freeState?.seat||lobbyState||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;if(freeState){freeHeld=null;updateFreeUI();}updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Einzelfeuer':equipped==='rifle'?'Scharfschützengewehr · Einzelschuss · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer':'Unbewaffnet';}
 function arsenal(){if(freeState){phone('inventory');return;}if(!started||studioOpen||lobbyState||lobbyTransition){$('notice').textContent='Das Inventar ist in deinem Hotelzimmer verfügbar.';return;}phone('inventory');}
 $('closearsenal').onclick=()=>showPhonePage('home');
 for(const id of [...weaponIds,'none'])$('equip-'+id).onclick=()=>{if(!started||studioOpen||lobbyState||lobbyTransition||freeState?.editing)return;chooseWeapon(id);$('closephone').onclick();};
@@ -356,7 +356,7 @@ function furniturePose(id,b){
  const local=id==='sofa'?[0,.08]:[.08,.66];
  return {x:b.p[0]+local[0]*c+local[1]*sn,z:b.p[2]-local[0]*sn+local[1]*c,y:b.p[1]-spec[id].s[1]/2,eye:id==='sofa'?1.18:1.02,yaw:a+(id==='sofa'?Math.PI:0),pitch:id==='sofa'?0:-.91};
 }
-function playerEye(){return [player.x,player.y+(posture?.eye||player.eyeHeight||1.65),player.z];}
+function playerEye(){return [player.x,player.y+(freeState?.seat?.eye||posture?.eye||player.eyeHeight||1.65),player.z];}
 function enterPosture(id,kind){
  if(held||posture||!movable(id)||renderer?.xrMode?.active)return false;
  const pose=furniturePose(id,bodies[id]);
@@ -499,7 +499,7 @@ function placementPoint(id){
   if(id!=='surface_rug'&&Object.entries(bodies).some(([k,b])=>k!==id&&k!=='surface_rug'&&state.objects[k]>0&&overlap(b.p,boundsSize(spec[k].s,b.q))))return null;
   return p.map(v=>Math.round(v*10000)/10000);
 }
-async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if(freeState){if(freeHeld)await freeEdit('place');else if(freeExitAt(playerEye(),dir()))await leaveFreeWorld();else if(freeSecretDoorAt(playerEye(),dir(),freeObstacles(freeState)))$('notice').textContent='Die Tür ist verschlossen.';else if(freeDoorTarget(freeState))await freeEdit('door');else freeGrab();return;}if(lobbyState){const door=lobbyInteraction(ray);if(door?.free){await enterFreeWorld();return;}if(door?.slot===lobbyState.slot)returnToRoom();else if(door)$('notice').textContent='Dieses Gästezimmer ist privat.';return;}if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
+async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if(freeState){if(freeState.seat)await freeEdit('stand');else if(freeHeld)await freeEdit('place');else if(freeExitAt(playerEye(),dir()))await leaveFreeWorld();else if(freeSecretDoorAt(playerEye(),dir(),freeObstacles(freeState)))$('notice').textContent='Die Tür ist verschlossen.';else if(freeDoorTarget(freeState))await freeEdit('door');else if(freeChairTarget(freeState))await freeEdit('sit');else freeGrab();return;}if(lobbyState){const door=lobbyInteraction(ray);if(door?.free){await enterFreeWorld();return;}if(door?.slot===lobbyState.slot)returnToRoom();else if(door)$('notice').textContent='Dieses Gästezimmer ist privat.';return;}if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
   const hit=interactionTarget(ray),primary=primaryInteraction(hit,ray);
   if(primary?.op==='toggle_light'){audio.play('click');await action(primary.op,primary.id);return;}
   if(primary?.op==='toggle_curtains'){await action(primary.op,primary.id);return;}
@@ -725,6 +725,11 @@ function freeDoorTarget(s){
  const hit=freeRay(playerEye(),dir(),freeObstacles(s).concat(triggers),3.2);
  return hit?rows.find(r=>r.id+':448'===hit.id)||null:null;
 }
+function freeChairTarget(s){
+ if(!s||s.seat||freeHeld)return null;
+ const hit=freeRay(playerEye(),dir(),freeObstacles(s),2.5);
+ return (s.structureParts||[]).find(p=>p.id===hit?.id&&p.furniture&&p.type==='chair'&&p.hp>0)||null;
+}
 function freeRepairTarget(s,whole=false){
  if(!s)return null;
  const parts=s.structureParts||[],trees=(s.scenery||[]).filter(b=>b.kind==='tree'&&b.hp>0);
@@ -770,7 +775,7 @@ function freeCandidate(h=freeHeld,mode='place'){
  return freeModelPlacement([x,y,z],e,rotation,blocks,players);
 }
 function freeTake(h){
- if(!freeState||freeState.editing||!h)return;
+ if(!freeState||freeState.editing||freeState.seat||!h)return;
  chooseWeapon('none');freeHeld=h;freeHintUntil=performance.now()+4000;updateFreeUI();
  if(!$('phone').hidden)$('closephone').onclick();
 }
@@ -812,10 +817,19 @@ async function loadFreeTexture(id){
 }
 function applyFreeSnapshot(s,result,initial=false){
  if(freeState!==s)return;
- if(initial||result.life!==s.life||result.corrected){
+ const previousSeat=s.seat?.id||null,nextSeat=result.seat?.id||null,seatChanged=previousSeat!==nextSeat;
+ s.seat=result.seat||null;
+ if(initial||result.life!==s.life||result.corrected||seatChanged){
   Object.assign(player,{x:result.position[0],y:result.position[1],z:result.position[2],yaw:result.yaw,pitch:0,vy:0,stance:'walk',eyeHeight:1.65});
   if(!initial&&result.life!==s.life){freeHeld=null;clearControls();$('notice').textContent='Neu gespawnt · kurzer Schutz aktiv';}
-  else if(!initial&&result.corrected)$('notice').textContent='Position korrigiert';
+  else if(!initial&&result.corrected&&!seatChanged)$('notice').textContent='Position korrigiert';
+ }
+ if(seatChanged){
+  clearControls();freeHeld=null;
+  if(s.seat){
+   equipped=null;reloadId=null;reloadLeft=0;renderer?.reload?.(0);updateAmmo();
+   $('weaponstatus').textContent='Unbewaffnet';first=true;player.pitch=-.12;
+  }else if(!result.notice&&!initial)$('notice').textContent='Aufgestanden';
  }
  s.hp=result.hp;s.life=result.life;s.score=result.score;s.online=result.online;s.peers=result.peers||[];s.textures=result.textures||[];
  if(Array.isArray(result.blocks)){s.blocks=result.blocks;s.revision=result.revision;freeView.setBlocks(s.blocks,s.revision,loadFreeTexture,loadFreeModel);if(freeHeld?.id){const b=s.blocks.find(b=>b.id===freeHeld.id);if(!b||!b.hp||b.version!==freeHeld.version){freeHeld=null;$('notice').textContent='Objekt wurde verändert. Bitte erneut aufnehmen.';}}}
@@ -878,14 +892,14 @@ function freePoll(){
  s.pending=p;
 }
 async function freeEdit(op,weapon=null,mode='place'){
- const s=freeState,h=freeHeld;if(!s||!canPlay()||s.editing||lobbyTransition)return;
+ const s=freeState,h=freeHeld;if(!s||!canPlay()||s.editing||lobbyTransition||s.seat&&op!=='stand')return;
  if(op==='pulse'&&(!weapon||weapon!==equipped||h)||op==='place'&&!h||op==='repair'&&h)return;
  // A reusable block is a construction tool, not the object to delete.
  // Capture the aimed block before awaiting a poll so a later mouse movement cannot delete another block.
  const buildingRemove=op==='remove'&&h?.kind==='block'&&!h.id;
  if(op==='remove'&&h&&!h.id&&!buildingRemove)return;
- const aimed=buildingRemove?freeTarget(true):null,aimedDoor=op==='door'&&!h?freeDoorTarget(s):null;
- if(op==='door'&&!aimedDoor)return;
+ const aimed=buildingRemove?freeTarget(true):null,aimedDoor=op==='door'&&!h?freeDoorTarget(s):null,aimedChair=op==='sit'&&!h?freeChairTarget(s):null;
+ if(op==='door'&&!aimedDoor||op==='sit'&&!aimedChair||op==='stand'&&!s.seat)return;
  if(buildingRemove&&(!freeOwn(aimed)||aimed.model)){if(aimed)$('notice').textContent='Nur eigene Baublöcke können so entfernt werden.';return;}
  s.editing=true;
  try{
@@ -898,6 +912,10 @@ async function freeEdit(op,weapon=null,mode='place'){
    const c=freeCandidate(h,mode);if(!c){$('notice').textContent='Kein freier Stellplatz';return;}
    extra={...c,texture:h.kind==='block'?h.texture||null:null};
    if(h.id){action='relocate';extra.id=h.id;extra.version=h.version;}else if(h.kind==='model')extra.sourceModel=h.source;
+  }else if(op==='sit'){
+   const chair=freeChairTarget(s);if(!chair||chair.id!==aimedChair.id)return;extra={id:chair.id};
+  }else if(op==='stand'){
+   if(!s.seat)return;
   }else if(op==='door'){
    const door=freeDoorTarget(s);if(!door||door.id!==aimedDoor.id)return;extra={id:door.id};
   }else if(op==='repair'){
@@ -952,7 +970,7 @@ function updateFreeUI(){
  $('free-hud-detail').textContent=s.hp+' HP · '+s.score+' Punkte';document.body.classList.toggle('free-armed',!!equipped);
  $('free-hud-size').textContent=freeHeld?freeHeld.name+' · '+freeHeldExtent().toFixed(2).replace('.',',')+' m':(({pistol:'Pistole',rifle:'Scharfschützengewehr',m16:'M16'})[equipped]||'Unbewaffnet')+(equipped?' · '+ammo[equipped]+' / '+clipSize[equipped]:'');
  $('free-size').value=String(freeSize);$('free-shape').value=freeShape;$('free-model-select').value=freeModelSource||'';
- $('free-model-take').disabled=!freeModelSource||s.editing||freeModelUploading;$('free-block-take').disabled=s.editing;
+ $('free-model-take').disabled=!freeModelSource||s.editing||!!s.seat||freeModelUploading;$('free-block-take').disabled=s.editing||!!s.seat;
  const key=JSON.stringify(s.textures);if(key!==freeTextureKey){
   const select=$('free-texture-select');select.replaceChildren(new Option('Weiß / Standard',''));
   for(const t of s.textures)select.add(new Option(t.name,t.id));
@@ -966,11 +984,19 @@ function updateFreeUI(){
 }
 function updateFreeHint(vr=false){
  const s=freeState;if(!s)return;
- const playing=canPlay()&&!vr,h=freeHeld,exit=!h&&freeExitAt(playerEye(),dir()),gate=!h&&!exit&&freeSecretDoorAt(playerEye(),dir(),freeObstacles(s)),door=!h&&!exit&&!gate?freeDoorTarget(s):null,target=!h&&!exit&&!gate&&!door?freeTarget(true):null,own=freeOwn(target),candidate=playing&&h?freeCandidate(h):null;
+ const playing=canPlay()&&!vr;
+ if(s.seat){
+  $('interaction-prompt').hidden=!playing;$('interaction-name').textContent='Stuhl · sitzend';$('interaction-actions').textContent='E · Aufstehen';
+  $('touchInteract').textContent='Aufstehen';$('touchInteract').disabled=!playing||s.editing;
+  for(const id of ['touchRepair','touchFire','touchReload','touchJump','touchSprint','touchCrouch','touchSecondary'])$(id).disabled=true;
+  $('touchSecondary').hidden=$('touchZoom').hidden=$('held-model-size').hidden=$('touchRotateLeft').hidden=$('touchRotateRight').hidden=true;
+  $('cross').classList.toggle('actionable',playing);$('hint').textContent='Free World · E: Aufstehen';updateFreeUI();return;
+ }
+ const h=freeHeld,exit=!h&&freeExitAt(playerEye(),dir()),gate=!h&&!exit&&freeSecretDoorAt(playerEye(),dir(),freeObstacles(s)),door=!h&&!exit&&!gate?freeDoorTarget(s):null,chair=!h&&!exit&&!gate&&!door?freeChairTarget(s):null,target=!h&&!exit&&!gate&&!door&&!chair?freeTarget(true):null,own=freeOwn(target),candidate=playing&&h?freeCandidate(h):null;
  const building=h?.kind==='block'&&!h.id,removeTarget=building?freeTarget(true):null,canRemove=building&&freeOwn(removeTarget)&&!removeTarget.model;
  const wholeFix=!h&&!exit&&!gate?freeRepairTarget(s,true):null,fix=wholeFix?.kind==='building-part'&&wholeFix.stage===0?null:wholeFix;
  const structureFix=wholeFix?.kind==='building-part'?wholeFix:null;
- const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!gate&&!door&&!own&&!structureFix&&now>=freeHintUntil);
+ const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!gate&&!door&&!chair&&!own&&!structureFix&&now>=freeHintUntil);
  const msg=$('notice').textContent;if(msg!==freeLastNotice){freeLastNotice=msg;freeNoticeUntil=now+3500;}
  document.body.classList.toggle('free-notice',playing&&!!msg&&now<freeNoticeUntil);
  $('held-model-size').hidden=!playing||!h;
@@ -981,13 +1007,13 @@ function updateFreeHint(vr=false){
  $('touchSecondary').hidden=!h;$('touchSecondary').textContent=building?'Entfernen':'Ablegen';
  $('touchSecondary').disabled=!playing||s.editing||(building?!canRemove:!candidate);
  $('touchFire').disabled=!playing||s.editing||(h?.kind==='block'?!candidate:!equipped||!!h||!!reloadId);$('touchFire').textContent=h?.kind==='block'?'Setzen':'Feuer';
- $('touchInteract').disabled=!playing||(!exit&&!gate&&!door&&!candidate&&!(own&&target.hp>0))||s.editing;$('touchInteract').textContent=exit?'Hotel':gate?'Untersuchen':door?(door.door.open?'Schließen':'Öffnen'):h?'Abstellen':'Aufheben';
+ $('touchInteract').disabled=!playing||(!exit&&!gate&&!door&&!chair&&!candidate&&!(own&&target.hp>0))||s.editing;$('touchInteract').textContent=exit?'Hotel':gate?'Untersuchen':door?(door.door.open?'Schließen':'Öffnen'):chair?'Hinsetzen':h?'Abstellen':'Aufheben';
  $('touchRepair').disabled=!playing||s.editing||!fix;$('touchReload').disabled=!equipped||!!reloadId;$('touchArsenal').disabled=false;$('touchArsenal').textContent='Inventar';
  $('touchJump').disabled=player.stance==='crouch';$('touchSprint').disabled=$('touchCrouch').disabled=!playing;
  $('touchSprint').setAttribute('aria-pressed',String(player.stance==='sprint'||touchSprint));$('touchCrouch').setAttribute('aria-pressed',String(player.stance==='crouch'||touchCrouch));
- $('interaction-name').textContent=exit?'HOTEL · Ausgang':gate?'Eingefrorene Tür':door?'Gebäudetür':h?(candidate?'Objekt abstellen':canRemove?'Eigenen Block entfernen':'Stellplatz blockiert'):structureFix?(structureFix.stage===4?'Gebäudeteil zerstört':structureFix.stage>0?'Gebäudeteil beschädigt':'Gebäude beschädigt'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
- $('interaction-actions').textContent=exit?'E · Zum Hotel':gate?'E · Untersuchen':door?('E · '+(door.door.open?'Schließen':'Öffnen')+((door.damage?.[448]||0)>0?' · R: Reparieren':'')):h?(building?'Linksklick: setzen · Rechtsklick: entfernen · +/−: Größe · Q/F: drehen · 0: abbrechen':(h.kind==='block'?'Linksklick/E: abstellen':'E: abstellen · B: Wand')+' · Q/F: drehen · +/−: Größe · 0: abbrechen'):structureFix?'R: Teil reparieren · Shift+R: Gebäude wiederaufbauen':own?(target.hp?'E · Aufheben · Entf · Entfernen'+(target.hp<100?' · R: Reparieren':''):'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
- $('cross').classList.toggle('actionable',playing&&(exit||gate||!!door||!!candidate||own||canRemove||!!structureFix));
+ $('interaction-name').textContent=exit?'HOTEL · Ausgang':gate?'Eingefrorene Tür':door?'Gebäudetür':chair?'Stuhl':h?(candidate?'Objekt abstellen':canRemove?'Eigenen Block entfernen':'Stellplatz blockiert'):structureFix?(structureFix.stage===4?'Gebäudeteil zerstört':structureFix.stage>0?'Gebäudeteil beschädigt':'Gebäude beschädigt'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
+ $('interaction-actions').textContent=exit?'E · Zum Hotel':gate?'E · Untersuchen':door?('E · '+(door.door.open?'Schließen':'Öffnen')+((door.damage?.[448]||0)>0?' · R: Reparieren':'')):chair?(s.peers.some(p=>p.seat?.id===chair.id)?'Besetzt':'E · Hinsetzen')+(chair.stage?' · R: Reparieren':''):h?(building?'Linksklick: setzen · Rechtsklick: entfernen · +/−: Größe · Q/F: drehen · 0: abbrechen':(h.kind==='block'?'Linksklick/E: abstellen':'E: abstellen · B: Wand')+' · Q/F: drehen · +/−: Größe · 0: abbrechen'):structureFix?'R: Teil reparieren · Shift+R: Gebäude wiederaufbauen':own?(target.hp?'E · Aufheben · Entf · Entfernen'+(target.hp<100?' · R: Reparieren':''):'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
+ $('cross').classList.toggle('actionable',playing&&(exit||gate||!!door||!!chair||!!candidate||own||canRemove||!!structureFix));
  $('hint').textContent='Free World · I: Inventar';updateFreeUI();
 }
 $('free-model-select').onchange=()=>{freeModelSource=$('free-model-select').value||null;freeHintUntil=performance.now()+4000;updateFreeUI();};
@@ -1284,7 +1310,7 @@ canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.poi
 canvas.addEventListener('contextmenu',e=>{if(canPlay()&&!mobile)e.preventDefault();});
 window.addEventListener('mousedown',e=>{if(e.button===2&&!mobile&&document.pointerLockElement===canvas&&canPlay()){e.preventDefault();if(freeState)freeSecondary();else toggleScope();}});
 window.addEventListener('wheel',e=>{
- if(!canPlay()||lobbyState||freeState?.editing||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
+ if(!canPlay()||lobbyState||freeState?.editing||freeState?.seat||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
  const slot=wheelInventorySlot(equipped,freeHeld,!!freeState,e.deltaY);if(slot===null)return;
  e.preventDefault();
  const now=performance.now();if(now-lastWheel<140)return;lastWheel=now;
@@ -1299,7 +1325,7 @@ window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener(
 function part(p,s,c,r=0,q=null){draw({p,s,c:rgb(c),r,q,m:mat(c)});}
 function canPlay(){return started&&active&&$('phone').hidden&&$('arsenal').hidden&&$('updater').hidden;}
 function fire(ray=null){
-  if(!canPlay()||lobbyState||lobbyTransition||posture||!equipped||busy||reloadId||fireCooldown>0)return false;
+  if(!canPlay()||lobbyState||lobbyTransition||posture||freeState?.seat||!equipped||busy||reloadId||fireCooldown>0)return false;
   const weapon=equipped;
   if(ammo[weapon]<=0){startReload(true);return false;}
   if(freeState){if(freeHeld||freeState.editing)return false;void freeEdit('pulse',weapon);return true;}
@@ -1426,7 +1452,7 @@ function frame(now,xrFrame){
   let dt=Math.max(0,Math.min(.035,(now-prev)/1000));prev=now;
   if(studioOpen){$('minimap').hidden=true;updateAvatarModelStatus();renderer.renderStudio(canvas,dt,$('character-preview'));return;}
   const vr=!!renderer.xrMode?.active;const xrInput=vr?renderer.xrMode.inputs(xrFrame):null;
-  if(canPlay()&&!posture&&!lobbyTransition){
+  if(canPlay()&&!posture&&!freeState?.seat&&!lobbyTransition){
     stepReload(dt);stepTrigger(dt);
     if(vr)player.yaw+=xrInput.turn;
     let f=vr?xrInput.move[1]:Number(keys.has('KeyW'))-Number(keys.has('KeyS'))+touchMove[1],s=vr?xrInput.move[0]:Number(keys.has('KeyD'))-Number(keys.has('KeyA'))+touchMove[0],a=player.yaw+(vr?xrInput.headYaw:0);
@@ -1476,7 +1502,7 @@ function frame(now,xrFrame){
     $('npc-greeting').hidden=true;renderer.equip(equipped,first&&!scopeZoom);
     const phase=freeView.updateSky(now,player),hours=Math.floor(phase*24),minutes=Math.floor(phase*1440)%60;
     $('free-time').textContent=String(hours).padStart(2,'0')+':'+String(minutes).padStart(2,'0');
-    freeView.step(dt,player,accountProfile,!first&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5,renderer.weaponModels,equipped);
+    freeView.step(dt,player,accountProfile,!first&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5,renderer.weaponModels,equipped,freeState.seat);
     if(canPlay()&&freeHeld)freeView.showPreview(freeCandidate(freeHeld),freeHeld,loadFreeHeldModel);else freeView.showPreview(null);
     audio.listener(eye,d);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom,false,freeView.scene,torch);
     updateMinimap(now,vr);

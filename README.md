@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.13 · Living Interiors**
+**v0.15.14 · Shared Seating**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.14 – Sitzplätze in der Free World
+
+Stühle in Wohnhäusern und im Café sind mit E oder der Touch-Interaktion benutzbar. Die vorhandene Hotel-Sitzpose wird auf die Stuhlhöhe und Sitzrichtung übertragen. Der Server verwaltet die Belegung und prüft einen freien Aufstehplatz; andere Spieler sehen die Sitzpose. Beim Zerstören des Stuhls wird der Spieler automatisch aus der Sitzposition gelöst.
 
 ## Neu in 0.15.13 – Lebendige Innenräume
 

@@ -71,7 +71,7 @@ console.log('Automatic reload, single-shot rifle and held-fire regression checks
 
 // Test actual posture state transitions with minimal DOM/room stand-ins.
 const postureTest=new Function('assert',`
-let held=null,posture=null,first=false,renderer=null;
+let held=null,posture=null,first=false,renderer=null,freeState=null;
 let player={x:0,y:0,z:0,vy:0,yaw:1,pitch:0},nodes={};
 const $=id=>nodes[id]??=( {hidden:true,textContent:''} );
 const spec={sofa:{s:[2.5,1.1,1.4]},surface_bed:{s:[1.56,1.2,2.26]}};
@@ -437,3 +437,16 @@ demoDoor.damage[448]=4;assert.equal(targetDoor({scenery:[demoDoor],obstacles:[]}
 
 assert.ok(html.includes('Eigenes Modellpaket importieren (optional)'));
 assert.ok(updater.includes('Kein manueller Import erforderlich.'));
+
+{
+ const chair={id:'house:519',furniture:true,type:'chair',hp:100},table={id:'house:518',furniture:true,type:'dining',hp:100},s={structureParts:[chair,table]};
+ let target=chair.id,reach=0;
+ const select=new Function('freeHeld','freeRay','playerEye','dir','freeObstacles',getPart('function freeChairTarget(','function freeRepairTarget(')+'return freeChairTarget;')(null,(o,d,rows,max)=>{reach=max;return {id:target};},()=>[0,1,0],()=>[1,0,0],()=>[]);
+ assert.equal(select(s),chair);assert.equal(reach,2.5);
+ target=table.id;assert.equal(select(s),null);target=chair.id;chair.hp=0;assert.equal(select(s),null);
+ chair.hp=100;s.seat={id:chair.id};assert.equal(select(s),null);
+ assert.ok(game.includes("if(freeState.seat)await freeEdit('stand')"));
+ assert.ok(game.includes("else if(freeChairTarget(freeState))await freeEdit('sit')"));
+ assert.ok(game.includes('!posture&&!freeState?.seat&&!lobbyTransition'));
+ assert.ok(game.includes('renderer.weaponModels,equipped,freeState.seat)'));
+}

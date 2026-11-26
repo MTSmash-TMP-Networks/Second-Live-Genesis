@@ -647,7 +647,7 @@ console.log('Village streetlights: day/night, staggered coverage and scene rebui
 console.log('Village NPC cold start, stale simulation timestamps and initial display pose verified');
 
 
-import {villageReactionPose,applyVillageNpcReaction,resetRoomAvatarPose} from './avatar_room_pose.js';
+import {villageReactionPose,applyVillageNpcReaction,resetRoomAvatarPose,applyRoomAvatarPose} from './avatar_room_pose.js';
 {
  
 for(let frame=0;frame<=360;frame++){
@@ -787,3 +787,14 @@ import {VillageInterior,makeInteriorProp,interiorMaterials} from './village_inte
  interior.set([]);assert.equal(root.children.length,0);
 }
 console.log('Village furniture meshes, collision, repair and interior lighting verified');
+
+{
+ const avatar=createCharacter(DEFAULT_CHARACTER,{legacyOnly:true});
+ animateCharacter(avatar,1/60,false,'walk');const body=avatar.userData.body,original=body.position.y;
+ applyRoomAvatarPose(avatar,{kind:'sit',hip:.69},null);
+ assert.ok(Math.abs(body.position.y-(.69-.925*avatar.userData.height))<1e-7);
+ assert.ok(Math.abs(avatar.userData.legs[0].rotation.x-1.30)<1e-7);
+ resetRoomAvatarPose(avatar);assert.ok(Math.abs(body.position.y-original)<1e-7);
+ disposeCharacter(avatar);
+}
+console.log('Free World chair pose and standing restoration verified');

@@ -78,6 +78,12 @@ def ray_box(origin,direction,b,s,limit):
             if lo>hi:return math.inf
     return lo
 
+def chair_pose(part):
+    b,s=part['bounds']
+    forward=part['side']*(-1 if part.get('flip') else 1)
+    return {'id':part['id'],'position':[b[0]+s[0]/2,b[1],b[2]+s[2]/2],
+            'yaw':-forward*math.pi/2,'eye':1.20,'hip':.69}
+
 def shot_boundary(origin,direction,limit):
     """Stop the fictional ray at the playable terrain or ice border."""
     for i in (0,2):
@@ -179,8 +185,9 @@ class FreeWorld:
         with closing(sqlite3.connect(self.path)) as db:
             return [{'id':i,'name':n} for i,n in db.execute('SELECT id,name FROM textures WHERE owner=? ORDER BY rowid',(player,))]
     def snapshot(self,player,row,revision=-1,corrected=False,notice=''):
-        peers=[{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life','score','weapon')} for key,r in self.players.items() if key!=player]
-        out={'slot':row['slot'],'hp':row['hp'],'life':row['life'],'score':row['score'],'position':row['position'],'yaw':row['yaw'],'corrected':corrected,'peers':peers,'online':len(self.players),'revision':self.revision,'notice':notice,'textures':self.own_textures(player),'dayPhase':(time.time()%L['daySeconds'])/L['daySeconds']}
+        self.release_invalid_seats(self.clock())
+        peers=[{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life','score','weapon')},'seat':r.get('seat')} for key,r in self.players.items() if key!=player]
+        out={'slot':row['slot'],'hp':row['hp'],'life':row['life'],'score':row['score'],'position':row['position'],'yaw':row['yaw'],'corrected':corrected,'peers':peers,'online':len(self.players),'revision':self.revision,'notice':notice,'seat':row.get('seat'),'textures':self.own_textures(player),'dayPhase':(time.time()%L['daySeconds'])/L['daySeconds']}
         out['npcs']=self.village.snapshot()
         out['corpses']=self.village.corpses(self.clock())
         if revision!=self.revision:
@@ -192,7 +199,7 @@ class FreeWorld:
     def enter(self,player,profile):
         with self.lock:
             now=self.clock();self.prune(now)
-            row={'slot':profile['slot'],'nickname':profile['nickname'],'avatar':profile['avatar'],'lease':secrets.token_urlsafe(24),'seen':now,'move_at':now,'edit_at':-100.,'pulse_at':-100.,'position':list(SPAWN),'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,'shield':now+3}
+            row={'slot':profile['slot'],'nickname':profile['nickname'],'avatar':profile['avatar'],'lease':secrets.token_urlsafe(24),'seen':now,'move_at':now,'edit_at':-100.,'pulse_at':-100.,'position':list(SPAWN),'yaw':0.,'stance':'walk','weapon':None,'seat':None,'seat_return':None,'hp':100,'life':1,'score':0,'shield':now+3}
             self.players[player]=row
             # Initial NPC snapshots must use the current simulation timeline,
             # even after the world has been idle for a long time.
@@ -200,6 +207,59 @@ class FreeWorld:
             return {**self.snapshot(player,row),'lease':row['lease']}
     def body_box(self,p,height=1.6):
         return [p[0]-.25,p[1]+.015,p[2]-.25],[.5,height-.015,.5]
+    def seat_space_clear(self,row,position,ignore=None,height=1.6):
+        if abs(position[0])>L['half']-.28 or abs(position[2])>L['half']-.28 or position[1]<0 or position[1]+height>L['height']:return False
+        box=self.body_box(position,height)
+        if any((ignore is None or o.get('id')!=ignore) and prism_overlap(*box,o) for o in self.solid_rows()):return False
+        return not any(other is not row and other.get('hp',100)>0 and
+                       overlap(*box,*self.body_box(other['position'],1.6))
+                       for other in [*self.players.values(),*self.village.npcs])
+    def seat_path_clear(self,row,origin,position,ignore):
+        n=max(1,math.ceil(math.dist(origin,position)/.10))
+        for i in range(1,n+1):
+            p=[a+(b-a)*i/n for a,b in zip(origin,position)]
+            if not self.seat_space_clear(row,p,ignore):return False
+        return True
+    def sit(self,row,data,now):
+        need(not row.get('seat'),'Du sitzt bereits',409)
+        key=data.get('id');need(isinstance(key,str),'Ungueltiger Sitzplatz')
+        part=self.village.structure.parts.get(key)
+        need(part and part.get('furniture') and part.get('type')=='chair' and part['hp']>0,'Stuhl nicht verfuegbar',409)
+        need(not any(p.get('seat',{}).get('id')==key for p in self.players.values() if p.get('seat')),'Stuhl ist besetzt',409)
+        seat=chair_pose(part);position=seat['position'];old=row['position']
+        need(distance_to_box([old[0],old[1]+1.4,old[2]],*part['bounds'])<=2.5 and abs(old[1]-position[1])<=.22,'Stuhl ausser Reichweite',409)
+        need(self.village.walk_height(position[0],position[2])>=position[1]-.005,'Stuhl hat keinen sicheren Boden',409)
+        need(self.seat_path_clear(row,old,position,key),'Sitzplatz nicht frei erreichbar',409)
+        row.update(seat=seat,seat_return={'position':old[:],'yaw':row['yaw']},position=position[:],
+                   yaw=seat['yaw'],stance='walk',weapon=None,move_at=now)
+        return 'Hinsetzen'
+    def stand(self,row,now,forced=False):
+        seat=row.get('seat')
+        need(seat is not None,'Du sitzt nicht',409)
+        x,y,z=seat['position'];origin=row['position'];key=seat['id']
+        back=row.get('seat_return') or {}
+        candidates=[back['position']] if back.get('position') else []
+        for radius in (.65,.85,1.1,1.4,1.8):
+            for i in range(16):
+                angle=i*math.pi/8
+                px=x+radius*math.cos(angle);pz=z+radius*math.sin(angle)
+                ground=self.village.walk_height(px,pz)
+                if abs(ground-y)<=.22:candidates.append([px,ground,pz])
+        place=next((p for p in candidates if abs(p[1]-y)<=.22 and self.seat_space_clear(row,p) and
+                    self.village.walk_height(p[0],p[2])>=p[1]-.005 and self.seat_path_clear(row,origin,p,key)),None)
+        if place is None:
+            need(forced,'Kein freier Platz zum Aufstehen',409)
+            # Destroyed support must never trap a player inside invalid geometry.
+            place=list(SPAWN)
+        row.update(seat=None,seat_return=None,position=place[:],stance='walk',weapon=None,move_at=now)
+        return 'Aufgestanden'
+    def release_invalid_seats(self,now):
+        for row in self.players.values():
+            seat=row.get('seat')
+            if not seat:continue
+            p=self.village.structure.parts.get(seat['id']);x,y,z=seat['position']
+            if not p or p['hp']<=0 or self.village.walk_height(x,z)<y-.005:
+                self.stand(row,now,True)
     def blocked(self,p,height=1.6):
         if abs(p[0])>L['half']-.28 or abs(p[2])>L['half']-.28 or p[1]<0 or p[1]+height>L['height']+.001:return True
         b,s=self.body_box(p,height)
@@ -210,6 +270,10 @@ class FreeWorld:
         need(numeric(yaw) and stance in ('walk','sprint','crouch'),'Ungueltige Bewegung')
         weapon=data.get('weapon')
         need(weapon is None or isinstance(weapon,str) and weapon in GAME_PROPS,'Unbekannte Spielwaffe')
+        if row.get('seat'):
+            # A client cannot walk, jump or equip an item while seated.
+            row.update(yaw=math.remainder(yaw,2*math.pi),weapon=None,stance='walk',move_at=now)
+            return math.dist(p,row['position'])>.005
         row['weapon']=weapon
         elapsed=min(1.5,max(.05,now-row['move_at']));old=row['position']
         height=1.12 if stance=='crouch' else 1.6
@@ -429,7 +493,7 @@ class FreeWorld:
         if now<target['shield']:return 'Spawn-Schutz aktiv',shot
         target['hp']=max(0,target['hp']-damage)
         if target['hp']==0:
-            target.update(hp=100,life=target['life']+1,position=list(SPAWN),yaw=0.,move_at=now,shield=now+3)
+            target.update(hp=100,life=target['life']+1,position=list(SPAWN),yaw=0.,move_at=now,shield=now+3,seat=None,seat_return=None)
             row['score']+=1
             return 'Spielpunkt +1',shot
         return 'Spieltreffer',shot
@@ -449,7 +513,10 @@ class FreeWorld:
                 corrected=self.update(row,data,now);row['seen']=now
                 return self.snapshot(player,row,data.get('revision'),corrected)
             need(type(data.get('life')) is int and data['life']==row['life'],'Spieler wurde neu gespawnt',409)
-            if op=='place':notice=self.build(player,row,data,now)
+            if row.get('seat') and op!='stand':raise CaptureError('Bitte zuerst aufstehen',409)
+            if op=='sit':notice=self.sit(row,data,now)
+            elif op=='stand':notice=self.stand(row,now)
+            elif op=='place':notice=self.build(player,row,data,now)
             elif op=='relocate':notice=self.relocate(player,row,data,now)
             elif op=='remove':notice=self.remove(player,row,data,now)
             elif op=='repair':notice=self.repair(player,row,data,now)

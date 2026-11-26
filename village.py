@@ -302,5 +302,5 @@ class Village:
             npc['shot_seq']+=1;npc['shot']={'origin':origin,'direction':direction,'distance':distance,'impact':True}
             target['hp']=max(0,target['hp']-12)
             if not target['hp']:
-                target.update(hp=100,life=target['life']+1,position=list(spawn),yaw=0.,move_at=now,shield=now+3)
+                target.update(hp=100,life=target['life']+1,position=list(spawn),yaw=0.,move_at=now,shield=now+3,seat=None,seat_return=None)
                 npc.update(target=None,weapon=None)

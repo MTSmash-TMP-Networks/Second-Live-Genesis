@@ -53,6 +53,7 @@ function tiltForBed(root,body,head){
 export function applyRoomAvatarPose(root,pose=null,weapon=null,lookYaw=0){
  const u=root.userData,r=u.realistic,rig=roomRig(root);
  if(pose?.kind==='sit'){
+  const hip=Number.isFinite(pose.hip)?pose.hip:.69;
   if(r&&rig?.Hips){
    for(const side of ['Left','Right']){
     const sign=side==='Left'?-1:1;
@@ -60,14 +61,14 @@ export function applyRoomAvatarPose(root,pose=null,weapon=null,lookYaw=0){
     aimBone(root,rig[side+'Foot'],rig[side+'ToeBase'],[0,-.10,-1]);
     bend(root,rig,side,'Arm','ForeArm','Hand',[sign*.18,-1,-.12],[0,-.38,-1]);
    }
-   offsetTo(root,r.pivot,rig.Hips,[0,.69,0]);
+   offsetTo(root,r.pivot,rig.Hips,[0,hip,0]);
    if(rig.Head&&rig.Head.parent){
     const angle=Math.max(-.65,Math.min(.65,lookYaw));
     const q=new THREE.Quaternion().setFromAxisAngle(Y,angle).multiply(rig.Head.getWorldQuaternion(new THREE.Quaternion()));
     remember(root,rig.Head);rig.Head.quaternion.copy(rig.Head.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(q));
    }
   }else if(!r){
-   remember(root,u.body);u.body.position.y=.69-.925*u.height;
+   remember(root,u.body);u.body.position.y=hip-.925*u.height;
    for(let i=0;i<2;i++){
     for(const part of [u.legs[i],u.knees[i],u.arms[i],u.elbows[i]])remember(root,part);
     u.legs[i].rotation.x=1.30;u.knees[i].rotation.x=-1.40;

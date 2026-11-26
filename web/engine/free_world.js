@@ -324,7 +324,7 @@ export class FreeWorldView{
   }
   for(const [slot,a] of this.peers)if(!seen.has(slot)){clearRoomAvatarProps(a.g);disposeCharacter(a.g);this.peers.delete(slot);}
  }
- step(dt,player,profile,third,models=null,weapon=null){
+ step(dt,player,profile,third,models=null,weapon=null,seat=null){
   this.effects.update(dt);this.village.rubble.step(dt);this.village.step(dt);
   for(const {row,size} of this.models.physicsModels()){const a=row.rotation*Math.PI/360;this.models.drawBody(row.id,{p:[row.x,row.y+Math.max(.015,size[1]*row.extent)/2,row.z],q:[0,Math.sin(a),0,Math.cos(a)]},row.hp);}
   const t=1-Math.exp(-dt*12);
@@ -347,11 +347,13 @@ export class FreeWorldView{
     g.rotation.y+=Math.atan2(Math.sin(pose.yaw-g.rotation.y),Math.cos(pose.yaw-g.rotation.y))*(1-Math.exp(-animationDt*12));
     moving=pose.moving;
     g.userData.villagePlayback=pose.playback;
+   }else if(p.seat){
+    g.position.set(...p.seat.position);g.rotation.y=p.seat.yaw;moving=false;
    }else{
     const d=new THREE.Vector3(...p.position);moving=g.position.distanceTo(d)>.035;
     g.position.lerp(d,t);g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;
    }
-   resetRoomAvatarPose(g);animateCharacter(g,animationDt,moving,p.stance);applyRoomAvatarPose(g,null,p.weapon);
+   resetRoomAvatarPose(g);animateCharacter(g,animationDt,moving,p.stance);applyRoomAvatarPose(g,p.seat?{kind:'sit',hip:p.seat.hip}:null,p.seat?null:p.weapon,p.seat?Math.atan2(Math.sin(p.yaw-p.seat.yaw),Math.cos(p.yaw-p.seat.yaw)):0);
    if(p.slot<0){
     const age=a.hitAt===undefined?Infinity:Math.max(0,(performance.now()-a.hitAt)/1000);
     applyVillageNpcReaction(g,{age,zone:a.hitZone,legs:p.injuredLegs||[],moving});
@@ -362,8 +364,8 @@ export class FreeWorldView{
   if(third&&profile){
    if(!this.local)this.local=this.avatar(profile);
    this.local.visible=true;const moving=Math.hypot(this.local.position.x-player.x,this.local.position.z-player.z)>.005;
-   this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=player.yaw;
-   resetRoomAvatarPose(this.local);animateCharacter(this.local,dt,moving,player.stance);applyRoomAvatarPose(this.local,null,weapon);updateRoomAvatarProp(this.local,models,weapon);
+   this.local.position.set(player.x,player.y,player.z);this.local.rotation.y=seat?.yaw??player.yaw;
+   resetRoomAvatarPose(this.local);animateCharacter(this.local,dt,!seat&&moving,player.stance);applyRoomAvatarPose(this.local,seat?{kind:'sit',hip:seat.hip}:null,seat?null:weapon,seat?Math.atan2(Math.sin(player.yaw-seat.yaw),Math.cos(player.yaw-seat.yaw)):0);updateRoomAvatarProp(this.local,models,seat?null:weapon);
   }else if(this.local)this.local.visible=false;
  }
  clear(){

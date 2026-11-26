@@ -1,4 +1,4 @@
-# Free World (0.15.13)
+# Free World (0.15.14)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -73,3 +73,6 @@ The Docker build supports the prepared CC0 ZIP at `optional-village/Second-Live-
 
 ## Living interiors (0.15.13)
 The six ground floors have a server-defined layout with 80 furniture items, stable IDs starting at 512 per building and the existing four damage stages. Houses contain living, sleeping, kitchen and dining furniture; the market has stocked shelving and a register; the café has tables, chairs and a coffee counter. Procedural textured meshes are batched per material, without new asset downloads. Furniture has approximate AABB collision, damage and repair, and local impact projection where a matching mesh exists. Conflicting existing builds suppress their default furniture; repair restores it once clear. Up to four nearby warm indoor lights become brighter at night. Visitors pause for 8–12 seconds and face a nearby fixture with a reversible idle pose overlay; the existing movement and combat logic remain intact. No furnishing of upper floors, actual sitting, service transactions, or new characters in this release.
+
+## Shared seating (0.15.14)
+Aim at a furnished chair within 2.5 m and use E (or the touch interaction) to sit. The server owns the seat ID, floor anchor, facing direction, and occupancy. Look around freely, switch camera using V, and press E again to stand. Movement, equipment and building edits are disabled while seated. The server validates the approach and selects an unobstructed exit position; a blocked exit leaves the player seated. Destroyed seats or missing support release occupants; if no nearby safe exit exists the normal spawn is used. Disconnect and respawn release occupancy. Seated player poses are synchronized, using the existing hotel rig overlay; hotel seating and NPC routines remain unchanged. Only the provided village chairs are supported, not arbitrary imported models.
