@@ -713,3 +713,52 @@ console.log('Free World hotel-style projected impacts, extended-distance surface
  }
 }
 console.log('Village damage shader clips destroyed cells without painting crack patterns on intact surfaces');
+
+import {preparedDoorTriangles,VillageView} from './village.js';
+{
+ // Two orientations, closed/open/destroyed door, adjacent intact walls,
+ // front face prism clipping after damage, and the original asset leaf split.
+ for(const side of [-1,1]){
+  const x=side===1?-75:-55,z=-49,row={id:'door-test',kind:'house',variant:0,bounds:[[side===1?x-10:x,0,z-5],[10,7.5,10]],damage:{},door:{side,front:x,z,width:1.06,height:2.4,bounds:[[side===1?x-.85:x,0,z-.53],[.85,2.4,1.06]],open:false}};
+  const floor=.1875,origin=[x+side*2,1.6,z],dir=[-side,0,0];
+  assert.equal(villageParts(row).length,269);
+  assert.ok(freeBlocked(villageColliders(row),x-side*.4,floor,z));
+  assert.equal(freeRay(origin,dir,villageColliders(row),4).id,'door-test:448');
+  row.door.open=true;
+  assert.ok(!freeBlocked(villageColliders(row),x-side*.4,floor,z));
+  assert.ok(!freeBlocked(villageColliders(row),x-side*2,floor,z));
+  assert.ok(freeBlocked(villageColliders(row),x-side*.4,floor,z+1));
+  assert.equal(freeRay(origin,dir,villageColliders(row),4),null);
+  assert.equal(freeRay(origin,dir,villageParts(row).filter(p=>!p.doorLeaf),4),null);
+  const floorTop=freeGround(villageColliders(row),x-side*.4,.20,z);assert.ok(Math.abs(floorTop-floor)<1e-8);
+  // At high render rates a movement step can be shorter than the old
+  // 3 cm mismatch between the support and character collision radii.
+  const obstacles=villageColliders(row);
+  for(const step of [.01,.025,.08]){
+   let px=x+side*1.5,py=0;
+   for(let i=0;i<Math.ceil(4/step);i++){
+    const nx=px-side*step;
+    if(!freeBlocked(obstacles,nx,py,z)){px=nx;}
+    else{
+     const top=freeGround(obstacles,nx,py+.20,z);
+     if(top>py+.001&&top-py<=.20&&!freeBlocked(obstacles,nx,top,z)){px=nx;py=top;}
+    }
+    py=freeGround(obstacles,px,py,z);
+   }
+   assert.ok((x-px)*side>2.4,'walk across the doorway threshold without jumping');
+   assert.ok(Math.abs(py-floor)<1e-8);
+  }
+  row.door.open=false;row.damage[448]=4;
+  assert.ok(!freeBlocked(villageColliders(row),x-side*.4,floor,z));
+  delete row.damage[448];assert.ok(freeBlocked(villageColliders(row),x-side*.4,floor,z));
+  const mask=new VillageDamageMask(row);assert.equal(mask.uniforms.villageHasDoor.value,1);mask.dispose();
+ }
+ const makeGeometry=(count,start,length,tris)=>({attributes:{position:{count,getX:()=>0,getY:()=>1,getZ:()=>4.9}},index:{array:Array.from({length:tris*3},(_,i)=>start+i%length)}});
+ const g=makeGeometry(3960,856,268,184);assert.equal(preparedDoorTriangles('shop-a','MI_Trim_MetalConcrete',g).take.length,552);
+ assert.equal(preparedDoorTriangles('shop-b','MI_Trim_MetalConcrete',g),null);
+ assert.equal(preparedDoorTriangles('shop-a','MI_Trim_MetalConcrete',makeGeometry(3960,856,268,183)),null);
+ const fake=new THREE.Group();fake.rotation.y=0;const view={buildings:new Map([['test',{doorPivot:fake,doorAngle:-Math.PI/2}]])};
+ for(let i=0;i<60;i++)VillageView.prototype.step.call(view,1/60);
+ assert.ok(Math.abs(fake.rotation.y+Math.PI/2)<.001);
+}
+console.log('Village doors: physical opening, closed/destroyed leaf, asset extraction and animation verified');

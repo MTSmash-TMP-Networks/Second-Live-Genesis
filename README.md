@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.10 · Clean Impact Surfaces**
+**v0.15.11 · Open Village**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.11 – Begehbares Dorf
+
+Die sechs Dorfgebäude sind durch animierte Türen betretbar. Mit E bzw. der Touch-Interaktion können Spieler Türen öffnen und schließen. Sechs NPCs (vier Männer und zwei Frauen) besuchen die Gebäude und kehren zu ihren Gehweg-Patrouillen zurück. NPC-Namensschilder sind ausgeblendet. Die vorbereiteten Original-GLBs werden weiter verwendet.
 
 ## Neu in 0.15.10 – Saubere Einschussmarkierungen
 

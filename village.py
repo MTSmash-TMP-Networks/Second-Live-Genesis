@@ -4,7 +4,7 @@ import random
 import sqlite3
 import time
 from contextlib import closing
-from village_structure import VillageStructure, prism_ray
+from village_structure import VillageStructure, prism_ray, prism_overlap, DOOR_INDEX
 
 TREE_REGROW_SECONDS=24*60*60
 NPC_STEP=.05
@@ -35,7 +35,9 @@ ROADS=[
 
 # The two continuous sidewalks are derived from the actual village road plan.
 NPC_SIDEWALKS=tuple(sorted((r for r in ROADS if r['kind']=='walk' and r['d']>r['w']),key=lambda r:r['x']))
-NPC_PATROL_SEEDS=((0,-48.),(1,-33.),(0,-18.),(1,-8.))
+NPC_PATROL_SEEDS=((0,-48.),(1,-33.),(0,-18.),(1,-8.),(0,-30.),(1,-49.))
+NPC_MODELS=(1,2,3,4,13,18)
+NPC_BUILDINGS=('building-0-0','building-1-1','building-0-2','building-1-2','building-0-1','building-1-0')
 SIDEWALK_Y=.075
 
 def sidewalk_height(x,z):
@@ -99,6 +101,7 @@ class Village:
                             db.execute('UPDATE village_state SET regrow_at=? WHERE id=?',(due,key))
                         self.regrow_at[key]=due
         self.structure=VillageStructure(path,self.rows.values())
+        self.door_revision=0;self.door_hold={}
         self.npcs=[]
         for i,(side,z) in enumerate(NPC_PATROL_SEEDS):
             lane=NPC_SIDEWALKS[side];x=lane['x']
@@ -108,9 +111,42 @@ class Village:
                         if abs(z+dz-lane['z'])<=lane['d']/2-5.4)
             home=next((p for p in candidates if not any(overlap([p[0]-.3,p[1],p[2]-.3],[.6,1.6,.6],*box) for box in blocks)),None)
             if home is None:continue
-            self.npcs.append({'slot':-100-i,'nickname':f'Test-NPC {i+1}','avatar':{'model':i+1,'height':1},
+            self.npcs.append({'slot':-100-i,'nickname':f'Test-NPC {i+1}','avatar':{'model':NPC_MODELS[i],'height':1,'beard':0 if i>=4 else 1},
                 'position':home[:],'home':home,'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,
-                'target':None,'velocity':[0.,0.,0.],'moving':False,'trail':[],'route':i%2,'patrol_turn_until':0.,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None,'hit_seq':0,'hit_zone':None,'hit_at':None,'injured_legs':[],'stagger_until':0.})
+                'target':None,'velocity':[0.,0.,0.],'moving':False,'trail':[],'route':i%2,'patrol_turn_until':0.,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None,'hit_seq':0,'hit_zone':None,'hit_at':None,'injured_legs':[],'stagger_until':0.,'visit_building':NPC_BUILDINGS[i],'visit_elapsed':0.,'visit_after':12.+i*4.,'visit_index':-1,'visit_wait':0.})
+    def door_clear(self,row,players,solid_rows,body_box):
+        b,s=row['door']['bounds'];b=[b[0]-.25,b[1],b[2]];s=[s[0]+.5,s[1],s[2]]
+        if any(overlap(b,s,*body_box(p['position'])) for p in [*players.values(),*(n for n in self.npcs if n['hp']>0)]):return False
+        return not any(not obj.get('kind') and overlap(b,s,*obj['bounds']) for obj in solid_rows())
+    def set_door(self,row,opened,now,players,solid_rows,body_box):
+        if row['damage'].get(str(DOOR_INDEX),0)>=4:return opened
+        if not opened and not self.door_clear(row,players,solid_rows,body_box):return False
+        if row['door']['open']!=opened:
+            row['door']['open']=opened;self.door_revision+=1
+        if opened:self.door_hold[row['id']]=now+7.
+        else:self.door_hold.pop(row['id'],None)
+        return True
+    def close_doors(self,now,players,solid_rows,body_box):
+        for key,due in list(self.door_hold.items()):
+            row=self.structure.rows.get(key)
+            if not row or row['damage'].get(str(DOOR_INDEX),0)>=4:
+                self.door_hold.pop(key,None);continue
+            if now>=due:
+                if not self.set_door(row,False,now,players,solid_rows,body_box):self.door_hold[key]=now+1.
+    def walk_height(self,x,z):
+        height=sidewalk_height(x,z)
+        for row in self.structure.rows.values():
+            b,s=row['bounds'];top=b[1]+s[1]*.025
+            if not b[0]-.25<=x<=b[0]+s[0]+.25 or not b[2]-.25<=z<=b[2]+s[2]+.25:continue
+            for p in self.structure.colliders[row['id']]:
+                if p['bounds'][0][1]+p['bounds'][1][1]<=top+1e-7 and prism_overlap([x-.25,0.,z-.25],[.5,top,.5],p):
+                    height=max(height,top);break
+        return height
+    def visit_route(self,npc):
+        building=self.structure.rows.get(npc['visit_building'])
+        if not building:return None,[]
+        d=building['door'];x,z,side=d['front'],d['z'],d['side'];lane=npc['home'][0]
+        return building,[[lane,0.,z],[x+side*1.8,0.,z],[x-side*2.,0.,z],[x-side*2.8,0.,z+1.2],[x-side*2.,0.,z],[x+side*1.8,0.,z],[lane,0.,z]]
     def solids(self):
         yield from (row for row in self.rows.values() if row['kind']=='tree' and row['hp']>0)
         yield from self.structure.solids()
@@ -175,6 +211,7 @@ class Village:
             self.motion_accumulator=max(0.,self.motion_accumulator-NPC_STEP)
             self.motion_time=max(self.motion_time,now-self.motion_accumulator)
             self._step(self.motion_time,NPC_STEP,players,blocked,ray_box,solid_rows,body_box,spawn)
+            self.close_doors(self.motion_time,players,solid_rows,body_box)
             # Keep the authoritative short trajectory, including turns and stops.
             # Clients can recover missing intermediate positions from the next poll.
             for npc in self.npcs:
@@ -188,7 +225,7 @@ class Village:
         for npc in self.npcs:
             if npc['hp']<=0:
                 if now>=npc['respawn'] and not blocked(npc['home']):
-                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None,patrol_turn_until=0.,trail=[],hit_seq=0,hit_zone=None,hit_at=None,injured_legs=[],stagger_until=0.)
+                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None,patrol_turn_until=0.,trail=[],hit_seq=0,hit_zone=None,hit_at=None,injured_legs=[],stagger_until=0.,visit_elapsed=0.,visit_index=-1,visit_wait=0.)
                 else:continue
             p=npc['position'];home=npc['home'];before=p[:]
             npc.update(velocity=[0.,0.,0.],moving=False)
@@ -197,14 +234,35 @@ class Village:
                 npc.update(target=None,weapon=None,stance='walk');continue
             target=players.get(npc['target'])
             if target and math.hypot(target['position'][0]-home[0],target['position'][2]-home[2])>25:target=None
+            visiting=False
             if not target:
                 npc.update(target=None,weapon=None,stance='walk')
-                goal=[home[0],home[1],home[2]+(5 if npc['route']==0 else -5)]
+                building,path=self.visit_route(npc)
+                if npc['visit_index']<0:
+                    npc['visit_elapsed']+=dt
+                    if path and npc['visit_elapsed']>=npc['visit_after']:
+                        npc.update(visit_index=0,visit_wait=0.)
+                if path and npc['visit_index']>=0:
+                    visiting=True;goal=path[npc['visit_index']]
+                    if npc['visit_index'] in (2,5):
+                        self.set_door(building,True,now,players,solid_rows,body_box)
+                else:goal=[home[0],home[1],home[2]+(5 if npc['route']==0 else -5)]
             else:
                 goal=target['position'];npc['stance']='walk';npc['weapon']='pistol'
             dx,dz=goal[0]-p[0],goal[2]-p[2];dist=math.hypot(dx,dz)
             # A blocked patrol pauses rather than switching direction each tick.
             # Reverse only at a reached waypoint, with a stationary turning phase.
+            if visiting and dist<=.06:
+                i=npc['visit_index']
+                if i==3 and npc['visit_wait']==0.:npc['visit_wait']=now+5.
+                if now>=npc['visit_wait']:
+                    if i+1<len(path):
+                        npc['visit_index']=i+1
+                        if i+1 in (2,5):self.set_door(building,True,now,players,solid_rows,body_box)
+                    else:
+                        npc.update(visit_index=-1,visit_elapsed=0.,visit_after=22.+(abs(npc['slot'])%6)*3.,visit_wait=0.)
+                # Advance on the next fixed step; never interpolate across a corner.
+                continue
             if not target and dist<=.06:
                 npc['route']=1-npc['route']
                 npc['patrol_turn_until']=now+NPC_TURN_SECONDS
@@ -219,7 +277,7 @@ class Village:
                     steps=max(1,math.ceil(step/.12))
                     for j in range(steps):
                         x=p[0]+dx/dist*step/steps;z=p[2]+dz/dist*step/steps
-                        q=[x,sidewalk_height(x,z),z]
+                        q=[x,self.walk_height(x,z),z]
                         if blocked(q) or any(math.hypot(q[0]-r['position'][0],q[2]-r['position'][2])<=.6 for r in players.values()):
                             break
                         npc['position']=q;p=q

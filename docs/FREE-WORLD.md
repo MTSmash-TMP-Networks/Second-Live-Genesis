@@ -1,4 +1,4 @@
-# Free World (0.15.10)
+# Free World (0.15.11)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -64,3 +64,6 @@ Regional NPC hit volumes are simplified arcade collision triggers. Head hits tri
 
 ## Clean impact surfaces (0.15.10)
 The village fracture shader now only discards destroyed cells, including in shadow and decal materials. Surviving surfaces retain the original GLB textures and no longer show procedural crack overlays or whole-cell darkening. Existing localized impact decals, exposed fracture geometry, collision, persistence and repair are unchanged.
+
+## Open village (0.15.11)
+Each existing building has a centered street-facing entrance and a separately animated door leaf. The server and client remove the matching aperture from front-wall Voronoi prisms, retaining the 268 original fracture IDs and adding door ID 448. A closed intact door blocks the entrance; an open leaf uses simplified collision. Press E (or the touch interaction button) near the entrance to open or close it. Doors auto-close after about seven seconds unless occupied. Destruction and repair persist; intact doors start closed after a server restart. Prepared Quaternius GLBs have their original door triangles isolated at runtime, with a procedural fallback for other assets. The ground floor is accessible, but not furnished or connected to upper levels. Four male and two female Rocketbox NPCs use staggered scripted indoor visits between sidewalk patrols; no full indoor pathfinding. NPC name tags are removed, player labels are unchanged.

@@ -26,15 +26,50 @@ export function villageFaces(row){
  if(faceCache.size>=48)faceCache.delete(faceCache.keys().next().value);
  faceCache.set(key,result);return result;
 }
+export const VILLAGE_DOOR_INDEX=448;
+export function villageDoorPart(row){
+ if(!row.door)return null;
+ const stage=row.damage?.[VILLAGE_DOOR_INDEX]||0;
+ return {id:row.id+':'+VILLAGE_DOOR_INDEX,building:row.id,kind:'building-part',index:VILLAGE_DOOR_INDEX,stage,hp:100-25*stage,bounds:row.door.bounds,doorLeaf:true};
+}
+function entranceClip(poly,n,k){
+ const out=[];
+ for(let i=0;i<poly.length;i++){
+  const a=poly[i],b=poly[(i+1)%poly.length],da=a[0]*n[0]+a[1]*n[1]-k,db=b[0]*n[0]+b[1]*n[1]-k,ia=da<=1e-10,ib=db<=1e-10;
+  if(ia)out.push(a);if(ia!==ib){const t=da/(da-db);out.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);}
+ }
+ return out;
+}
+function cutEntrance(part,row,face){
+ const d=row.door;if(!d||face!==(d.side===1?3:2))return part;
+ const [b,s]=part.bounds,z0=d.z-d.width/2,z1=d.z+d.width/2,h=d.height;
+ if(b[2]>=z1||b[2]+s[2]<=z0||b[1]>=h)return part;
+ const pieces=[];
+ for(const [low,high,bottom] of [[b[2],Math.min(z0,b[2]+s[2]),b[1]],[Math.max(z1,b[2]),b[2]+s[2],b[1]],[Math.max(z0,b[2]),Math.min(z1,b[2]+s[2]),Math.max(h,b[1])]]){
+  if(high-low<1e-8||b[1]+s[1]-bottom<1e-8)continue;
+  if(part.poly){
+   let poly=part.poly;
+   for(const [n,k] of [[[-1,0],-low],[[1,0],high],[[0,-1],-bottom]])if(poly.length)poly=entranceClip(poly,n,k);
+   if(poly.length<3)continue;
+   const lo=[b[0],Math.min(...poly.map(p=>p[1])),Math.min(...poly.map(p=>p[0]))],hi=[b[0]+s[0],Math.max(...poly.map(p=>p[1])),Math.max(...poly.map(p=>p[0]))];
+   pieces.push({bounds:[lo,hi.map((n,j)=>n-lo[j])],axes:part.axes,poly});
+  }else pieces.push({bounds:[[b[0],bottom,low],[s[0],b[1]+s[1]-bottom,high-low]]});
+ }
+ return {...part,pieces};
+}
 export function villageParts(row){
- return villageFaces(row).flatMap(f=>f.parts.map(p=>{const stage=row.damage?.[p.index]||0;return {...p,id:row.id+':'+p.index,building:row.id,kind:'building-part',stage,hp:100-25*stage};}));
+ const parts=villageFaces(row).flatMap((f,i)=>f.parts.map(p=>{const stage=row.damage?.[p.index]||0;return cutEntrance({...p,id:row.id+':'+p.index,building:row.id,kind:'building-part',stage,hp:100-25*stage},row,i);}));
+ const door=villageDoorPart(row);if(door)parts.push(door);return parts;
 }
 export function villageColliders(row){
- return villageFaces(row).flatMap((f,i)=>f.parts.some(p=>(row.damage?.[p.index]||0)>=4)?
-  f.parts.filter(p=>(row.damage?.[p.index]||0)<4).map(p=>({...p,id:row.id+':'+p.index,kind:'building-solid',hp:100})):
-  [{id:row.id+':solid:'+i,kind:'building-solid',hp:100,bounds:f.bounds}]);
+ const parts=villageFaces(row).flatMap((f,i)=>f.parts.some(p=>(row.damage?.[p.index]||0)>=4)?
+  f.parts.filter(p=>(row.damage?.[p.index]||0)<4).map(p=>cutEntrance({...p,id:row.id+':'+p.index,kind:'building-solid',hp:100},row,i)):
+  [cutEntrance({id:row.id+':solid:'+i,kind:'building-solid',hp:100,bounds:f.bounds},row,i)]);
+ const door=villageDoorPart(row);if(door&&door.hp>0&&!row.door.open)parts.push(door);
+ return parts;
 }
 export function villagePrismOverlap(a,s,part){
+ if(part.pieces)return part.pieces.some(p=>villagePrismOverlap(a,s,p));
  const [b,t]=part.bounds;
  if(!a.every((x,j)=>x<b[j]+t[j]-1e-8&&x+s[j]>b[j]+1e-8))return false;
  if(!part.poly)return true;
@@ -48,6 +83,8 @@ export function villagePrismOverlap(a,s,part){
  return true;
 }
 export function villagePrismRay(origin,direction,part,limit){
+ if(part.pieces){let best=null;for(const p of part.pieces){const hit=villagePrismRay(origin,direction,p,limit);if(hit&&(!best||hit.dist<best.dist))best=hit;}return best;}
+ if(!part.poly){const [b,s]=part.bounds;let lo=0,hi=limit,normal=null;for(let i=0;i<3;i++){const o=origin[i],v=direction[i];if(Math.abs(v)<1e-9){if(o<b[i]||o>b[i]+s[i])return null;continue;}const t0=(b[i]-o)/v,t1=(b[i]+s[i]-o)/v,t=Math.min(t0,t1);if(t>=lo){lo=t;normal=[0,0,0];normal[i]=v>0?-1:1;}hi=Math.min(hi,Math.max(t0,t1));if(lo>hi)return null;}return normal&&lo<=limit?{dist:lo,normal,point:origin.map((o,i)=>o+direction[i]*lo)}:null;}
  const [u,v,axis]=part.axes,[b,s]=part.bounds;let lo=0,hi=limit,normal=null;
  function plane(value,slope,n){
   if(Math.abs(slope)<1e-10)return value>=-1e-8;
@@ -65,13 +102,14 @@ export function villagePrismRay(origin,direction,part,limit){
  return normal&&lo<=limit?{dist:lo,normal,point:origin.map((x,j)=>x+direction[j]*lo)}:null;
 }
 export function villagePrismTop(part,x,y,z){
- const [b,s]=part.bounds,top=b[1]+s[1],a=[x-.22,b[1]-.001,z-.22],size=[.44,s[1]+.002,.44];
+ if(part.pieces)return part.pieces.reduce((top,p)=>Math.max(top,villagePrismTop(p,x,y,z)),0);
+ const [b,s]=part.bounds,top=b[1]+s[1],a=[x-.25,b[1]-.001,z-.25],size=[.50,s[1]+.002,.50];
  if(!villagePrismOverlap(a,size,part))return 0;
- if(part.axes[2]===1)return top<=y+.025?top:0;
+ if(!part.poly||part.axes[2]===1)return top<=y+.025?top:0;
  // Clip the upright polygon to the character's horizontal support strip.
  const [u,v]=part.axes,vertical=u===1?0:1,horizontal=1-vertical,coord=(u===1?v:u)===0?x:z;
  let points=part.poly;
- for(const [sign,edge] of [[1,coord-.22],[-1,coord+.22]]){
+ for(const [sign,edge] of [[1,coord-.25],[-1,coord+.25]]){
   const clipped=[];
   for(let i=0;i<points.length;i++){
    const p=points[i],q=points[(i+1)%points.length],da=sign*(p[horizontal]-edge),db=sign*(q[horizontal]-edge);
@@ -156,6 +194,10 @@ uniform vec3 villageOrigin;
 uniform vec3 villageSize;
 uniform sampler2D villageSites;
 uniform float villageChanged;
+uniform float villageHasDoor;
+uniform vec3 villageDoorMin;
+uniform vec3 villageDoorMax;
+bool villageDoorHole(vec3 p){return villageHasDoor>0.5&&all(greaterThanEqual(p,villageDoorMin))&&all(lessThanEqual(p,villageDoorMax));}
 float villageStageAt(vec3 p){
  if(villageChanged<0.5)return 0.0;
  vec3 q=clamp((p-villageOrigin)/villageSize,0.0,0.999999);
@@ -190,12 +232,13 @@ float villageStageAt(vec3 p){
 export function patchVillageShader(shader,uniforms){
  Object.assign(shader.uniforms,uniforms);
  shader.vertexShader='varying vec3 vVillageWorld;\n'+shader.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\nvVillageWorld=(modelMatrix*vec4(transformed,1.0)).xyz;');
- shader.fragmentShader=fragmentHeader+shader.fragmentShader.replace('#include <clipping_planes_fragment>','#include <clipping_planes_fragment>\nfloat villageStage=villageStageAt(vVillageWorld);if(villageStage>3.5)discard;');
+ shader.fragmentShader=fragmentHeader+shader.fragmentShader.replace('#include <clipping_planes_fragment>','#include <clipping_planes_fragment>\nif(villageDoorHole(vVillageWorld))discard;float villageStage=villageStageAt(vVillageWorld);if(villageStage>3.5)discard;');
  // Only fully destroyed cells change the surface silhouette. Intact fragments
  // retain their original texture; local impact decals show individual hits.
 }
 // Mirror the shader's face selection when raycasting a visual surface for a decal.
 export function villageSurfaceIntact(row,point){
+ const door=row.door;if(door&&Math.abs(point.z-door.z)<=door.width/2&&Math.abs(point.x-door.front)<=1.05&&point.y>=row.bounds[1][1]*.025+.001&&point.y<=door.height)return false;
  const [origin,size]=row.bounds,p=point.toArray(),q=p.map((x,j)=>clamp((x-origin[j])/size[j],0,.999999));
  let face;
  if(q[1]<.025)face=0;else if(q[1]>=.86)face=1;
@@ -236,8 +279,10 @@ export class VillageDamageMask{
  constructor(row){
   this.data=new Float32Array(65*6*4);this.texture=new THREE.DataTexture(this.data,65,6,THREE.RGBAFormat,THREE.FloatType);
   this.texture.minFilter=this.texture.magFilter=THREE.NearestFilter;this.texture.generateMipmaps=false;this.texture.flipY=false;
-  this.uniforms={villageOrigin:{value:new THREE.Vector3(...row.bounds[0])},villageSize:{value:new THREE.Vector3(...row.bounds[1])},villageSites:{value:this.texture},villageChanged:{value:0}};
+  this.uniforms={villageOrigin:{value:new THREE.Vector3(...row.bounds[0])},villageSize:{value:new THREE.Vector3(...row.bounds[1])},villageSites:{value:this.texture},villageChanged:{value:0},villageHasDoor:{value:row.door?1:0},villageDoorMin:{value:new THREE.Vector3(row.door?row.door.front-1.06:0,row.bounds[1][1]*.025+.001,row.door?row.door.z-row.door.width/2:0)},villageDoorMax:{value:new THREE.Vector3(row.door?row.door.front+1.06:0,row.door?.height||0,row.door?row.door.z+row.door.width/2:0)}};
   this.cuts=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshStandardMaterial({color:0xc3b2a0,map:cutTexture(),roughness:.98,side:THREE.DoubleSide}));
+  this.cuts.material.onBeforeCompile=shader=>{patchVillageShader(shader,this.uniforms);shader.fragmentShader=shader.fragmentShader.replace('float villageStage=villageStageAt(vVillageWorld);if(villageStage>3.5)discard;','');};
+  this.cuts.material.customProgramCacheKey=()=> 'village-cut-door-v1';
   this.cuts.castShadow=true;this.cuts.receiveShadow=true;this.key=null;this.update(row);
  }
  update(row){
@@ -261,7 +306,7 @@ export class VillageDamageMask{
    m.side=THREE.DoubleSide;m.shadowSide=THREE.DoubleSide;
    const before=m.onBeforeCompile,cache=m.customProgramCacheKey();
    m.onBeforeCompile=function(shader,renderer){before.call(this,shader,renderer);patchVillageShader(shader,uniforms);};
-   m.customProgramCacheKey=()=>cache+'|village-voronoi-v3-mask-only|'+visible;m.needsUpdate=true;owned.add(m);return m;
+   m.customProgramCacheKey=()=>cache+'|village-voronoi-v4-entrance|'+visible;m.needsUpdate=true;owned.add(m);return m;
   }
   function clone(m){if(!copies.has(m))copies.set(m,patch(m.clone(),true));return copies.get(m);}
   root.traverse(o=>{

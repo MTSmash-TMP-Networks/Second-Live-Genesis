@@ -31,7 +31,7 @@ export function freeRayBox(origin,direction,min,size,limit=layout.reach){
 export function freeRay(origin,direction,blocks,limit=layout.reach,includeDestroyed=false){
  let best=null;
  const consider=(hit,id=null)=>{if(hit&&hit.dist>=0&&(!best||hit.dist<best.dist))best={...hit,id};};
- for(const block of blocks){if(!includeDestroyed&&(block.hp??100)<=0)continue;consider(block.poly?villagePrismRay(origin,direction,block,limit):freeRayBox(origin,direction,...freeBox(block),limit),block.id);}
+ for(const block of blocks){if(!includeDestroyed&&(block.hp??100)<=0)continue;consider((block.poly||block.pieces)?villagePrismRay(origin,direction,block,limit):freeRayBox(origin,direction,...freeBox(block),limit),block.id);}
  // The six interior faces accept blocks (not an invisible room shell).
  for(let i=0;i<3;i++)for(const side of [-1,1]){
   if(i===1&&side>0)continue; // Open sky, not a placeable invisible ceiling.
@@ -51,7 +51,7 @@ export function freePlacement(hit,dims,blocks,players=[]){
  const cell=hit.point.map((v,i)=>i===axis?Math.round(v/G)-(hit.normal[i]<0?dims[i]:0):Math.floor(v/G-dims[i]/2+.5));
  if(!validFreeGrid(cell,dims))return null;
  const min=cell.map(x=>x*G),size=dims.map(x=>x*G);
- if(blocks.some(b=>b.poly?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))))return null;
+ if(blocks.some(b=>(b.poly||b.pieces)?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))))return null;
  if(players.some(p=>freeOverlap(min,size,[p[0]-.28,p[1]+.015,p[2]-.28],[.56,1.6,.56])))return null;
  return {cell,dims:[...dims]};
 }
@@ -61,7 +61,7 @@ export function freeModelPlacement(p,extent,rotation,blocks,players=[]){
  const pose={p:p.map(v=>Math.round(v*10000)/10000),extent:Math.round(extent*100)/100,rotation};
  const [min,size]=freeBox({pose});
  if(min.some((v,i)=>v<[-H,0,-H][i]-.000001||v+size[i]>[H,Y,H][i]+.000001)||freeOverlap(min,size,[-3,0,H-6],[6,Y,6]))return null;
- if(blocks.some(b=>b.poly?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))))return null;
+ if(blocks.some(b=>(b.poly||b.pieces)?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))))return null;
  if(players.some(p=>freeOverlap(min,size,[p[0]-.28,p[1]+.015,p[2]-.28],[.56,1.6,.56])))return null;
  return {pose};
 }
@@ -79,12 +79,12 @@ export function freeSecretDoorAt(origin,direction,blocks=[]){
 }
 export function freeBlocked(blocks,x,y,z,height=1.6){
  if(Math.abs(x)>H-.28||Math.abs(z)>H-.28||y+height>Y+.001)return true;
- const min=[x-.25,y+.015,z-.25],size=[.5,height-.015,.5];return blocks.some(b=>(b.hp??100)>0&&(b.poly?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))));
+ const min=[x-.25,y+.015,z-.25],size=[.5,height-.015,.5];return blocks.some(b=>(b.hp??100)>0&&((b.poly||b.pieces)?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))));
 }
 export function freeGround(blocks,x,y,z){
  let ground=0;
- for(const b of blocks){if((b.hp??100)<=0)continue;if(b.poly){ground=Math.max(ground,villagePrismTop(b,x,y,z));continue;}const [min,s]=freeBox(b),top=min[1]+s[1];
-  if(top<=y+.025&&x>min[0]-.22&&x<min[0]+s[0]+.22&&z>min[2]-.22&&z<min[2]+s[2]+.22)ground=Math.max(ground,top);
+ for(const b of blocks){if((b.hp??100)<=0)continue;if(b.poly||b.pieces){ground=Math.max(ground,villagePrismTop(b,x,y,z));continue;}const [min,s]=freeBox(b),top=min[1]+s[1];
+  if(top<=y+.025&&x>min[0]-.25&&x<min[0]+s[0]+.25&&z>min[2]-.25&&z<min[2]+s[2]+.25)ground=Math.max(ground,top);
  }
  return ground;
 }
@@ -260,11 +260,15 @@ export class FreeWorldView{
    if(mark.kind==='building'){
     const entry=this.village.buildings.get(mark.object),row=entry?.row,part=mark.target.slice(mark.object.length+1);
     if(!entry||(row.damage?.[part]||0)>=4)return [];
+    if(part==='448'){
+     const root=entry.doorPivot;
+     return root&&!row.door?.open&&Math.abs(root.rotation.y)<.025?[{root,kind:'wood'}]:[];
+    }
     const root=entry.imported||entry.fallback;
     return [{root,kind:'wall',accept:p=>villageSurfaceIntact(row,p),decorate:mesh=>{
      const material=mesh.material.clone();
      material.onBeforeCompile=shader=>patchVillageShader(shader,entry.mask.uniforms,false);
-     material.customProgramCacheKey=()=> 'world-impact-fracture-v1';
+     material.customProgramCacheKey=()=> 'world-impact-fracture-v2-entrance';
      material.needsUpdate=true;mesh.material=material;mesh.userData.ownedImpactMaterial=true;
     }}];
    }
@@ -287,7 +291,9 @@ export class FreeWorldView{
   }
  }
  avatar(profile){
-  const g=createCharacter(profile.avatar,{villageNpc:profile.slot<0});const tag=textSprite(profile.nickname,.95,.24);tag.position.y=2.12;g.add(tag);g.userData.nameTag=tag;this.scene.add(g);return g;
+  const g=createCharacter(profile.avatar,{villageNpc:profile.slot<0});
+  if(!(profile.slot<0)){const tag=textSprite(profile.nickname,.95,.24);tag.position.y=2.12;g.add(tag);g.userData.nameTag=tag;}
+  this.scene.add(g);return g;
  }
  sync(peers){
   const seen=new Set();
@@ -314,7 +320,7 @@ export class FreeWorldView{
   for(const [slot,a] of this.peers)if(!seen.has(slot)){clearRoomAvatarProps(a.g);disposeCharacter(a.g);this.peers.delete(slot);}
  }
  step(dt,player,profile,third,models=null,weapon=null){
-  this.effects.update(dt);this.village.rubble.step(dt);
+  this.effects.update(dt);this.village.rubble.step(dt);this.village.step(dt);
   for(const {row,size} of this.models.physicsModels()){const a=row.rotation*Math.PI/360;this.models.drawBody(row.id,{p:[row.x,row.y+Math.max(.015,size[1]*row.extent)/2,row.z],q:[0,Math.sin(a),0,Math.cos(a)]},row.hp);}
   const t=1-Math.exp(-dt*12);
   for(const a of this.peers.values()){

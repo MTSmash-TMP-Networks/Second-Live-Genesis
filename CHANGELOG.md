@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.11 – Open Village
+- Alle sechs Dorfgebäude besitzen begehbare, straßenseitige Eingänge. Die Türen schwenken nach innen und können mit E oder der Touch-Interaktion geöffnet und geschlossen werden. Die Original-Türgeometrie wird aus den vorbereiteten Quaternius-Modellen getrennt; andere Modelle verwenden eine passende Ersatztür. Client und Server nutzen dieselbe Öffnung im Voronoi-Kollisionsraster. Türen bleiben zerstör- und reparierbar; beschädigte Teile und Texturen bleiben erhalten. Schließen ist bei belegtem Durchgang gesperrt, Türen schließen nach etwa sieben Sekunden automatisch. Offene Türblätter haben vereinfachte Kollision.
+- Vier bestehende männliche NPCs plus zwei weibliche Rocketbox-NPCs (Emma und Olivia). Alle sechs folgen Gehweg-Patrouillen mit zeitversetzten Besuchen in ihren zugeordneten Gebäuden, öffnen Türen und verlassen sie wieder. Die bisherige Bewegungsinterpolation und Trefferreaktionen bleiben erhalten. Namensschilder über NPCs entfernt; Spielernamen unverändert.
+- Begehbare Erdgeschossflächen, noch keine Einrichtung, Obergeschoss-Treppen oder vollständige Innenraum-Navigation. Keine neuen externen Modelle oder Modellimporte erforderlich.
+
 ## 0.15.10 – Clean Impact Surfaces
 - Großflächige prozedurale Rissmuster und Abdunklung bei Treffern an Dorfgebäuden entfernt. Originaltexturen bleiben unverändert; nur lokale Einschussmarkierungen und tatsächlich ausgebrochene Bauteile sind sichtbar. Schadensstufen, Bruchphysik, Schatten und Reparatur bleiben erhalten. Hotelzimmer unverändert.
 

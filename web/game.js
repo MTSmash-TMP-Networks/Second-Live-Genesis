@@ -499,7 +499,7 @@ function placementPoint(id){
   if(id!=='surface_rug'&&Object.entries(bodies).some(([k,b])=>k!==id&&k!=='surface_rug'&&state.objects[k]>0&&overlap(b.p,boundsSize(spec[k].s,b.q))))return null;
   return p.map(v=>Math.round(v*10000)/10000);
 }
-async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if(freeState){if(freeHeld)await freeEdit('place');else if(freeExitAt(playerEye(),dir()))await leaveFreeWorld();else if(freeSecretDoorAt(playerEye(),dir(),freeObstacles(freeState)))$('notice').textContent='Die Tür ist verschlossen.';else freeGrab();return;}if(lobbyState){const door=lobbyInteraction(ray);if(door?.free){await enterFreeWorld();return;}if(door?.slot===lobbyState.slot)returnToRoom();else if(door)$('notice').textContent='Dieses Gästezimmer ist privat.';return;}if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
+async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if(freeState){if(freeHeld)await freeEdit('place');else if(freeExitAt(playerEye(),dir()))await leaveFreeWorld();else if(freeSecretDoorAt(playerEye(),dir(),freeObstacles(freeState)))$('notice').textContent='Die Tür ist verschlossen.';else if(freeDoorTarget(freeState))await freeEdit('door');else freeGrab();return;}if(lobbyState){const door=lobbyInteraction(ray);if(door?.free){await enterFreeWorld();return;}if(door?.slot===lobbyState.slot)returnToRoom();else if(door)$('notice').textContent='Dieses Gästezimmer ist privat.';return;}if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
   const hit=interactionTarget(ray),primary=primaryInteraction(hit,ray);
   if(primary?.op==='toggle_light'){audio.play('click');await action(primary.op,primary.id);return;}
   if(primary?.op==='toggle_curtains'){await action(primary.op,primary.id);return;}
@@ -718,6 +718,13 @@ function freeTarget(includeBroken=false){
  const hit=freeRay(playerEye(),dir(),freeObstacles(freeState),FREE_LAYOUT.reach,includeBroken);
  return freeState.blocks.find(b=>b.id===hit?.id)||null;
 }
+function freeDoorTarget(s){
+ if(!s)return null;
+ const rows=(s.scenery||[]).filter(r=>r.door&&(r.damage?.[448]||0)<4);
+ const triggers=rows.map(r=>({id:r.id+':448',bounds:r.door.bounds,hp:100}));
+ const hit=freeRay(playerEye(),dir(),freeObstacles(s).concat(triggers),3.2);
+ return hit?rows.find(r=>r.id+':448'===hit.id)||null:null;
+}
 function freeRepairTarget(s,whole=false){
  if(!s)return null;
  const parts=s.structureParts||[],trees=(s.scenery||[]).filter(b=>b.kind==='tree'&&b.hp>0);
@@ -735,7 +742,7 @@ function freeRepairTarget(s,whole=false){
 }
 function rebuildFreeObstacles(s){
  const scenery=s.scenery||[],buildings=scenery.filter(b=>b.kind==='house'||b.kind==='shop');
- s.structureParts=buildings.flatMap(villageParts);
+ s.structureParts=buildings.flatMap(villageParts).filter(p=>!p.doorLeaf||p.stage>0||!buildings.find(b=>b.id===p.building)?.door?.open);
  s.obstacles=s.blocks.concat(scenery.filter(b=>b.kind==='tree'&&b.hp>0),buildings.flatMap(villageColliders));
 }
 function freeHeldExtent(h=freeHeld){return h?.kind==='model'?h.extent:Math.max(...(h?.dims||[1]))*FREE_LAYOUT.grid;}
@@ -877,7 +884,8 @@ async function freeEdit(op,weapon=null,mode='place'){
  // Capture the aimed block before awaiting a poll so a later mouse movement cannot delete another block.
  const buildingRemove=op==='remove'&&h?.kind==='block'&&!h.id;
  if(op==='remove'&&h&&!h.id&&!buildingRemove)return;
- const aimed=buildingRemove?freeTarget(true):null;
+ const aimed=buildingRemove?freeTarget(true):null,aimedDoor=op==='door'&&!h?freeDoorTarget(s):null;
+ if(op==='door'&&!aimedDoor)return;
  if(buildingRemove&&(!freeOwn(aimed)||aimed.model)){if(aimed)$('notice').textContent='Nur eigene Baublöcke können so entfernt werden.';return;}
  s.editing=true;
  try{
@@ -890,6 +898,8 @@ async function freeEdit(op,weapon=null,mode='place'){
    const c=freeCandidate(h,mode);if(!c){$('notice').textContent='Kein freier Stellplatz';return;}
    extra={...c,texture:h.kind==='block'?h.texture||null:null};
    if(h.id){action='relocate';extra.id=h.id;extra.version=h.version;}else if(h.kind==='model')extra.sourceModel=h.source;
+  }else if(op==='door'){
+   const door=freeDoorTarget(s);if(!door||door.id!==aimedDoor.id)return;extra={id:door.id};
   }else if(op==='repair'){
    const b=freeRepairTarget(s,mode==='whole');if(!b)return;
    extra={id:b.id};
@@ -956,11 +966,11 @@ function updateFreeUI(){
 }
 function updateFreeHint(vr=false){
  const s=freeState;if(!s)return;
- const playing=canPlay()&&!vr,h=freeHeld,exit=!h&&freeExitAt(playerEye(),dir()),gate=!h&&!exit&&freeSecretDoorAt(playerEye(),dir(),freeObstacles(s)),target=!h&&!exit&&!gate?freeTarget(true):null,own=freeOwn(target),candidate=playing&&h?freeCandidate(h):null;
+ const playing=canPlay()&&!vr,h=freeHeld,exit=!h&&freeExitAt(playerEye(),dir()),gate=!h&&!exit&&freeSecretDoorAt(playerEye(),dir(),freeObstacles(s)),door=!h&&!exit&&!gate?freeDoorTarget(s):null,target=!h&&!exit&&!gate&&!door?freeTarget(true):null,own=freeOwn(target),candidate=playing&&h?freeCandidate(h):null;
  const building=h?.kind==='block'&&!h.id,removeTarget=building?freeTarget(true):null,canRemove=building&&freeOwn(removeTarget)&&!removeTarget.model;
  const wholeFix=!h&&!exit&&!gate?freeRepairTarget(s,true):null,fix=wholeFix?.kind==='building-part'&&wholeFix.stage===0?null:wholeFix;
  const structureFix=wholeFix?.kind==='building-part'?wholeFix:null;
- const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!gate&&!own&&!structureFix&&now>=freeHintUntil);
+ const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!gate&&!door&&!own&&!structureFix&&now>=freeHintUntil);
  const msg=$('notice').textContent;if(msg!==freeLastNotice){freeLastNotice=msg;freeNoticeUntil=now+3500;}
  document.body.classList.toggle('free-notice',playing&&!!msg&&now<freeNoticeUntil);
  $('held-model-size').hidden=!playing||!h;
@@ -971,13 +981,13 @@ function updateFreeHint(vr=false){
  $('touchSecondary').hidden=!h;$('touchSecondary').textContent=building?'Entfernen':'Ablegen';
  $('touchSecondary').disabled=!playing||s.editing||(building?!canRemove:!candidate);
  $('touchFire').disabled=!playing||s.editing||(h?.kind==='block'?!candidate:!equipped||!!h||!!reloadId);$('touchFire').textContent=h?.kind==='block'?'Setzen':'Feuer';
- $('touchInteract').disabled=!playing||(!exit&&!gate&&!candidate&&!(own&&target.hp>0))||s.editing;$('touchInteract').textContent=exit?'Hotel':gate?'Untersuchen':h?'Abstellen':'Aufheben';
+ $('touchInteract').disabled=!playing||(!exit&&!gate&&!door&&!candidate&&!(own&&target.hp>0))||s.editing;$('touchInteract').textContent=exit?'Hotel':gate?'Untersuchen':door?(door.door.open?'Schließen':'Öffnen'):h?'Abstellen':'Aufheben';
  $('touchRepair').disabled=!playing||s.editing||!fix;$('touchReload').disabled=!equipped||!!reloadId;$('touchArsenal').disabled=false;$('touchArsenal').textContent='Inventar';
  $('touchJump').disabled=player.stance==='crouch';$('touchSprint').disabled=$('touchCrouch').disabled=!playing;
  $('touchSprint').setAttribute('aria-pressed',String(player.stance==='sprint'||touchSprint));$('touchCrouch').setAttribute('aria-pressed',String(player.stance==='crouch'||touchCrouch));
- $('interaction-name').textContent=exit?'HOTEL · Ausgang':gate?'Eingefrorene Tür':h?(candidate?'Objekt abstellen':canRemove?'Eigenen Block entfernen':'Stellplatz blockiert'):structureFix?(structureFix.stage===4?'Gebäudeteil zerstört':structureFix.stage>0?'Gebäudeteil beschädigt':'Gebäude beschädigt'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
- $('interaction-actions').textContent=exit?'E · Zum Hotel':gate?'E · Untersuchen':h?(building?'Linksklick: setzen · Rechtsklick: entfernen · +/−: Größe · Q/F: drehen · 0: abbrechen':(h.kind==='block'?'Linksklick/E: abstellen':'E: abstellen · B: Wand')+' · Q/F: drehen · +/−: Größe · 0: abbrechen'):structureFix?'R: Teil reparieren · Shift+R: Gebäude wiederaufbauen':own?(target.hp?'E · Aufheben · Entf · Entfernen'+(target.hp<100?' · R: Reparieren':''):'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
- $('cross').classList.toggle('actionable',playing&&(exit||gate||!!candidate||own||canRemove||!!structureFix));
+ $('interaction-name').textContent=exit?'HOTEL · Ausgang':gate?'Eingefrorene Tür':door?'Gebäudetür':h?(candidate?'Objekt abstellen':canRemove?'Eigenen Block entfernen':'Stellplatz blockiert'):structureFix?(structureFix.stage===4?'Gebäudeteil zerstört':structureFix.stage>0?'Gebäudeteil beschädigt':'Gebäude beschädigt'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
+ $('interaction-actions').textContent=exit?'E · Zum Hotel':gate?'E · Untersuchen':door?('E · '+(door.door.open?'Schließen':'Öffnen')+((door.damage?.[448]||0)>0?' · R: Reparieren':'')):h?(building?'Linksklick: setzen · Rechtsklick: entfernen · +/−: Größe · Q/F: drehen · 0: abbrechen':(h.kind==='block'?'Linksklick/E: abstellen':'E: abstellen · B: Wand')+' · Q/F: drehen · +/−: Größe · 0: abbrechen'):structureFix?'R: Teil reparieren · Shift+R: Gebäude wiederaufbauen':own?(target.hp?'E · Aufheben · Entf · Entfernen'+(target.hp<100?' · R: Reparieren':''):'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
+ $('cross').classList.toggle('actionable',playing&&(exit||gate||!!door||!!candidate||own||canRemove||!!structureFix));
  $('hint').textContent='Free World · I: Inventar';updateFreeUI();
 }
 $('free-model-select').onchange=()=>{freeModelSource=$('free-model-select').value||null;freeHintUntil=performance.now()+4000;updateFreeUI();};

@@ -426,3 +426,11 @@ assert.ok(game.includes('buildings.flatMap(villageColliders)'));
 console.log('Village repair targeting, full rebuild and own block repair routing passed');
 
 assert.ok(game.includes('freeView.syncImpactMarks(s.impacts||[],s.blocks,s.scenery||[])'));
+
+assert.ok(game.includes("else if(freeDoorTarget(freeState))await freeEdit('door')"));
+assert.ok(game.includes("else if(op==='door')"));
+const targetDoor=new Function('freeObstacles','freeRay','playerEye','dir',getPart('function freeDoorTarget(','function freeRepairTarget(')+'return freeDoorTarget;')(
+ s=>s.obstacles,(o,d,rows)=>({id:rows.at(-1)?.id}),()=>[0,1,0],()=>[1,0,0]);
+const demoDoor={id:'house',door:{bounds:[[1,0,0],[.85,2.4,1.06]]},damage:{}};
+assert.equal(targetDoor({scenery:[demoDoor],obstacles:[]}),demoDoor);
+demoDoor.damage[448]=4;assert.equal(targetDoor({scenery:[demoDoor],obstacles:[]}),null);

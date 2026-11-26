@@ -161,7 +161,9 @@ class FreeWorld:
         if self.village.regrow(occupied()):self.revision+=1
     def tick_village(self,now):
         self.regrow_village()
+        before=self.village.door_revision
         self.village.tick(now,self.players,self.blocked,ray_box,self.solid_rows,self.body_box,SPAWN)
+        if before!=self.village.door_revision:self.revision+=1
     def prune(self,now):
         for player,row in list(self.players.items()):
             if now-row['seen']>=L['leaseSeconds']:self.players.pop(player,None)
@@ -183,7 +185,7 @@ class FreeWorld:
         out['corpses']=self.village.corpses(self.clock())
         if revision!=self.revision:
             out['impacts']=self.impact_snapshot()
-            out['scenery']=[{**r,**({'damage':dict(r['damage'])} if 'damage' in r else {})} for r in self.village.rows.values()]
+            out['scenery']=[{**r,**({'damage':dict(r['damage']),'door':dict(r['door'])} if 'damage' in r else {})} for r in self.village.rows.values()]
             out['villageRoads']=ROADS
             out['blocks']=[{**{k:v for k,v in b.items() if k!='owner'},**({'modelName':self.models[b['model']]['name'],'modelBytes':self.models[b['model']]['bytes']} if b['model'] in self.models else {})} for b in self.blocks.values()]
         return out
@@ -294,6 +296,19 @@ class FreeWorld:
                 row=db.execute('SELECT data FROM shared_models WHERE id=?',(identifier,)).fetchone()
             need(row is not None,'Modell nicht gefunden',404)
             return row[0]
+
+    def toggle_village_door(self,row,data,now):
+        key=data.get('id')
+        need(isinstance(key,str) and key in self.village.structure.rows,'Tuer nicht vorhanden',404)
+        building=self.village.structure.rows[key];door=building['door']
+        need(building['damage'].get('448',0)<4,'Tuer ist zerstoert',409)
+        need(now-row['edit_at']>=.12,'Bitte kurz warten',429)
+        eye=[row['position'][0],row['position'][1]+1.4,row['position'][2]]
+        need(distance_to_box(eye,*door['bounds'])<=3.2,'Tuer ausser Reichweite')
+        opened=not door['open']
+        need(self.village.set_door(building,opened,now,self.players,self.solid_rows,self.body_box),'Tuerdurchgang blockiert',409)
+        self.revision+=1;row['edit_at']=now
+        return 'Tuer geoeffnet' if opened else 'Tuer geschlossen'
 
     def repair(self,player,row,data,now):
         i=data.get('id')
@@ -438,6 +453,7 @@ class FreeWorld:
             elif op=='relocate':notice=self.relocate(player,row,data,now)
             elif op=='remove':notice=self.remove(player,row,data,now)
             elif op=='repair':notice=self.repair(player,row,data,now)
+            elif op=='door':notice=self.toggle_village_door(row,data,now)
             elif op=='pulse':
                 notice,shot=self.pulse(player,row,data,now);row['seen']=now
                 return {**self.snapshot(player,row,data.get('revision'),notice=notice),'shot':shot}

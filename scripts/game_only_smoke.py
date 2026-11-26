@@ -518,13 +518,13 @@ class GameOnlyTest(unittest.TestCase):
             session=world.enter('builder',profile);player=world.players['builder']
             row=world.village.rows['building-0-0']
             structure=world.village.structure
-            self.assertEqual(len(list(parts_for(row))),268)
+            self.assertEqual(len(list(parts_for(row))),269)
             self.assertEqual(len(structure.colliders[row['id']]),6)
             parts=list(parts_for(row))
-            self.assertEqual(len({p['index'] for p in parts}),268)
-            self.assertTrue(any(abs(a[0]-b[0])>.01 and abs(a[1]-b[1])>.01 for p in parts for a,b in zip(p['poly'],p['poly'][1:]+p['poly'][:1])))
+            self.assertEqual(len({p['index'] for p in parts}),269)
+            self.assertTrue(any(abs(a[0]-b[0])>.01 and abs(a[1]-b[1])>.01 for p in parts if p.get('poly') for a,b in zip(p['poly'],p['poly'][1:]+p['poly'][:1])))
             # Street-facing wall, at the lowest two accessible wall levels.
-            part=structure.parts[row['id']+':'+str(part_index(7,1,3))]
+            part=structure.parts[row['id']+':'+str(part_index(7,1,1))]
             b,s=part['bounds'];z=b[2]+s[2]/2
             player.update(position=[b[0]+s[0]+2.,0.,z],weapon='pistol')
             now[0]+=4
@@ -602,7 +602,7 @@ class GameOnlyTest(unittest.TestCase):
             world=FreeWorld(tmp,lambda:now[0])
             now[0]+=3600.
             session=world.enter('a',profile)
-            self.assertEqual(len(session['npcs']),4)
+            self.assertEqual(len(session['npcs']),6)
             for npc in session['npcs']:
                 self.assertEqual(npc['serverTime'],now[0])
                 self.assertGreaterEqual(npc['motionTime'],now[0]-.06)
@@ -657,12 +657,13 @@ class GameOnlyTest(unittest.TestCase):
         now=[100.]
         with tempfile.TemporaryDirectory() as tmp:
             village=Village(Path(tmp)/'sidewalk.sqlite3',[],lambda:now[0])
-            self.assertEqual(len(village.npcs),4)
+            self.assertEqual(len(village.npcs),6)
             players={'observer':{'position':[-65.,0.,-30.]}}
             def body(p):
                 return [p[0]-.25,p[1]+.015,p[2]-.25],[.5,1.585,.5]
             def blocked(p):
                 return any(prism_overlap(*body(p),o) for o in village.solids())
+            for npc in village.npcs:npc['visit_after']=math.inf
             extremes={n['slot']:[n['position'][2],n['position'][2]] for n in village.npcs}
             for _ in range(800):
                 now[0]+=NPC_STEP
@@ -679,8 +680,75 @@ class GameOnlyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             x=NPC_SIDEWALKS[0]['x'];z=NPC_PATROL_SEEDS[0][1]
             village=Village(Path(tmp)/'blocked.sqlite3',[([x-.5,0,z-.4],[1,2,.8])],lambda:10.)
-            self.assertEqual(len(village.npcs),4)
+            self.assertEqual(len(village.npcs),6)
             self.assertEqual(village.npcs[0]['home'],[x,SIDEWALK_Y,z+1])
+
+    def test_village_enterable_buildings_and_npc_visits(self):
+        from village import Village,NPC_MODELS
+        from village_structure import prism_overlap,prism_ray,DOOR_INDEX
+        now=[100.]
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'visits.sqlite3'
+            village=Village(path,[],lambda:now[0])
+            self.assertEqual([n['avatar']['model'] for n in village.npcs],list(NPC_MODELS))
+            self.assertEqual(len(village.npcs),6)
+            self.assertEqual(sum(n['avatar']['model']>=13 for n in village.npcs),2)
+            players={'observer':{'position':[-65.,0.,-30.]}}
+            def body(p):return [p[0]-.25,p[1]+.015,p[2]-.25],[.5,1.585,.5]
+            def blocked(p):return any(prism_overlap(*body(p),o) for o in village.solids())
+            for row in village.structure.rows.values():
+                d=row['door'];x,z,side=d['front'],d['z'],d['side'];floor=row['bounds'][1][1]*.025
+                origin=[x+side*1.5,1.5,z];direction=[-side,0,0]
+                self.assertTrue(blocked([x-side*.4,floor,z]))
+                self.assertTrue(village.set_door(row,True,now[0],players,village.solids,body))
+                self.assertFalse(blocked([x-side*.4,floor,z]))
+                self.assertFalse(blocked([x-side*2,floor,z]))
+                self.assertTrue(blocked([x-side*.4,floor,z+1]))
+                self.assertFalse(any(prism_ray(origin,direction,p,3.)<3. for p in village.structure.targets(origin,3.)))
+                players['observer']['position']=[x-side*.4,floor,z]
+                self.assertFalse(village.set_door(row,False,now[0],players,village.solids,body))
+                players['observer']['position']=[-65.,0.,-30.]
+                self.assertTrue(village.set_door(row,False,now[0],players,village.solids,body))
+            entered=set();returned=set();opened=set()
+            for _ in range(2200):
+                now[0]+=.05
+                village.tick(now[0],players,blocked,lambda *a:math.inf,village.solids,body,[0,0,0])
+                for npc in village.npcs:
+                    row=village.structure.rows[npc['visit_building']];d=row['door'];x,y,z=npc['position']
+                    self.assertFalse(blocked(npc['position']))
+                    if (d['front']-x)*d['side']>1.2 and abs(z-d['z'])<3.:entered.add(npc['slot'])
+                    elif npc['slot'] in entered and npc['visit_index']==-1:returned.add(npc['slot'])
+                    if d['open']:opened.add(row['id'])
+                if len(returned)==6 and len(opened)==6:break
+            self.assertEqual(len(entered),6)
+            self.assertEqual(len(returned),6)
+            self.assertEqual(len(opened),6)
+            row=village.structure.rows['building-0-0'];key=row['id']+':'+str(DOOR_INDEX)
+            village.structure.damage(village.structure.parts[key],4)
+            self.assertTrue(row['door']['open'])
+            reopened=Village(path,[],lambda:now[0])
+            self.assertTrue(reopened.structure.rows[row['id']]['door']['open'])
+            self.assertEqual(reopened.structure.parts[key]['stage'],4)
+            reopened.structure.repair(reopened.structure.parts[key])
+            self.assertEqual(reopened.structure.parts[key]['hp'],100)
+
+    def test_free_world_manual_door_interaction(self):
+        from free_world import FreeWorld
+        from world_capture import CaptureError
+        now=[100.]
+        profile={'slot':0,'nickname':'Guest','avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            world=FreeWorld(tmp,lambda:now[0]);session=world.enter('a',profile);p=world.players['a']
+            building=world.village.structure.rows['building-0-0'];d=building['door'];x,z,side=d['front'],d['z'],d['side']
+            with self.assertRaises(CaptureError):world.toggle_village_door(p,{'id':building['id']},now[0])
+            p['position']=[x+side*2,0.,z]
+            self.assertIn('geoeffnet',world.toggle_village_door(p,{'id':building['id']},now[0]))
+            self.assertTrue(d['open'])
+            p['position']=[x-side*.4,building['bounds'][1][1]*.025,z]
+            with self.assertRaises(CaptureError):world.toggle_village_door(p,{'id':building['id']},now[0]+1.)
+            p['position']=[x-side*2,building['bounds'][1][1]*.025,z]
+            self.assertIn('geschlossen',world.toggle_village_door(p,{'id':building['id']},now[0]+2.))
+            self.assertFalse(d['open'])
 
     def test_hidden_village_damage_retaliation_and_migration(self):
         from free_world import FreeWorld
@@ -693,7 +761,7 @@ class GameOnlyTest(unittest.TestCase):
             trees=[r for r in session['scenery'] if r['kind']=='tree']
             self.assertGreater(len(trees),150)
             self.assertEqual(len([r for r in session['scenery'] if r['kind']!='tree']),6)
-            self.assertEqual(len(session['npcs']),4)
+            self.assertEqual(len(session['npcs']),6)
             self.assertTrue(session['villageRoads'])
             tree=min(trees,key=lambda r:math.hypot(r['bounds'][0][0]-20,r['bounds'][0][2]-110))
             b,size=tree['bounds'];x=b[0]+size[0]/2;z=b[2]+size[2]/2
