@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.4 – Unified Free World Inventory
+- Kein Bau-/PvP-Modus mehr: Spielwaffen, Baublock und eigene GLB-Modelle im gemeinsamen Inventar. 1–3 wie im Hotel, 4 Baublock, E aufnehmen/abstellen, Q/F drehen, B Wand, R reparieren, Entf entfernen.
+- GLB-Modelle unabhängig vom Bauraster in 10-cm-Schritten von 0,10 bis 4 m skalieren. Baublöcke in 50-cm-Schritten von 0,50 bis 4 m; Form und eigene Bildtextur bleiben wählbar.
+- Bereits gesetzte eigene Objekte werden mit stabiler ID und Revisionsprüfung neu platziert statt dupliziert. Modellpose und Drehung werden gespeichert; bestehende Rasterobjekte bleiben kompatibel.
+- Lokale Modellvorschau und Größenbedienung wie im Hotel. Gemeinsame Welt behält serverseitige Boxkollisionen und Treffer-Verschiebung.
+
 ## 0.14.3 – Free World Models, Sky & Damage
 - Eigene GLB-Modelle aus der privaten Bibliothek können als öffentliche Kopie im Baumodus platziert werden, inklusive Neuimport im Smartphone. Begrenzter gemeinsamer Speicher und persistente Modellreferenzen; private Originale bleiben getrennt.
 - Offener Himmel mit sichtbarer Sonne und Mond, 20-Minuten-Tag-Nacht-Zyklus nach Serverzeit, fließender Dämmerung und wechselnder Beleuchtung. Steingrauer Boden und weiße Seitenwände bleiben; Bauhöhe bleibt 24 m.

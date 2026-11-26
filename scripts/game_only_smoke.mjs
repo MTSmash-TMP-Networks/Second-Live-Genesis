@@ -219,7 +219,7 @@ console.log('Imported object lifecycle: preserve live motion, remote edit, destr
 
 assert.ok(ids.includes('held-size-minus')&&ids.includes('held-size-plus')&&ids.includes('held-model-extent'));
 const scaling=new Function('assert',`
- const spec={},bodies={},state={objects:{}};let held=null,debris=[],busy=false,roomModelBusy=false,lobbyState=null,lobbyTransition=false;
+ const spec={},bodies={},state={objects:{}};let held=null,debris=[],busy=false,roomModelBusy=false,lobbyState=null,lobbyTransition=false,freeState=null;
  let rows=[{row:{id:'x',name:'Test',x:1,y:0,z:2,extent:.8,rotation:0,hp:100,revision:0,solid:true},size:[.5,1,.5]}];
  const renderer={roomModels:{physicsModels:()=>rows}},rgb=()=>[.5,.5,.5],canPlay=()=>true,updateInteractionHint=()=>{};
  const yawQuat=a=>[0,Math.sin(a*Math.PI/360),0,Math.cos(a*Math.PI/360)];
@@ -284,24 +284,31 @@ assert.equal(JSON.stringify(blockDims(4,'wall-x')),'[1,4,4]');
 assert.equal(JSON.stringify(blockDims(2,'floor')),'[2,1,2]');
 console.log('Free World UI, separate scene, block presets and phone access checks passed');
 
-assert.ok(ids.includes('free-inventory'));
-assert.ok(game.includes("phone(freeTool==='pvp'?'inventory':'free')"));
+assert.ok(ids.includes('free-inventory')&&ids.includes('equip-block')&&ids.includes('free-model-take'));
+assert.ok(!game.includes('freeTool')&&!html.includes('free-pvp-mode'));
+assert.ok(game.includes("if(freeState){phone('inventory');return;}"));
 const freeKeyTest=new Function('assert',`
-let freeState={},freeTool='pvp',freeSize=2,freeShape='cube',selected=null,reloads=0,inventory=0,interactions=0;
-const FREE_LAYOUT={sizes:[1,2,4,8]};
-const chooseWeapon=id=>{selected=id;},arsenal=()=>{inventory++;},startReload=()=>{reloads++;},interact=()=>{interactions++;},updateFreeUI=()=>{},phone=()=>{},freeEdit=()=>{},setFreeTool=mode=>{freeTool=mode;};
+let blocks=0,removals=0;
+const freeTakeBlock=()=>{blocks++;},freeEdit=op=>{if(op==='remove')removals++;};
 `+getPart('function freeKey(','let freeTextureKey=')+`
-for(const [key,id] of [['Digit1','pistol'],['Digit2','rifle'],['Digit3','m16'],['Digit0','none']]){assert.equal(freeKey(key),true);assert.equal(selected,id);}
-freeKey('KeyT');assert.equal(reloads,1);freeKey('KeyI');assert.equal(inventory,1);
-freeTool='build';freeKey('Digit4');assert.equal(freeSize,8);freeKey('Digit1');assert.equal(freeSize,1);assert.equal(selected,'none');
+for(const key of ['Digit0','Digit1','Digit2','Digit3','KeyI','KeyT','KeyE','KeyB','KeyQ','KeyF','KeyG','KeyR'])assert.equal(freeKey(key),false);
+assert.equal(freeKey('Digit4'),true);assert.equal(blocks,1);
+assert.equal(freeKey('Delete'),true);assert.equal(removals,1);
 `);
 freeKeyTest(assert);
-assert.ok(game.includes("weapon:freeTool==='pvp'?equipped:null"));
+const resizeFreeTest=new Function('assert',getPart('function resizeFreeObject(','function freeCandidate(')+`
+const m={kind:'model',extent:.8};resizeFreeObject(m,1);assert.equal(m.extent,.9);resizeFreeObject(m,-1);assert.equal(m.extent,.8);
+m.extent=.1;resizeFreeObject(m,-1);assert.equal(m.extent,.1);m.extent=4;resizeFreeObject(m,1);assert.equal(m.extent,4);
+const b={kind:'block',shape:'cube',dims:[2,2,2]};resizeFreeObject(b,1);assert.equal(JSON.stringify(b.dims),'[3,3,3]');
+const w={kind:'block',shape:'wall-x',dims:[1,4,4]};resizeFreeObject(w,-1);assert.equal(JSON.stringify(w.dims),'[1,3,3]');
+`);resizeFreeTest(assert);
+assert.ok(game.includes("weapon:equipped"));
 assert.ok(game.includes("void freeEdit('pulse',weapon)"));
-console.log('Free World PvP inventory, keyboard selection, reload and independent building controls passed');
+assert.ok(game.includes("action='relocate';extra.id=h.id;extra.version=h.version"));
+console.log('Unified inventory and independent 10 cm model / 50 cm block sizing checks passed');
 
 assert.ok(ids.includes('free-model-select')&&ids.includes('free-model-upload')&&ids.includes('free-time'));
-assert.ok(game.includes("sourceModel:freeModelSource||null")&&game.includes("freeView.syncClock(result.dayPhase"));
+assert.ok(game.includes("extra.sourceModel=h.source")&&game.includes("freeView.syncClock(result.dayPhase"));
 assert.ok(game.includes("renderer.shot(weapon,result.shot,freeView.effects)"));
 assert.ok(game.includes("now>=freeHintUntil")&&game.includes("freeNoticeUntil=now+3500"));
 console.log('Free World private model selection, shared damage effects, clock and timed hints checks passed');

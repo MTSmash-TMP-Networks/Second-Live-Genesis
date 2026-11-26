@@ -130,7 +130,7 @@ body:has(#phone:not([hidden])) #minimap,body.character-editing #minimap,.xr-play
 #phone .free{background:linear-gradient(145deg,#84ccc8,#386f83)}
 #phone #free-tools select,#phone #free-texture-file{display:block;width:100%;padding:9px;border:1px solid #ffffff30;border-radius:8px;background:#172b3b;color:#f4f7fa;font:12px system-ui;min-width:0}
 #phone #free-texture-file{font-size:10px;padding:7px}#phone #free-texture-message{overflow-wrap:anywhere}
-.free-playing #touchRepair,.free-playing:not(.free-pvp) #touchReload,.free-playing:not(.free-pvp) #touchZoom,.free-playing #touchRotateLeft,.free-playing #touchRotateRight,.free-playing #vr{display:none!important}
+.free-playing:not(.free-armed) #touchReload,.free-playing:not(.free-armed) #touchZoom,.free-playing #vr{display:none!important}
 body:has(#phone:not([hidden])) #free-hud{display:none!important}
 .mobile #free-hud{top:88px;left:10px;width:min(196px,48vw);font-size:10px;padding:6px 9px}
 @media(max-height:500px){.mobile #free-hud{top:67px}.fw-hud-top{margin-bottom:4px}#free-hud-detail,#free-hud-size{margin-top:3px}}
@@ -144,3 +144,5 @@ body:has(#phone:not([hidden])) #free-hud{display:none!important}
 #free-time{color:#f2d8a8;font-variant-numeric:tabular-nums}
 #phone #free-model-file{font-size:10px;padding:7px}
 #phone #free-model-message{overflow-wrap:anywhere}
+
+#free-inventory-items{display:grid;gap:8px;margin:12px 0}#free-inventory-items[hidden]{display:none!important}

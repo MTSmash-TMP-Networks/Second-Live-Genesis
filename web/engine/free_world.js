@@ -6,10 +6,11 @@ import {createCharacter,animateCharacter,disposeCharacter,normalizeCharacter} fr
 import {resetRoomAvatarPose,applyRoomAvatarPose,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
 export const FREE_LAYOUT=layout;
 const H=layout.half,Y=layout.height,G=layout.grid;
-export function freeBounds(block){return {p:block.cell.map((v,i)=>(v+block.dims[i]/2)*G),s:block.dims.map(v=>v*G)};}
+export function freeBounds(block){if(block.pose){const {p,extent:e}=block.pose;return {p:[p[0],p[1]+e/2,p[2]],s:[e,e,e]};}return {p:block.cell.map((v,i)=>(v+block.dims[i]/2)*G),s:block.dims.map(v=>v*G)};}
+export function freeBox(block){const {p,s}=freeBounds(block);return [p.map((v,i)=>v-s[i]/2),s];}
 export function freeOverlap(a,s,b,t){return a.every((v,i)=>v<b[i]+t[i]&&v+s[i]>b[i]);}
 export function validFreeGrid(cell,dims){
- return cell.length===3&&dims.length===3&&cell.every(Number.isInteger)&&dims.every(v=>layout.sizes.includes(v))&&cell.every((v,i)=>v>=[-H/G,0,-H/G][i]&&v+dims[i]<=[H/G,Y/G,H/G][i])&&!freeOverlap(cell,dims,[-6,0,H/G-12],[12,Y/G,12]);
+ return cell.length===3&&dims.length===3&&cell.every(Number.isInteger)&&dims.every(v=>Number.isInteger(v)&&v>=1&&v<=Math.max(...layout.sizes))&&cell.every((v,i)=>v>=[-H/G,0,-H/G][i]&&v+dims[i]<=[H/G,Y/G,H/G][i])&&!freeOverlap(cell,dims,[-6,0,H/G-12],[12,Y/G,12]);
 }
 export function freeRayBox(origin,direction,min,size,limit=layout.reach){
  let lo=0,hi=limit,normal=null;
@@ -25,7 +26,7 @@ export function freeRayBox(origin,direction,min,size,limit=layout.reach){
 export function freeRay(origin,direction,blocks,limit=layout.reach,includeDestroyed=false){
  let best=null;
  const consider=(hit,id=null)=>{if(hit&&hit.dist>=0&&(!best||hit.dist<best.dist))best={...hit,id};};
- for(const block of blocks){if(!includeDestroyed&&(block.hp??100)<=0)continue;consider(freeRayBox(origin,direction,block.cell.map(x=>x*G),block.dims.map(x=>x*G),limit),block.id);}
+ for(const block of blocks){if(!includeDestroyed&&(block.hp??100)<=0)continue;consider(freeRayBox(origin,direction,...freeBox(block),limit),block.id);}
  // The six interior faces accept blocks (not an invisible room shell).
  for(let i=0;i<3;i++)for(const side of [-1,1]){
   if(i===1&&side>0)continue; // Open sky, not a placeable invisible ceiling.
@@ -43,10 +44,21 @@ export function freePlacement(hit,dims,blocks,players=[]){
  const axis=hit.normal.findIndex(v=>v!==0);
  if(axis<0)return null;
  const cell=hit.point.map((v,i)=>i===axis?Math.round(v/G)-(hit.normal[i]<0?dims[i]:0):Math.floor(v/G-dims[i]/2+.5));
- if(!validFreeGrid(cell,dims)||blocks.some(b=>freeOverlap(cell,dims,b.cell,b.dims)))return null;
+ if(!validFreeGrid(cell,dims))return null;
  const min=cell.map(x=>x*G),size=dims.map(x=>x*G);
+ if(blocks.some(b=>freeOverlap(min,size,...freeBox(b))))return null;
  if(players.some(p=>freeOverlap(min,size,[p[0]-.28,p[1]+.015,p[2]-.28],[.56,1.6,.56])))return null;
  return {cell,dims:[...dims]};
+}
+// Models have independent metric sizes and poses; only construction blocks snap.
+export function freeModelPlacement(p,extent,rotation,blocks,players=[]){
+ if(!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)||!Number.isFinite(extent)||extent<.1||extent>4||![0,90,180,270].includes(rotation))return null;
+ const pose={p:p.map(v=>Math.round(v*10000)/10000),extent:Math.round(extent*100)/100,rotation};
+ const [min,size]=freeBox({pose});
+ if(min.some((v,i)=>v<[-H,0,-H][i]-.000001||v+size[i]>[H,Y,H][i]+.000001)||freeOverlap(min,size,[-3,0,H-6],[6,Y,6]))return null;
+ if(blocks.some(b=>freeOverlap(min,size,...freeBox(b))))return null;
+ if(players.some(p=>freeOverlap(min,size,[p[0]-.28,p[1]+.015,p[2]-.28],[.56,1.6,.56])))return null;
+ return {pose};
 }
 export function freeExitAt(origin,direction){
  if(direction[2]<=1e-8)return false;
@@ -55,11 +67,11 @@ export function freeExitAt(origin,direction){
 }
 export function freeBlocked(blocks,x,y,z,height=1.6){
  if(Math.abs(x)>H-.28||Math.abs(z)>H-.28||y+height>Y+.001)return true;
- return blocks.some(b=>(b.hp??100)>0&&freeOverlap([x-.25,y+.015,z-.25],[.5,height-.015,.5],b.cell.map(v=>v*G),b.dims.map(v=>v*G)));
+ return blocks.some(b=>(b.hp??100)>0&&freeOverlap([x-.25,y+.015,z-.25],[.5,height-.015,.5],...freeBox(b)));
 }
 export function freeGround(blocks,x,y,z){
  let ground=0;
- for(const b of blocks){if((b.hp??100)<=0)continue;const min=b.cell.map(v=>v*G),s=b.dims.map(v=>v*G),top=min[1]+s[1];
+ for(const b of blocks){if((b.hp??100)<=0)continue;const [min,s]=freeBox(b),top=min[1]+s[1];
   if(top<=y+.025&&x>min[0]-.22&&x<min[0]+s[0]+.22&&z>min[2]-.22&&z<min[2]+s[2]+.22)ground=Math.max(ground,top);
  }
  return ground;
@@ -88,6 +100,7 @@ export class FreeWorldView{
   this.sun=new THREE.Mesh(new THREE.SphereGeometry(7,24,16),new THREE.MeshBasicMaterial({color:0xffdf99,toneMapped:false}));
   this.moon=new THREE.Mesh(new THREE.SphereGeometry(4.5,24,16),new THREE.MeshBasicMaterial({color:0xe3eaff,toneMapped:false}));this.sky.add(this.sun,this.moon);
   this.phase=0.5;this.phaseTime=0;this.effects=new ShotEffects(this.scene);this.models=new RoomModels(this.scene);this.models.root.name='Shared Free World models';this.modelRefs=new Map();
+  this.heldModels=new RoomModels(this.scene);this.heldModels.root.name='Local object placement preview';this.heldModels.root.visible=false;this.heldAsset=null;
   this.cube=new THREE.BoxGeometry(1,1,1);this.materials=new Map();this.textures=new Map();this.meshes=[];this.peers=new Map();this.local=null;this.revision=-1;this.generation=0;
   const room=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1});
   const box=(p,s,m=room)=>{const o=new THREE.Mesh(this.cube,m);o.position.set(...p);o.scale.set(...s);this.scene.add(o);return o;};
@@ -135,7 +148,7 @@ export class FreeWorldView{
    const hp=b.hp??100;if(hp<=0)continue;
    if(b.model){
     const id='block-'+b.id,{p,s}=freeBounds(b);this.modelRefs.set(id,b);
-    rows.push({id,name:b.modelName,bytes:b.modelBytes,x:p[0],y:p[1]-s[1]/2,z:p[2],extent:s[0],rotation:0,solid:true,placed:true,hp});
+    rows.push({id,name:b.modelName,bytes:b.modelBytes,x:p[0],y:p[1]-s[1]/2,z:p[2],extent:s[0],rotation:b.pose?.rotation??0,solid:true,placed:true,hp});
     continue;
    }
    const key=(b.texture||'default')+':'+hp;
@@ -151,8 +164,19 @@ export class FreeWorldView{
    mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();this.scene.add(mesh);this.meshes.push(mesh);
   }
  }
- showPreview(candidate){
-  this.preview.visible=!!candidate;if(candidate){const {p,s}=freeBounds(candidate);this.preview.position.set(...p);this.preview.scale.set(...s);}
+ showPreview(candidate,held=null,load=null){
+  this.preview.visible=!!candidate;
+  if(candidate){const {p,s}=freeBounds(candidate);this.preview.position.set(...p);this.preview.scale.set(...s);}
+  const asset=held?.kind==='model'&&held.asset&&held.bytes?held.asset:null;
+  if(asset!==this.heldAsset){this.heldModels.clear();this.heldAsset=asset;}
+  this.heldModels.root.visible=!!(asset&&candidate);
+  if(!asset||!candidate||!load)return;
+  const pose=candidate.pose;
+  this.heldModels.sync([{id:asset,bytes:held.bytes,name:held.name,placed:true,hp:held.hp??100,x:pose.p[0],y:pose.p[1],z:pose.p[2],extent:pose.extent,rotation:pose.rotation}],(_,signal)=>load(held,signal));
+  for(const {row,size} of this.heldModels.physicsModels()){
+   const a=row.rotation*Math.PI/360;
+   this.heldModels.drawBody(row.id,{p:[row.x,row.y+Math.max(.015,size[1]*row.extent)/2,row.z],q:[0,Math.sin(a),0,Math.cos(a)]},row.hp);
+  }
  }
  avatar(profile){
   const g=createCharacter(profile.avatar);const tag=textSprite(profile.nickname,.95,.24);tag.position.y=2.12;g.add(tag);g.userData.nameTag=tag;this.scene.add(g);return g;
@@ -170,7 +194,7 @@ export class FreeWorldView{
  }
  step(dt,player,profile,third,models=null,weapon=null){
   this.effects.update(dt);
-  for(const {row,size} of this.models.physicsModels())this.models.drawBody(row.id,{p:[row.x,row.y+Math.max(.015,size[1]*row.extent)/2,row.z],q:[0,0,0,1]},row.hp);
+  for(const {row,size} of this.models.physicsModels()){const a=row.rotation*Math.PI/360;this.models.drawBody(row.id,{p:[row.x,row.y+Math.max(.015,size[1]*row.extent)/2,row.z],q:[0,Math.sin(a),0,Math.cos(a)]},row.hp);}
   const t=1-Math.exp(-dt*12);
   for(const a of this.peers.values()){
    const g=a.g,p=a.target,d=new THREE.Vector3(...p.position),moving=g.position.distanceTo(d)>.035;

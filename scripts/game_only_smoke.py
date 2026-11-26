@@ -323,6 +323,51 @@ class GameOnlyTest(unittest.TestCase):
             self.assertEqual(world.models,{})
             self.assertEqual(library.get('a',source),blob)
 
+    def test_free_world_inventory_metric_model_relocation(self):
+        from free_world import FreeWorld, block_bounds
+        from room_models import RoomModelStore
+        now=[10.]
+        profile=lambda slot:{'slot':slot,'nickname':'Guest '+str(slot),'avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            library=RoomModelStore(tmp)
+            source=library.add('a','model.glb',room_model_fixture())['added']
+            world=FreeWorld(tmp,lambda:now[0],GameStore.WEAPON_DAMAGE,library)
+            a=world.enter('a',profile(0));b=world.enter('b',profile(1))
+            def req(who,session,op,**kw):
+                return world.request(who,{'action':op,'lease':session['lease'],'life':session['life'],**kw})
+            now[0]+=4
+            req('a',a,'update',position=[0,0,142],yaw=0)
+            req('b',b,'update',position=[4,0,142],yaw=0)
+            first={'p':[0,0,139],'extent':.9,'rotation':90}
+            made=req('a',a,'place',pose=first,sourceModel=source)
+            item=made['blocks'][0]
+            self.assertEqual(item['pose'],first)
+            self.assertEqual(block_bounds(item)[1],[.9,.9,.9])
+            self.assertEqual(item['version'],0)
+            now[0]+=.6
+            second={'p':[1,0,139],'extent':1.3,'rotation':180}
+            with self.assertRaises(CaptureError):
+                req('b',b,'relocate',id=item['id'],version=0,pose=second)
+            moved=req('a',a,'relocate',id=item['id'],version=0,pose=second)
+            self.assertEqual(len(moved['blocks']),1)
+            self.assertEqual(moved['blocks'][0]['id'],item['id'])
+            self.assertEqual(moved['blocks'][0]['model'],item['model'])
+            self.assertEqual(moved['blocks'][0]['pose'],second)
+            self.assertEqual(moved['blocks'][0]['version'],1)
+            now[0]+=.6
+            with self.assertRaises(CaptureError):
+                req('a',a,'relocate',id=item['id'],version=0,pose=first)
+            restored=FreeWorld(tmp,model_library=library)
+            self.assertEqual(restored.blocks[item['id']]['pose'],second)
+            self.assertEqual(restored.blocks[item['id']]['version'],1)
+            self.assertEqual(len(restored.models),1)
+            block=req('a',a,'place',cell=[-5,0,277],dims=[3,3,3])
+            self.assertEqual(len(block['blocks']),2)
+            other=next(r for r in block['blocks'] if r['id']!=item['id'])
+            now[0]+=.6
+            resized=req('a',a,'relocate',id=other['id'],version=0,cell=[-5,0,277],dims=[4,4,4])
+            self.assertEqual(next(r for r in resized['blocks'] if r['id']==other['id'])['dims'],[4,4,4])
+
     def test_free_world_http_auth_and_transition(self):
         with tempfile.TemporaryDirectory() as tmp:
             srv=create_server(port=0,data_dir=Path(tmp),guest_game=True,world_capture=True)

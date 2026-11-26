@@ -23,7 +23,7 @@ def vec(v,n=3):
 
 def grid_box(cell,dims):
     need(isinstance(cell,list) and len(cell)==3 and all(type(x) is int for x in cell),'Ungueltiges Bauraster')
-    need(isinstance(dims,list) and len(dims)==3 and all(type(x) is int and x in SIZES for x in dims),'Ungueltige Blockgroesse')
+    need(isinstance(dims,list) and len(dims)==3 and all(type(x) is int and 1<=x<=max(SIZES) for x in dims),'Ungueltige Blockgroesse')
     need(all(lo<=c and c+d<=hi for c,d,lo,hi in zip(cell,dims,[-HALF,0,-HALF],[HALF,HEIGHT,HALF])),'Block ausserhalb der Free World')
     # Keep the entrance and respawn area permanently unobstructed.
     need(not overlap(cell,dims,[-6,0,HALF-12],[12,HEIGHT,12]),'Eingang und Spawn bleiben frei')
@@ -33,7 +33,34 @@ def overlap(a,s,b,t):
     return all(x<y+v and x+u>y for x,u,y,v in zip(a,s,b,t))
 
 def block_bounds(row):
+    pose=row.get('pose')
+    if pose:
+        x,y,z=pose['p'];e=pose['extent']
+        return [x-e/2,y,z-e/2],[e,e,e]
     return [x*L['grid'] for x in row['cell']],[x*L['grid'] for x in row['dims']]
+
+def model_pose(data):
+    need(isinstance(data,dict),'Ungueltige Modellposition')
+    p=vec(data.get('p'));e=data.get('extent');rotation=data.get('rotation',0)
+    need(numeric(e) and .1<=e<=4 and type(rotation) is int and rotation in (0,90,180,270),'Ungueltige Modellgroesse oder Drehung')
+    p=[round(v,4) for v in p];e=round(e,2)
+    pose={'p':p,'extent':e,'rotation':rotation}
+    b,s=block_bounds({'pose':pose})
+    need(all(lo-.000001<=x and x+d<=hi+.000001 for x,d,lo,hi in zip(b,s,[-L['half'],0,-L['half']],[L['half'],L['height'],L['half']])),'Modell ausserhalb der Free World')
+    need(not overlap(b,s,[-3,0,L['half']-6],[6,L['height'],6]),'Eingang und Spawn bleiben frei')
+    return pose
+
+def placement_geometry(data,is_model):
+    raw=data.get('pose')
+    if raw is not None:
+        need(is_model,'Nur Modelle haben freie Groesse')
+        pose=model_pose(raw);b,s=block_bounds({'pose':pose})
+        cell=[math.floor(v/L['grid']+1e-8) for v in b]
+        dims=[math.ceil((v+d)/L['grid']-1e-8)-c for v,d,c in zip(b,s,cell)]
+        return cell,dims,pose
+    cell,dims=grid_box(data.get('cell'),data.get('dims'))
+    if is_model:need(len(set(dims))==1,'Ungueltiger Modellbau')
+    return cell,dims,None
 
 def distance_to_box(p,b,s):
     return math.sqrt(sum(max(x-y-v,y-x,0)**2 for x,y,v in zip(p,b,s)))
@@ -62,11 +89,13 @@ class FreeWorld:
             columns={r[1] for r in db.execute('PRAGMA table_info(blocks)')}
             if 'hp' not in columns:db.execute('ALTER TABLE blocks ADD COLUMN hp INTEGER NOT NULL DEFAULT 100')
             if 'model' not in columns:db.execute('ALTER TABLE blocks ADD COLUMN model TEXT')
+            if 'pose' not in columns:db.execute('ALTER TABLE blocks ADD COLUMN pose TEXT')
+            if 'version' not in columns:db.execute('ALTER TABLE blocks ADD COLUMN version INTEGER NOT NULL DEFAULT 0')
             db.execute('CREATE TABLE IF NOT EXISTS shared_models(id TEXT PRIMARY KEY,owner TEXT NOT NULL,name TEXT NOT NULL,bytes INTEGER NOT NULL,data BLOB NOT NULL)')
             for i,owner,name,n in db.execute('SELECT id,owner,name,bytes FROM shared_models'):
                 self.models[i]={'owner':owner,'name':name,'bytes':n}
-            for i,owner,slot,cell,dims,texture,hp,model in db.execute('SELECT id,owner,slot,cell,dims,texture,hp,model FROM blocks'):
-                self.blocks[i]={'id':i,'owner':owner,'ownerSlot':slot,'cell':json.loads(cell),'dims':json.loads(dims),'texture':texture,'hp':hp,'model':model}
+            for i,owner,slot,cell,dims,texture,hp,model,pose,version in db.execute('SELECT id,owner,slot,cell,dims,texture,hp,model,pose,version FROM blocks'):
+                self.blocks[i]={'id':i,'owner':owner,'ownerSlot':slot,'cell':json.loads(cell),'dims':json.loads(dims),'texture':texture,'hp':hp,'model':model,'pose':json.loads(pose) if pose else None,'version':version}
         self.revision=1
     def prune(self,now):
         for player,row in list(self.players.items()):
@@ -115,18 +144,21 @@ class FreeWorld:
         if abs(old[1]-p[1])<.025 and any(self.blocked([a+(b-a)*i/steps for a,b in zip(old,p)],height) for i in range(1,steps)):return True
         row.update(position=[round(x,4) for x in p],yaw=math.remainder(yaw,2*math.pi),stance=stance,move_at=now)
         return False
+    def validate_placement(self,row,cell,dims,pose,exclude=None):
+        b,s=block_bounds({'cell':cell,'dims':dims,'pose':pose})
+        need(distance_to_box([row['position'][0],row['position'][1]+1.4,row['position'][2]],b,s)<=L['reach'],'Objekt ausser Reichweite')
+        need(not any(x['id']!=exclude and overlap(b,s,*block_bounds(x)) for x in self.blocks.values()),'Stellplatz belegt',409)
+        for other in self.players.values():
+            need(not overlap(b,s,*self.body_box(other['position'],1.6)),'Spieler im Stellplatz',409)
+
     def build(self,player,row,data,now):
         need(now-row['edit_at']>=.12,'Bitte kurz warten',429)
-        cell,dims=grid_box(data.get('cell'),data.get('dims'))
-        b=[x*L['grid'] for x in cell];s=[x*L['grid'] for x in dims]
-        need(distance_to_box([row['position'][0],row['position'][1]+1.4,row['position'][2]],b,s)<=L['reach'],'Block ausser Reichweite')
+        cell,dims,pose=placement_geometry(data,data.get('sourceModel') is not None)
+        self.validate_placement(row,cell,dims,pose)
         need(len(self.blocks)<L['maxBlocks'] and sum(x['owner']==player for x in self.blocks.values())<L['maxOwned'],'Blocklimit erreicht',409)
-        need(not any(overlap(cell,dims,x['cell'],x['dims']) for x in self.blocks.values()),'Bauplatz belegt',409)
-        for p in self.players.values():
-            need(not overlap(b,s,*self.body_box(p['position'],1.6)),'Spieler im Bauplatz',409)
         texture=data.get('texture');source=data.get('sourceModel');model=None;asset=None
         if source is not None:
-            need(self.model_library is not None and isinstance(source,str) and len(source)==32 and texture is None and len(set(dims))==1,'Ungueltiger Modellbau')
+            need(self.model_library is not None and isinstance(source,str) and len(source)==32 and texture is None,'Ungueltiger Modellbau')
             need(sum(bool(b['model']) for b in self.blocks.values())<L['maxModels'] and sum(bool(b['model']) and b['owner']==player for b in self.blocks.values())<L['maxOwnModels'],'Modelllimit erreicht',409)
             private=next((r for r in self.model_library.list(player)['models'] if r['id']==source),None)
             need(private is not None,'Eigenes Modell nicht gefunden',404)
@@ -140,17 +172,37 @@ class FreeWorld:
             need(texture is None or isinstance(texture,str) and len(texture)==32 and any(t['id']==texture for t in self.own_textures(player)),'Textur nicht verfuegbar')
         with closing(sqlite3.connect(self.path)) as db,db:
             if asset:db.execute('INSERT INTO shared_models(id,owner,name,bytes,data) VALUES(?,?,?,?,?)',(model,player,asset['name'],asset['bytes'],blob))
-            i=db.execute('INSERT INTO blocks(owner,slot,cell,dims,texture,model,hp) VALUES(?,?,?,?,?,?,100)',(player,row['slot'],json.dumps(cell),json.dumps(dims),texture,model)).lastrowid
+            i=db.execute('INSERT INTO blocks(owner,slot,cell,dims,texture,model,hp,pose,version) VALUES(?,?,?,?,?,?,100,?,0)',(player,row['slot'],json.dumps(cell),json.dumps(dims),texture,model,json.dumps(pose) if pose else None)).lastrowid
         if asset:self.models[model]=asset
-        self.blocks[i]={'id':i,'owner':player,'ownerSlot':row['slot'],'cell':cell,'dims':dims,'texture':texture,'model':model,'hp':100}
+        self.blocks[i]={'id':i,'owner':player,'ownerSlot':row['slot'],'cell':cell,'dims':dims,'texture':texture,'model':model,'hp':100,'pose':pose,'version':0}
         self.revision+=1;row['edit_at']=now
         return 'Modell freigegeben und platziert' if model else 'Block gesetzt'
+    def relocate(self,player,row,data,now):
+        need(now-row['edit_at']>=.12,'Bitte kurz warten',429)
+        i=data.get('id');need(type(i) is int and i in self.blocks,'Objekt nicht vorhanden',404)
+        old=self.blocks[i]
+        need(old['owner']==player,'Nur eigene Objekte aufnehmen',403)
+        need(type(data.get('version')) is int and data['version']==old['version'] and old['hp']>0,'Objekt inzwischen veraendert',409)
+        need(distance_to_box([row['position'][0],row['position'][1]+1.4,row['position'][2]],*block_bounds(old))<=L['reach'],'Objekt ausser Reichweite')
+        cell,dims,pose=placement_geometry(data,bool(old['model']))
+        if old['model']:need(pose is not None,'Modellposition fehlt')
+        self.validate_placement(row,cell,dims,pose,i)
+        texture=data.get('texture',old['texture'])
+        if old['model']:need(texture is None,'Modelltextur bleibt erhalten')
+        else:need(texture is None or isinstance(texture,str) and len(texture)==32 and any(t['id']==texture for t in self.own_textures(player)),'Textur nicht verfuegbar')
+        with closing(sqlite3.connect(self.path)) as db,db:
+            db.execute('UPDATE blocks SET cell=?,dims=?,pose=?,texture=?,version=version+1 WHERE id=? AND owner=?',(json.dumps(cell),json.dumps(dims),json.dumps(pose) if pose else None,texture,i,player))
+        old.update(cell=cell,dims=dims,pose=pose,texture=texture,version=old['version']+1)
+        self.revision+=1;row['edit_at']=now
+        return 'Objekt abgestellt und gespeichert'
+
     def remove(self,player,row,data,now):
         need(now-row['edit_at']>=.12,'Bitte kurz warten',429)
         i=data.get('id');need(type(i) is int and i in self.blocks,'Block nicht vorhanden',404)
         block=self.blocks[i]
         need(block['owner']==player,'Nur eigene Bloecke koennen entfernt werden',403)
         need(distance_to_box([row['position'][0],row['position'][1]+1.4,row['position'][2]],*block_bounds(block))<=L['reach'],'Block ausser Reichweite')
+        if 'version' in data:need(type(data['version']) is int and data['version']==block['version'],'Objekt inzwischen veraendert',409)
         model=block['model'];last=bool(model) and not any(b['id']!=i and b['model']==model for b in self.blocks.values())
         with closing(sqlite3.connect(self.path)) as db,db:
             db.execute('DELETE FROM blocks WHERE id=? AND owner=?',(i,player))
@@ -173,26 +225,36 @@ class FreeWorld:
         p,s=block_bounds(b)
         need(distance_to_box(row['position'],p,s)<=L['reach'],'Objekt ausser Reichweite')
         need(not any(overlap(p,s,*self.body_box(r['position'])) for r in self.players.values()),'Spieler im Bauplatz',409)
-        with closing(sqlite3.connect(self.path)) as db,db:db.execute('UPDATE blocks SET hp=100 WHERE id=?',(i,))
-        b['hp']=100;self.revision+=1
+        with closing(sqlite3.connect(self.path)) as db,db:db.execute('UPDATE blocks SET hp=100,version=version+1 WHERE id=?',(i,))
+        b['hp']=100;b['version']+=1;self.revision+=1
         return 'Objekt repariert'
 
     def damage_block(self,b,direction,damage):
-        hp=max(0,b['hp']-damage);cell=b['cell'][:]
-        # Shared grid objects use authoritative displacement, not independent client physics.
+        hp=max(0,b['hp']-damage);cell=b['cell'][:];dims=b['dims'][:];pose=b.get('pose')
+        # Preserve existing shared grid displacement, including free-size models.
         if b['model'] and hp>0:
             axis=0 if abs(direction[0])>=abs(direction[2]) else 2
             if abs(direction[axis])>.2:
-                trial=cell[:];trial[axis]+=1 if direction[axis]>0 else -1
+                sign=1 if direction[axis]>0 else -1
                 try:
-                    grid_box(trial,b['dims'])
-                    occupied=any(other['id']!=b['id'] and overlap(trial,b['dims'],other['cell'],other['dims']) for other in self.blocks.values())
-                    pos=[v*L['grid'] for v in trial];size=[v*L['grid'] for v in b['dims']]
-                    supported=trial[1]==0 or any(o['id']!=b['id'] and o['hp']>0 and o['cell'][1]+o['dims'][1]==trial[1] and all(trial[j]<o['cell'][j]+o['dims'][j] and trial[j]+b['dims'][j]>o['cell'][j] for j in (0,2)) for o in self.blocks.values())
-                    if not occupied and supported and not any(overlap(pos,size,*self.body_box(r['position'])) for r in self.players.values()):cell=trial
+                    if pose:
+                        moved={**pose,'p':pose['p'][:]}
+                        moved['p'][axis]+=sign*L['grid']
+                        tc,td,tp=placement_geometry({'pose':moved},True)
+                    else:
+                        tc=cell[:];tc[axis]+=sign;td=dims[:];tp=None
+                        grid_box(tc,td)
+                    pos,size=block_bounds({'cell':tc,'dims':td,'pose':tp})
+                    occupied=any(o['id']!=b['id'] and overlap(pos,size,*block_bounds(o)) for o in self.blocks.values())
+                    supported=pos[1]<=.0001
+                    for o in self.blocks.values():
+                        if o['id']==b['id'] or o['hp']<=0:continue
+                        op,os=block_bounds(o)
+                        if abs(op[1]+os[1]-pos[1])<.0001 and all(pos[j]<op[j]+os[j] and pos[j]+size[j]>op[j] for j in (0,2)):supported=True
+                    if not occupied and supported and not any(overlap(pos,size,*self.body_box(r['position'])) for r in self.players.values()):cell,dims,pose=tc,td,tp
                 except CaptureError:pass
-        with closing(sqlite3.connect(self.path)) as db,db:db.execute('UPDATE blocks SET hp=?,cell=? WHERE id=?',(hp,json.dumps(cell),b['id']))
-        b.update(hp=hp,cell=cell);self.revision+=1
+        with closing(sqlite3.connect(self.path)) as db,db:db.execute('UPDATE blocks SET hp=?,cell=?,dims=?,pose=?,version=version+1 WHERE id=?',(hp,json.dumps(cell),json.dumps(dims),json.dumps(pose) if pose else None,b['id']))
+        b.update(hp=hp,cell=cell,dims=dims,pose=pose,version=b['version']+1);self.revision+=1
         return 'Objekt zerstoert' if not hp else 'Objekt beschaedigt'
 
     def pulse(self,player,row,data,now):
@@ -243,6 +305,7 @@ class FreeWorld:
                 return self.snapshot(player,row,data.get('revision'),corrected)
             need(type(data.get('life')) is int and data['life']==row['life'],'Spieler wurde neu gespawnt',409)
             if op=='place':notice=self.build(player,row,data,now)
+            elif op=='relocate':notice=self.relocate(player,row,data,now)
             elif op=='remove':notice=self.remove(player,row,data,now)
             elif op=='repair':notice=self.repair(player,row,data,now)
             elif op=='pulse':

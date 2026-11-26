@@ -340,7 +340,7 @@ import {stabilizePatrolClip} from './realistic_character.js';
 }
 console.log('Hotel patrol: steady route clock, stationary turns and horizontal root-motion removal verified');
 
-import {freeBounds,freeRay,freePlacement,freeBlocked,freeGround,freeExitAt,validFreeGrid,freeSkyState} from './free_world.js';
+import {freeBounds,freeRay,freePlacement,freeBlocked,freeGround,freeExitAt,validFreeGrid,freeSkyState,freeModelPlacement} from './free_world.js';
 import {freeWorldDoorAt} from './lobby_layout.js';
 {
  const hit=freeRay([0,1.5,0],[0,-1,0],[]);
@@ -379,3 +379,15 @@ console.log('Free World raster, wall/floor placement, stacking, collision and po
  assert.equal(freeRay([0,2,0],[0,-1,0],[broken],8,true).id,2);
 }
 console.log('Free World open sky, solar cycle and destroyed-object collision checks passed');
+
+{
+ const first=freeModelPlacement([10,0,10],.9,90,[]);assert.ok(first);
+ assert.equal(first.pose.extent,.9);assert.equal(first.pose.rotation,90);
+ const model={id:3,hp:100,...first};assert.equal(freeBounds(model).s[0],.9);
+ assert.ok(freeBlocked([model],10,0,10));assert.ok(!freeBlocked([model],11,0,10));
+ assert.equal(freeModelPlacement([10,0,10],.4,0,[model]),null);
+ assert.ok(freeModelPlacement([11,0,10],.4,180,[model]));
+ assert.equal(freeModelPlacement([150,0,0],.9,0,[]),null);
+ assert.ok(validFreeGrid([20,0,20],[3,3,3]));
+}
+console.log('Independent model metric placement, rotation and block grid sizes passed');
