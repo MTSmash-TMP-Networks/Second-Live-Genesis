@@ -368,6 +368,28 @@ class GameOnlyTest(unittest.TestCase):
             resized=req('a',a,'relocate',id=other['id'],version=0,cell=[-5,0,277],dims=[4,4,4])
             self.assertEqual(next(r for r in resized['blocks'] if r['id']==other['id'])['dims'],[4,4,4])
 
+    def test_village_asset_store_atomic_install_and_persistence(self):
+        from village_assets import VillageAssetStore, KEYS
+        import io, zipfile
+        def pack(names, bad=None):
+            out=io.BytesIO()
+            with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as z:
+                for name in names:z.writestr(name,b'bad' if name==bad else room_model_fixture())
+            return out.getvalue()
+        with tempfile.TemporaryDirectory() as tmp:
+            store=VillageAssetStore(tmp,Path(tmp)/'bundled')
+            self.assertEqual(store.manifest(),[])
+            names=[k+'.glb' for k in KEYS]
+            self.assertEqual(store.install(pack(names))['models'],list(KEYS))
+            self.assertEqual(store.get('shop-a'),room_model_fixture())
+            with self.assertRaises(CaptureError):store.install(pack(names,bad='shop-a.glb'))
+            with self.assertRaises(CaptureError):store.install(pack(names+['../outside']))
+            with self.assertRaises(CaptureError):store.install(pack(names[:-1]))
+            reopened=VillageAssetStore(tmp,Path(tmp)/'bundled')
+            self.assertEqual(reopened.manifest(),list(KEYS))
+            self.assertEqual(reopened.get('shop-a'),room_model_fixture())
+            with self.assertRaises(CaptureError):reopened.get('../outside')
+
     def test_hidden_village_damage_retaliation_and_migration(self):
         from free_world import FreeWorld
         from village import Village, make_scenery

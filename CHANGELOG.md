@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.1 – Quaternius Village Model Import
+- Administratoren können über System ein vorbereitetes ZIP mit vier eingebetteten GLB-Gebäudemodellen hochladen. Alle vier Dateien werden vor dem atomaren Austausch geprüft und dauerhaft in der Datenbank im bestehenden Datenvolume gespeichert. Kein neuer Docker-Build für den Modellwechsel erforderlich.
+- Explizite Asset-Routen für Dorfmodelle, lokale Modellbank mit Fallback auf gebündelte GLBs bzw. prozedurale Gebäude. Türen und Schaufenster werden zur Dorfstraße ausgerichtet; Markt- und Café-Schilder bleiben sichtbar. Die gemeinsamen Kollisionen und der Spielstand bleiben unverändert.
+- Das separat bereitgestellte, aus dem Quaternius Downtown City MegaKit Standard (CC0) zusammengesetzte Modellpaket ist nicht als Binärdatei im Git-Repository enthalten. Nach dem ersten Update kann es einmalig im Smartphone importiert werden.
+
 ## 0.15.0 – Hidden Village
 - Verstecktes Dorf links der Weltmitte: sechs Gebäude (vier Wohnhäuser, Markt und Café), asphaltierte Dorfstraße, Gehwege und dichtes Waldgebiet mit weiteren Bäumen in der Free World. Prozedurale, instanzierte Baumdarstellung und lokale, modular inspirierte Gebäudefassaden.
 - Bäume besitzen einen serverseitigen, persistenten Schadenszustand; nach Zerstörung bleibt ein nicht kollidierender Baumstumpf. Gebäude und lebende Baumstämme blockieren Bewegung und Treffer. Bestehende Spielerbauten haben bei der Einrichtung Vorrang.

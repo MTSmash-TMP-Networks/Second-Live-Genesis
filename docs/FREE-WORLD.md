@@ -1,4 +1,4 @@
-# Free World (0.15.0)
+# Free World (0.15.1)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -34,3 +34,6 @@ Select the reusable block with 4 or the mouse wheel. Left click places blocks; r
 
 ## Hidden village (0.15.0)
 A concealed village in the western half has four houses, a market, a cafe, streets and a dense forest. Trees are instanced and their health is shared and persisted; a destroyed tree leaves a decorative stump. Buildings are exterior-only solid obstacles. Four training NPCs patrol and defend themselves when hit; they respawn after 15 seconds. Their simple obstacle avoidance is not full navigation. Existing player builds are never replaced by scenery. The optional local building bank uses static self-contained GLBs; see [optional-village](../optional-village/README.md). Quaternius Downtown City MegaKit is the selected CC0 source, but its original archive is not bundled yet. The built-in facades are temporary procedural replacements.
+
+## Prepared Quaternius models (0.15.1)
+Install the separately supplied prepared `Second-Live-Quaternius-Village-Models.zip` through Smartphone → System → Dorfmodelle importieren. Only the activated administrator may import. The four GLBs are validated and atomically stored in `village_assets.sqlite3` in the existing data volume; no external requests or subsequent rebuilds are required. Reload the game to activate the new art. Imported entrances face the street and shop labels remain visible. Buildings are still solid exterior-only collision boxes, and all previous scene coordinates and tree damage stay unchanged. The original Standard archive is not directly accepted; use the prepared four-model ZIP. See [asset instructions](../optional-village/README.md).

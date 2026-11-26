@@ -28,6 +28,7 @@ from hotel_lobby import HotelLobby, FacadeDirectory
 from game_accounts import AccountStore, SESSION_TTL
 from room_models import RoomModelStore, MAX_FILE as MAX_MODEL_FILE
 from free_world import FreeWorld, L as FREE_LAYOUT
+from village_assets import VillageAssetStore, MAX_ZIP as MAX_VILLAGE_ZIP
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -390,6 +391,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     facades = FacadeDirectory(accounts) if accounts else None
     room_models = RoomModelStore(store.path) if accounts else None
     free_world = FreeWorld(store.path,damage_profiles=GameStore.WEAPON_DAMAGE,model_library=room_models) if accounts else None
+    village_assets = VillageAssetStore(store.path, WEB / 'assets' / 'village')
     world_transition = threading.RLock()
     # Keep the original player/cookie/home database, independent of image capture.
     panorama = None
@@ -397,7 +399,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.15.0"
+        server_version = "SecondLive/0.15.1"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -589,6 +591,15 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                 types = {".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".glb": "model/gltf-binary", ".gltf": "model/gltf+json", ".txt": "text/plain; charset=utf-8"}
                 typ = types.get(filepath.suffix.lower(), "application/octet-stream")
                 self.send_data(200, filepath.read_bytes(), typ, "public, max-age=3600")
+            elif path.startswith("/assets/village/"):
+                name=path.removeprefix("/assets/village/")
+                try:
+                    if name=='manifest.json':self.send_json(200,village_assets.manifest())
+                    elif name in ('house-a.glb','house-b.glb','shop-a.glb','shop-b.glb'):
+                        self.send_data(200,village_assets.get(name[:-4]),'model/gltf-binary')
+                    else:self.send_json(404,{'error':'Dorfmodell nicht gefunden'})
+                except CaptureError as e:self.send_json(e.status,capture_error_body(e))
+                except (OSError,sqlite3.Error):self.send_json(503,{'error':'Modellspeicher nicht verfuegbar'})
             elif path.startswith("/assets/polyhaven/"):
                 root = (WEB / "assets" / "polyhaven").resolve()
                 rel = path.removeprefix("/assets/polyhaven/")
@@ -604,7 +615,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.15.0", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "free_world": bool(free_world), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.15.1", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "free_world": bool(free_world), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path.startswith("/api/free-world/texture/") or path.startswith("/api/free-world/model/"):
@@ -659,6 +670,24 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
             path=urlsplit(self.path).path
             if not legacy_capture and (path in ('/api/scans','/api/world','/api/session/pair','/api/capture') or path.startswith(('/api/capture/','/api/scans/','/media/'))):
                 self.send_json(404,{'error':'Aufnahmefunktion eingestellt'});return
+            if path=="/api/admin/village-assets":
+                self.close_connection=True
+                if not self.require_admin():return
+                def village_action():
+                    if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Type','').split(';')[0].strip()!='application/zip':
+                        raise CaptureError('ZIP-Datei erwartet',415)
+                    try:n=int(self.headers.get('Content-Length','0'))
+                    except ValueError:n=0
+                    if not 0<n<=MAX_VILLAGE_ZIP:raise CaptureError('Modellpaket maximal 24 MiB',413)
+                    if not village_assets.upload_slots.acquire(blocking=False):raise CaptureError('Modellimport laeuft bereits',409)
+                    try:
+                        self.connection.settimeout(60)
+                        blob=self.rfile.read(n)
+                        if len(blob)!=n:raise CaptureError('Unvollstaendiger ZIP-Upload',400)
+                        return village_assets.install(blob)
+                    except sqlite3.Error:raise CaptureError('Modellspeicher nicht verfuegbar',503) from None
+                    finally:village_assets.upload_slots.release()
+                self.capture_reply(village_action);return
             if path in ("/api/free-world","/api/free-world/texture"):
                 self.close_connection=True
                 if not free_world:

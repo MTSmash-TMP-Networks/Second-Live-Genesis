@@ -74,7 +74,7 @@ RUN ./node_modules/.bin/esbuild avatar_smoke.mjs --bundle --platform=node --form
 # Game-only runtime; retained player identity uses the standard library.
 FROM python:3.13-slim-bookworm
 WORKDIR /app
-COPY server.py updater_api.py wall_damage.py world_capture.py hotel_lobby.py game_accounts.py room_models.py free_world.py village.py /app/
+COPY server.py updater_api.py wall_damage.py world_capture.py hotel_lobby.py game_accounts.py room_models.py free_world.py village.py village_assets.py /app/
 COPY --chmod=0644 scripts/game_only_smoke.py /app/game_only_smoke.py
 COPY web/ /app/web/
 COPY optional-village/ /app/web/assets/village/

@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.0 · Hidden Village**
+**v0.15.1 · Quaternius Village Model Import**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.1 – Quaternius-Gebäude importieren
+
+Über das System-Menü im Smartphone kann der Administrator das vorbereitete Quaternius-Modell-ZIP hochladen. Vier geprüfte, eingebettete GLB-Modelle ersetzen die prozeduralen Dorfgebäude. Die Datenbank im bestehenden Datenvolume erhält die Modelle auch über Container-Updates hinweg. Nach dem Import das Spiel neu laden; Bauwerke und Kollisionen bleiben unverändert. Siehe [Modellimport](optional-village/README.md).
 
 ## Neu in 0.15.0 – Hidden Village
 

@@ -395,3 +395,8 @@ assert.ok(game.includes('freeView.sync([...s.peers,...s.npcs])'));
 assert.ok(game.includes('freeBlocked(freeObstacles(freeState)'));
 assert.ok(game.includes('renderer.shot(\'pistol\',npc.shot,freeView.effects)'));
 console.log('Hidden village client scenery, dead tree collision and NPC snapshot checks passed');
+
+for(const id of ['village-asset-file','village-asset-upload','village-asset-status','village-asset-reload'])assert.ok(ids.includes(id));
+assert.ok(updater.includes('/api/admin/village-assets')&&updater.includes("'Content-Type':'application/zip'"));
+assert.ok(updater.includes('villageImporting'));
+console.log('Administrator village asset upload controls present');

@@ -85,12 +85,17 @@ export class VillageView{
  installModel(entry){
   const asset=this.assetBank.get(entry.key);if(!asset||entry.imported)return;
   const clone=asset.model.clone(true),[min,s]=entry.row.bounds;
-  const wrapper=new THREE.Group(),factor=new THREE.Vector3(s[0]/asset.size.x,s[1]/asset.size.y,s[2]/asset.size.z);
+  const placed=new THREE.Group(),wrapper=new THREE.Group();
+  const front=min[0]+s[0]/2<-65?1:-1;
+  // Prepared models have their entrances on local +Z, facing the village street after rotation.
+  const factor=new THREE.Vector3(s[2]/asset.size.x,s[1]/asset.size.y,s[0]/asset.size.z);
   const center=asset.box.getCenter(new THREE.Vector3());
-  wrapper.scale.copy(factor);clone.position.x-=center.x;clone.position.y-=asset.box.min.y;clone.position.z-=center.z;
+  wrapper.scale.copy(factor);wrapper.rotation.y=front*Math.PI/2;
+  clone.position.x-=center.x;clone.position.y-=asset.box.min.y;clone.position.z-=center.z;
   clone.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
-  wrapper.add(clone);wrapper.position.set(min[0]+s[0]/2,0,min[2]+s[2]/2);
-  this.buildingRoot.remove(entry.fallback);this.buildingRoot.add(wrapper);entry.imported=wrapper;
+  wrapper.add(clone);placed.add(wrapper);placed.position.set(min[0]+s[0]/2,0,min[2]+s[2]/2);
+  if(entry.row.label)this.sign(placed,entry.row.label,front*(s[0]/2+.04),s[1]*.49,0,front*Math.PI/2);
+  this.buildingRoot.remove(entry.fallback);this.buildingRoot.add(placed);entry.imported=placed;
  }
  setRoads(roads){
   const key=JSON.stringify(roads);if(key===this.roadKey)return;this.roadKey=key;this.roadRoot.clear();
