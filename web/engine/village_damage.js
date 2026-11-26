@@ -187,17 +187,12 @@ float villageStageAt(vec3 p){
  return stage;
 }
 `;
-export function patchVillageShader(shader,uniforms,visible){
+export function patchVillageShader(shader,uniforms){
  Object.assign(shader.uniforms,uniforms);
  shader.vertexShader='varying vec3 vVillageWorld;\n'+shader.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\nvVillageWorld=(modelMatrix*vec4(transformed,1.0)).xyz;');
  shader.fragmentShader=fragmentHeader+shader.fragmentShader.replace('#include <clipping_planes_fragment>','#include <clipping_planes_fragment>\nfloat villageStage=villageStageAt(vVillageWorld);if(villageStage>3.5)discard;');
- if(visible)shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
- if(villageStage>0.5){
-  vec3 q=vVillageWorld-villageOrigin;
-  float line=min(abs(sin(q.x*13.0+q.y*8.0+q.z*11.0+sin(q.y*29.0)*0.8)),abs(sin(q.z*17.0-q.y*12.0+q.x*7.0)));
-  float crack=1.0-smoothstep(0.025,0.045+villageStage*0.045,line);
-  diffuseColor.rgb*=mix(1.0-villageStage*0.09,0.22,crack*0.85);
- }`);
+ // Only fully destroyed cells change the surface silhouette. Intact fragments
+ // retain their original texture; local impact decals show individual hits.
 }
 // Mirror the shader's face selection when raycasting a visual surface for a decal.
 export function villageSurfaceIntact(row,point){
@@ -265,8 +260,8 @@ export class VillageDamageMask{
   function patch(m,visible){
    m.side=THREE.DoubleSide;m.shadowSide=THREE.DoubleSide;
    const before=m.onBeforeCompile,cache=m.customProgramCacheKey();
-   m.onBeforeCompile=function(shader,renderer){before.call(this,shader,renderer);patchVillageShader(shader,uniforms,visible);};
-   m.customProgramCacheKey=()=>cache+'|village-voronoi-v2|'+visible;m.needsUpdate=true;owned.add(m);return m;
+   m.onBeforeCompile=function(shader,renderer){before.call(this,shader,renderer);patchVillageShader(shader,uniforms);};
+   m.customProgramCacheKey=()=>cache+'|village-voronoi-v3-mask-only|'+visible;m.needsUpdate=true;owned.add(m);return m;
   }
   function clone(m){if(!copies.has(m))copies.set(m,patch(m.clone(),true));return copies.get(m);}
   root.traverse(o=>{

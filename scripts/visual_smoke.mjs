@@ -467,6 +467,8 @@ import {villageTreeParts,VillageForest,VillageRoads} from './village_landscape.j
  const shader={uniforms:{},vertexShader:'void main(){vec3 transformed=position; #include <project_vertex>}',fragmentShader:'void main(){#include <clipping_planes_fragment> #include <color_fragment>}'};
  mesh.material.onBeforeCompile(shader,null);
  assert.ok(shader.fragmentShader.includes('if(villageStage>3.5)discard'));
+ assert.ok(shader.fragmentShader.includes('#include <color_fragment>'));
+ assert.ok(!shader.fragmentShader.includes('diffuseColor.rgb*=')&&!shader.fragmentShader.includes('float crack='));
  assert.ok(shader.vertexShader.includes('modelMatrix*vec4(transformed,1.0)'));
  assert.ok(!shader.vertexShader.includes('\\n')&&!shader.fragmentShader.includes('\\n'));
  assert.ok(shader.uniforms.villageSites.value===mask.texture);
@@ -698,3 +700,16 @@ console.log('NPC regional reactions, reversible pose overlays and extended Free 
  marks.clearWorld();assert.equal(marks.live.size,0);
 }
 console.log('Free World hotel-style projected impacts, extended-distance surface projection and cleanup passed');
+
+{
+ // Building surfaces, decal masks and shadow materials must never apply
+ // a whole-cell crack pattern or color change to surviving original textures.
+ for(const kind of ['surface','decal','depth','distance']){
+  const shader={uniforms:{},vertexShader:'void main(){ #include <project_vertex> }',fragmentShader:'void main(){ #include <clipping_planes_fragment> #include <color_fragment> }'};
+  patchVillageShader(shader,{},kind==='surface');
+  assert.ok(shader.fragmentShader.includes('if(villageStage>3.5)discard'));
+  assert.ok(shader.fragmentShader.includes('#include <color_fragment>'));
+  assert.ok(!shader.fragmentShader.includes('diffuseColor')&&!shader.fragmentShader.includes('float crack='));
+ }
+}
+console.log('Village damage shader clips destroyed cells without painting crack patterns on intact surfaces');

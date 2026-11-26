@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.9 · NPC Hit Reactions & World Impact Marks**
+**v0.15.10 · Clean Impact Surfaces**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.10 – Saubere Einschussmarkierungen
+
+Dorfgebäude behalten bei Treffern ihre Originaltexturen. Nur lokale Einschussmarkierungen und tatsächlich ausgebrochene Bauteile sind sichtbar; das großflächige künstliche Rissmuster entfällt.
 
 ## Neu in 0.15.9 – Trefferreaktionen und Einschussmarkierungen
 

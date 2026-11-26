@@ -1,4 +1,4 @@
-# Free World (0.15.9)
+# Free World (0.15.10)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -61,3 +61,6 @@ Before the entry snapshot, the server ticks the village, including after extende
 
 ## NPC hit reactions and surface marks (0.15.9)
 Regional NPC hit volumes are simplified arcade collision triggers. Head hits trigger immediate defeat and a faster fall; surviving torso/leg hits trigger a short stagger, and injured legs affect movement pace and the reversible pose overlay until respawn. No change to healthy movement, player damage rules, or death/respawn durations. The fictional rifle ray and its tracer extend to 300 world units/metres, bounded by game terrain and collision geometry; building/repair range stays 8 m. The hotel decal projection and material textures are reused for server-confirmed surface hits. A bounded SQLite table stores up to 384 shared marks (12 per target), cleared on repair, destruction or relocation. Inset imported geometry is projected only where a suitable surface exists, and village fracture shaders clip building decals. Marks on a model moved by a hit are not retained. Rendering with installed GLBs needs an in-game check.
+
+## Clean impact surfaces (0.15.10)
+The village fracture shader now only discards destroyed cells, including in shadow and decal materials. Surviving surfaces retain the original GLB textures and no longer show procedural crack overlays or whole-cell darkening. Existing localized impact decals, exposed fracture geometry, collision, persistence and repair are unchanged.

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.15.10 – Clean Impact Surfaces
+- Großflächige prozedurale Rissmuster und Abdunklung bei Treffern an Dorfgebäuden entfernt. Originaltexturen bleiben unverändert; nur lokale Einschussmarkierungen und tatsächlich ausgebrochene Bauteile sind sichtbar. Schadensstufen, Bruchphysik, Schatten und Reparatur bleiben erhalten. Hotelzimmer unverändert.
+
 ## 0.15.9 – NPC Hit Reactions & World Impact Marks
 - NPCs erhalten serverseitige, vereinfachte Trefferzonen und sichtbare, reversible Körperreaktionen. Ein Kopftreffer beendet den NPC-Spielzustand sofort und löst die schnelle Fallanimation aus. Beinverletzungen verändern Schritthaltung und Bewegungstempo bis zum Respawn; Körpertreffer lösen kurzes Taumeln aus. Gesunde Laufanimation und bisherige Respawn-Zeiten bleiben unverändert. Keine neuen MoCap-Clips oder Ragdoll-Simulation.
 - Das Scharfschützengewehr nutzt in der Free World bis zu 300 Spielmeter statt der bisherigen 8-m-Baureichweite. Server-Ray und sichtbare Schussspur verwenden dieselbe Reichweite. Gelände, Eisgrenze und intakte Kollisionen begrenzen die Spieltreffer. Hotelzimmer und Baureichweite bleiben unverändert.
