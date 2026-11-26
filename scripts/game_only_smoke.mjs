@@ -434,3 +434,6 @@ const targetDoor=new Function('freeObstacles','freeRay','playerEye','dir',getPar
 const demoDoor={id:'house',door:{bounds:[[1,0,0],[.85,2.4,1.06]]},damage:{}};
 assert.equal(targetDoor({scenery:[demoDoor],obstacles:[]}),demoDoor);
 demoDoor.damage[448]=4;assert.equal(targetDoor({scenery:[demoDoor],obstacles:[]}),null);
+
+assert.ok(html.includes('Eigenes Modellpaket importieren (optional)'));
+assert.ok(updater.includes('Kein manueller Import erforderlich.'));

@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.11 · Open Village**
+**v0.15.12 · Bundled Village Assets**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.12 – Dorfmodelle im Docker-Build
+
+Das Standardpaket `optional-village/Second-Live-Quaternius-Village-Models.zip` wird automatisch geprüft und beim Docker-Build eingebunden, sobald die Original-ZIP im GitHub-Repository hinterlegt ist. Bereits im Datenvolume gespeicherte Modelle bleiben erhalten und haben Vorrang. Der manuelle Modellimport im Admin-Bereich ist nur noch eine optionale Zusatzfunktion. Siehe [Modellpaket](optional-village/README.md).
 
 ## Neu in 0.15.11 – Begehbares Dorf
 

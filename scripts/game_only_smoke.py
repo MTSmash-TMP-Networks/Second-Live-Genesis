@@ -461,6 +461,42 @@ class GameOnlyTest(unittest.TestCase):
             resized=req('a',a,'relocate',id=other['id'],version=0,cell=[-5,0,277],dims=[4,4,4])
             self.assertEqual(next(r for r in resized['blocks'] if r['id']==other['id'])['dims'],[4,4,4])
 
+    def test_bundled_village_zip(self):
+        import hashlib, io, json, zipfile
+        from village_assets import VillageAssetStore, KEYS, BUNDLE_NAME, bundle_village_assets
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);source=root/'source';source.mkdir();dest=root/'bundled'
+            self.assertEqual(bundle_village_assets(source,dest),[])
+            self.assertEqual(json.loads((dest/'manifest.json').read_text()),[])
+            models={k:room_model_fixture() for k in KEYS}
+            out=io.BytesIO()
+            with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as z:
+                for k,data in models.items():z.writestr(k+'.glb',data)
+                z.writestr('LICENSE-Quaternius.txt','CC0')
+                z.writestr('ASSET-REPORT.json','{}')
+            blob=out.getvalue();archive=source/BUNDLE_NAME;archive.write_bytes(blob)
+            with patch('village_assets.BUNDLE_SHA256',hashlib.sha256(blob).hexdigest()):
+                self.assertEqual(bundle_village_assets(source,dest),list(KEYS))
+                self.assertEqual(json.loads((dest/'manifest.json').read_text()),list(KEYS))
+                self.assertEqual((dest/'LICENSE-Quaternius.txt').read_text(),'CC0')
+                self.assertEqual((dest/'ASSET-REPORT.json').read_text(),'{}')
+                store=VillageAssetStore(root,dest)
+                self.assertEqual(store.manifest(),list(KEYS))
+                for k,data in models.items():self.assertEqual(store.get(k),data)
+                store.install(blob)
+                archive.write_bytes(blob+b'corruption')
+                with self.assertRaisesRegex(ValueError,'SHA256 mismatch'):
+                    bundle_village_assets(source,dest)
+                self.assertEqual(store.manifest(),list(KEYS))
+                self.assertEqual((dest/'house-a.glb').read_bytes(),models['house-a'])
+            archive.unlink()
+            self.assertEqual(bundle_village_assets(source,dest),[])
+            # An image without the bundle must never discard the persistent bank.
+            self.assertEqual(VillageAssetStore(root,dest).manifest(),list(KEYS))
+            (source/'house-a.glb').write_bytes(models['house-a'])
+            self.assertEqual(bundle_village_assets(source,dest),['house-a'])
+            self.assertEqual(json.loads((dest/'manifest.json').read_text()),['house-a'])
+
     def test_village_asset_store_atomic_install_and_persistence(self):
         from village_assets import VillageAssetStore, KEYS
         import io, zipfile

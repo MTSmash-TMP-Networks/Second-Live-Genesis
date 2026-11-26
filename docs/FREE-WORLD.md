@@ -1,4 +1,4 @@
-# Free World (0.15.11)
+# Free World (0.15.12)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -67,3 +67,6 @@ The village fracture shader now only discards destroyed cells, including in shad
 
 ## Open village (0.15.11)
 Each existing building has a centered street-facing entrance and a separately animated door leaf. The server and client remove the matching aperture from front-wall Voronoi prisms, retaining the 268 original fracture IDs and adding door ID 448. A closed intact door blocks the entrance; an open leaf uses simplified collision. Press E (or the touch interaction button) near the entrance to open or close it. Doors auto-close after about seven seconds unless occupied. Destruction and repair persist; intact doors start closed after a server restart. Prepared Quaternius GLBs have their original door triangles isolated at runtime, with a procedural fallback for other assets. The ground floor is accessible, but not furnished or connected to upper levels. Four male and two female Rocketbox NPCs use staggered scripted indoor visits between sidewalk patrols; no full indoor pathfinding. NPC name tags are removed, player labels are unchanged.
+
+## Bundled village assets (0.15.12)
+The Docker build supports the prepared CC0 ZIP at `optional-village/Second-Live-Quaternius-Village-Models.zip`. When present in the Git checkout, the build checks the original SHA256, validates all four static GLBs, copies the license/report and writes the local asset manifest. No browser-side download or admin import is required. Existing database imports take precedence. Without the ZIP the build still supports standalone GLBs and procedural fallbacks. See `optional-village/README.md` for the exact package path and checksum.

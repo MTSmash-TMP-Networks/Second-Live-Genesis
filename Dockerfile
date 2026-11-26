@@ -77,8 +77,9 @@ WORKDIR /app
 COPY server.py updater_api.py wall_damage.py world_capture.py hotel_lobby.py game_accounts.py room_models.py free_world.py village.py village_structure.py village_assets.py /app/
 COPY --chmod=0644 scripts/game_only_smoke.py /app/game_only_smoke.py
 COPY web/ /app/web/
-COPY optional-village/ /app/web/assets/village/
-RUN python -c "import json,pathlib; p=pathlib.Path('/app/web/assets/village'); (p/'manifest.json').write_text(json.dumps([k for k in ('house-a','house-b','shop-a','shop-b') if (p/(k+'.glb')).is_file()]))"
+COPY optional-village/ /tmp/second-live-village/
+RUN python -c "from village_assets import bundle_village_assets; bundle_village_assets('/tmp/second-live-village','/app/web/assets/village')" \
+    && rm -rf /tmp/second-live-village
 RUN rm -f /app/web/scanner.html /app/web/panorama.html /app/web/capture.js /app/web/capture-flow.js /app/web/capture-quality.js /app/web/capture.css /app/web/panorama.js /app/web/panorama-flow.js /app/web/panorama.css /app/web/device-access.js /app/web/app.js /app/web/style.css /app/web/engine/capture-view.js
 COPY --from=avatar-check /build/renderer.bundle.js /app/web/engine/renderer.bundle.js
 COPY --from=renderer /build/THREE-LICENSE.txt /app/web/engine/THREE-LICENSE.txt

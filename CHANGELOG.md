@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.12 – Bundled Village Assets
+- Docker-Build unterstützt das vorbereitete Quaternius-Modell-ZIP direkt im Git-Checkout. Sobald das Archiv in `optional-village/Second-Live-Quaternius-Village-Models.zip` liegt, wird es anhand der fest hinterlegten SHA256-Prüfsumme geprüft, entpackt und mit den bestehenden GLB-Sicherheitsprüfungen validiert. Kein separater Admin-Import für das Standardpaket nötig. Bereits installierte Modelle im Datenvolume bleiben vorrangig; bei fehlendem ZIP bleiben die bisherigen Fallbacks verfügbar.
+- Admin-Modellimport in einen optionalen aufklappbaren Bereich verschoben; vorhandene Modellanzahl und Status werden weiterhin angezeigt.
+
 ## 0.15.11 – Open Village
 - Alle sechs Dorfgebäude besitzen begehbare, straßenseitige Eingänge. Die Türen schwenken nach innen und können mit E oder der Touch-Interaktion geöffnet und geschlossen werden. Die Original-Türgeometrie wird aus den vorbereiteten Quaternius-Modellen getrennt; andere Modelle verwenden eine passende Ersatztür. Client und Server nutzen dieselbe Öffnung im Voronoi-Kollisionsraster. Türen bleiben zerstör- und reparierbar; beschädigte Teile und Texturen bleiben erhalten. Schließen ist bei belegtem Durchgang gesperrt, Türen schließen nach etwa sieben Sekunden automatisch. Offene Türblätter haben vereinfachte Kollision.
 - Vier bestehende männliche NPCs plus zwei weibliche Rocketbox-NPCs (Emma und Olivia). Alle sechs folgen Gehweg-Patrouillen mit zeitversetzten Besuchen in ihren zugeordneten Gebäuden, öffnen Türen und verlassen sie wieder. Die bisherige Bewegungsinterpolation und Trefferreaktionen bleiben erhalten. Namensschilder über NPCs entfernt; Spielernamen unverändert.

@@ -22,7 +22,7 @@ async function refreshVillageAssets(){
     const r=await fetch('/assets/village/manifest.json',{cache:'no-store',credentials:'same-origin'});
     if(!r.ok)throw Error('HTTP '+r.status);
     const models=await r.json();
-    if(!villageImporting)$('village-asset-status').textContent=models.length+' / 4 Gebäudemodelle installiert.';
+    if(!villageImporting)$('village-asset-status').textContent=models.length===4?'4 / 4 Gebäudemodelle verfügbar. Kein manueller Import erforderlich.':models.length+' / 4 Gebäudemodelle verfügbar. Das Standardpaket wird beim Docker-Build eingebunden, sobald es im Repository liegt.';
   }catch(e){if(!villageImporting)$('village-asset-status').textContent='Modellbestand nicht verfügbar.';}
 }
 async function importVillageAssets(){
