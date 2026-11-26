@@ -146,3 +146,12 @@ body:has(#phone:not([hidden])) #free-hud{display:none!important}
 #phone #free-model-message{overflow-wrap:anywhere}
 
 #free-inventory-items{display:grid;gap:8px;margin:12px 0}#free-inventory-items[hidden]{display:none!important}
+
+/* Smartphone torch app */
+#phone .sl-app-icon.flashlight{background:linear-gradient(145deg,#647486,#263441);color:#f2f5fa}
+#phone .torch-active .sl-app-icon.flashlight{background:linear-gradient(145deg,#ffe59f,#c58a22);color:#30230d;box-shadow:0 0 14px #f5c95a55,inset 0 1px 1px #ffffff70}
+#phone .flashlight-card{text-align:center}
+#phone .flashlight-symbol{width:86px;height:86px;margin:8px auto 20px;display:grid;place-items:center;border-radius:25px;background:#ffffff0e;color:#d2dfed}
+#phone .flashlight-symbol svg{width:54px;height:54px}
+#phone #flashlight-toggle{width:100%;font-size:15px;min-height:48px}
+#phone #flashlight-toggle[aria-pressed="true"]{background:#f0c66e;color:#30230d}

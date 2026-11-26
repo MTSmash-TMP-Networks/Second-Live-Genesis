@@ -333,3 +333,28 @@ const repeatBlockPlacement=new Function('assert',`
  })();
 `);await repeatBlockPlacement(assert);
 console.log('Free World repeat placement and one-shot object handling passed');
+
+for(const id of ['phone-app-flashlight','phone-page-flashlight','flashlight-toggle','flashlight-status'])assert.ok(ids.includes(id));
+assert.equal(nav('flashlight',true,false),'flashlight');assert.equal(nav('flashlight',false,false),'welcome');assert.equal(nav('flashlight',true,true),'character');
+const wheelSlot=new Function(getPart('const weaponIds=','const clipSize=')+'return wheelInventorySlot;')();
+const blockPreset={kind:'block',dims:[2,2,2]},heldModel={kind:'model',source:'model'},existingBlock={...blockPreset,id:3};
+assert.equal(wheelSlot('m16',null,true,1),'block');
+assert.equal(wheelSlot(null,blockPreset,true,1),'none');
+assert.equal(wheelSlot(null,blockPreset,true,-1),'m16');
+assert.equal(wheelSlot(null,null,true,-1),'block');
+assert.equal(wheelSlot('m16',null,false,1),'none');
+assert.equal(wheelSlot(null,null,false,-1),'m16');
+assert.equal(wheelSlot(null,heldModel,true,1),null);assert.equal(wheelSlot(null,existingBlock,true,-1),null);
+assert.ok(game.includes("if(slot==='block')freeTakeBlock();else chooseWeapon(slot);"));
+assert.ok(game.includes("freeView.scene,torch")&&game.includes("false,true,null,torch")&&game.includes("scopeZoom,false,null,torch"));
+const flashlightUiTest=new Function('assert',`
+ let flashlightOn=false,started=true,studioOpen=false;
+ const nodes={},$=id=>nodes[id]??={textContent:'',setAttribute(key,v){this[key]=v;},classList:{toggle(key,v){this[key]=v;}}};
+ const showPhonePage=()=>{};
+ `+getPart('function updateFlashlightUI(','// Free World is a separate')+`
+ $('flashlight-toggle').onclick();assert.equal(flashlightOn,true);assert.equal($('flashlight-toggle')['aria-pressed'],'true');assert.equal($('phone-app-flashlight').classList['torch-active'],true);
+ updateFlashlightUI();assert.equal(flashlightOn,true);
+ $('flashlight-toggle').onclick();assert.equal(flashlightOn,false);assert.equal($('flashlight-toggle')['aria-pressed'],'false');
+ started=false;$('flashlight-toggle').onclick();assert.equal(flashlightOn,false);
+ `);flashlightUiTest(assert);
+console.log('Free World wheel inventory and smartphone flashlight toggle checks passed');

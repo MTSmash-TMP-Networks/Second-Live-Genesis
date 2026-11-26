@@ -9,6 +9,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { buildArchitecture, applyRoomDaylight } from './architecture.js';
 export { curtainBounds } from './architecture.js';
 import { XRMode } from './xr.js';
+import { createFlashlight, updateFlashlight } from './flashlight.js';
 import { ShotEffects } from './shotfx.js';
 import { ImpactMarks } from './impact_marks.js';
 import { WallMeshes } from './wall_mesh.js';
@@ -56,6 +57,7 @@ export class RoomRenderer {
     this.camera=new THREE.PerspectiveCamera(65,1,.05,350);
     this.rig=new THREE.Group();this.scene.add(this.rig);this.rig.add(this.camera);
     this.xrMode=new XRMode(this);
+    this.flashlight=createFlashlight(quality);
 
     this.weaponRoot=new THREE.Group();
     this.camera.add(this.weaponRoot);
@@ -571,6 +573,7 @@ export class RoomRenderer {
     updateRoomAvatarProp(root,this.weaponModels,posture?null:weapon);
   }
   renderStudio(canvas,dt,preview=null){
+    updateFlashlight(this.flashlight,null,null);
     const w=Math.max(1,(preview||canvas).clientWidth),h=Math.max(1,(preview||canvas).clientHeight),dpr=Math.min(devicePixelRatio||1,1.5);
     if(w!==this.width||h!==this.height||dpr!==this.dpr){this.width=w;this.height=h;this.dpr=dpr;this.renderer.setPixelRatio(dpr);this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
     this.studio.render(this.renderer,w/h,dt,!!preview);
@@ -580,8 +583,9 @@ export class RoomRenderer {
       preview.getContext('2d')?.drawImage(canvas,0,0);
     }
   }
-  render(canvas,eye,target,mobile,dt=1/60,player=null,scopeZoom=false,inLobby=false,worldScene=null){
+  render(canvas,eye,target,mobile,dt=1/60,player=null,scopeZoom=false,inLobby=false,worldScene=null,flashlight=null){
     const scene=worldScene||(inLobby?this.lobby.scene:this.scene);
+    updateFlashlight(this.flashlight,scene,this.xrMode.active?null:flashlight);
     // Camera-attached inventory models must belong to the scene being rendered.
     const rigScene=worldScene||this.scene;
     if(this.rig.parent!==rigScene)rigScene.add(this.rig);

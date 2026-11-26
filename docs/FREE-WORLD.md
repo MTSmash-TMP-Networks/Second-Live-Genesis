@@ -1,4 +1,4 @@
-# Free World (0.14.5)
+# Free World (0.14.6)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -6,7 +6,7 @@ Enter through FREE WORLD at the north end of the hotel corridor (E). The shared 
 |---|---|
 | I | Shared inventory: weapons, building block and own 3D models |
 | 1–3 / T | Select game weapon / reload |
-| 4 | Select reusable building block with configured size, shape and image; remains selected after new placement |
+| 4 / mouse wheel | Select reusable building block with configured size, shape and image; remains selected after new placement |
 | E | Pick up own intact object or place held object |
 | + / − | Model: 0.1 m increments (0.1–4 m); block: 0.5 m increments (0.5–4 m) |
 | Q / F | Rotate held object by 90 degrees |
@@ -24,3 +24,6 @@ Select a private GLB in the Free World phone app, or import a new one there. Pla
 
 ## Unified inventory (0.14.4)
 There is no build/PvP mode toggle. All controls remain available in the shared world; taking an object holsters the selected weapon, and weapon selection cancels the held preview. Choose or import a GLB, then select **Modell aufnehmen**. Existing intact owned objects can be picked up and edited with E. Changes are committed atomically when placed, preserving the object ID, asset, health and texture. The original shared placement remains until the new location is accepted; both old and new locations must be within reach. Model positions and 90-degree rotations are stored independently of the grid, with revision checks for concurrent edits. Blocks remain snapped to the half-metre grid and preserve selected image textures. Shared models still use conservative box collisions and server-controlled impact displacement, not the full private-room rigid-body simulation.
+
+## Wheel inventory and flashlight (0.14.6)
+Mouse wheel cycles empty hand, three weapons and the reusable block in both directions. Rotating or resizing the new block updates the current preset. Existing objects and held GLB models still require deliberate cancellation. The smartphone flashlight app toggles a local, 28 m directional spotlight in the room, hotel corridor and Free World; it remains on when the phone is closed and across transitions. Other clients do not see the beam. Immersive VR does not use the lamp.

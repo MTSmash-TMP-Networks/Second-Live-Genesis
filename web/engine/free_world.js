@@ -124,7 +124,7 @@ function grassSurface(){
  for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i),v=.87+.08*Math.sin(x*.052+Math.cos(z*.041))+.05*Math.cos(z*.073-x*.036);colors.push(v,Math.min(1,v+.035),v*.92);}
  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
  const map=terrainTexture(true);map.repeat.set(2*H/5,2*H/5);
- return new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({map,vertexColors:true,roughness:1}));
+ const ground=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({map,vertexColors:true,roughness:1}));ground.receiveShadow=true;return ground;
 }
 export function freeIceCliffData(side){
  const segments=104,stride=segments+1,span=H+6,positions=[],uvs=[],colors=[],indices=[];
@@ -142,7 +142,7 @@ function iceCliff(side,material){
  for(const [k,v,n] of [['position',d.positions,3],['uv',d.uvs,2],['color',d.colors,3]])geometry.setAttribute(k,new THREE.Float32BufferAttribute(v,n));
  geometry.setIndex(d.indices);geometry.computeVertexNormals();geometry.computeBoundingSphere();
  const mesh=new THREE.Mesh(geometry,material),[x,z,angle]=[[0,-H,0],[H,0,-Math.PI/2],[0,H,Math.PI],[-H,0,Math.PI/2]][side];
- mesh.position.set(x,0,z);mesh.rotation.y=angle;return mesh;
+ mesh.position.set(x,0,z);mesh.rotation.y=angle;mesh.castShadow=true;mesh.receiveShadow=true;return mesh;
 }
 function iceGate(scene,box,map){
  const {x,width,height}=ICE_GATE,z=-H+.028,geometry=new THREE.PlaneGeometry(width,height),uv=geometry.attributes.uv;
@@ -221,7 +221,7 @@ export class FreeWorldView{
   for(const [key,m] of this.materials)if(!used.has(key)){m.dispose();this.materials.delete(key);this.textures.get(key)?.dispose();this.textures.delete(key);}
   const obj=new THREE.Object3D();
   for(const group of groups.values()){
-   const mesh=new THREE.InstancedMesh(this.cube,this.material(group[0].texture,load,group[0].hp??100),group.length);
+   const mesh=new THREE.InstancedMesh(this.cube,this.material(group[0].texture,load,group[0].hp??100),group.length);mesh.castShadow=true;mesh.receiveShadow=true;
    group.forEach((b,i)=>{const {p,s}=freeBounds(b);obj.position.set(...p);obj.scale.set(...s);obj.updateMatrix();mesh.setMatrixAt(i,obj.matrix);});
    mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();this.scene.add(mesh);this.meshes.push(mesh);
   }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.6 – Inventory Wheel & Phone Flashlight
+- Free World: Mausrad wechselt in beide Richtungen zwischen leerer Hand, Pistole, Scharfschützengewehr, M16 und Baublock. Größe und gedrehte Form des Baublocks bleiben beim Wechsel erhalten; aufgenommene vorhandene Objekte und GLB-Modelle werden nicht versehentlich durch Scrollen abgewählt.
+- Taschenlampen-App im virtuellen Smartphone. Ein richtungsabhängiges, lokales Spotlicht mit 28 m Reichweite und Schatten leuchtet im Hotelzimmer, Hotelflur und in der Free World. Die Lampe bleibt beim Schließen des Smartphones und beim Weltwechsel an, bis sie ausgeschaltet wird. Keine Synchronisation mit anderen Spielern, kein VR-Modus. Keine neuen Asset-Downloads.
+
 ## 0.14.5 – Beyond the Ice
 - Inventarplatz 4 bleibt nach neuem Blockbau aktiv; Größe, Form und Bild bleiben erhalten. Verschobene Objekte und GLB-Modelle bleiben einmalig platzierbar.
 - Graslandschaft, prozedurale Gletschergrenze, versteckte verschlossene Tür. Keine zusätzlichen Downloads; Weltgrenzen, Bauhöhe und bestehende Spielstände unverändert.

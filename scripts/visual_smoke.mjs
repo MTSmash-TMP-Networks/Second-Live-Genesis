@@ -408,3 +408,23 @@ console.log('Independent model metric placement, rotation and block grid sizes p
  }
 }
 console.log('Ice geometry, gate range and collision checks passed');
+
+import { createFlashlight, updateFlashlight } from './flashlight.js';
+{
+ const room=new THREE.Scene(),hall=new THREE.Scene(),world=new THREE.Scene();
+ const light=createFlashlight('1k');
+ assert.ok(light.isSpotLight&&light.castShadow&&light.distance===28);
+ assert.equal(light.shadow.mapSize.x,512);
+ assert.equal(createFlashlight('2k').shadow.mapSize.x,1024);
+ const beam={origin:[1,1.65,2],direction:[0,0,-1]};
+ updateFlashlight(light,room,beam);assert.equal(light.parent,room);assert.equal(light.target.parent,room);
+ assert.ok(Math.abs(light.position.z-1.72)<1e-8);
+ assert.ok(light.target.position.z<light.position.z);
+ updateFlashlight(light,hall,{origin:[3,1,4],direction:[1,0,0]});assert.equal(light.parent,hall);assert.equal(light.target.parent,hall);
+ assert.ok(!room.children.includes(light)&&!room.children.includes(light.target));assert.ok(light.target.position.x>light.position.x);
+ updateFlashlight(light,world,beam);assert.equal(light.parent,world);assert.equal(light.target.parent,world);
+ updateFlashlight(light,world,null);assert.equal(light.parent,null);assert.equal(light.target.parent,null);
+ updateFlashlight(light,world,beam);assert.equal(light.parent,world);
+ updateFlashlight(light,world,{origin:[0,0,0],direction:[0,0,0]});assert.equal(light.parent,null);
+}
+console.log('Phone flashlight: actual Three.js spotlight, aim, scene switch, shadow quality and off state checks passed');

@@ -3,6 +3,7 @@ import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
 let renderer=null, physicsWorld=null, graphicsReady=false;
+let flashlightOn=false;
 let equipped=null, xrEntering=false, xrReturnFirst=true, posture=null, scopeZoom=false, lastWheel=-Infinity;
 let lobbyEnabled=false,lobbyState=null,lobbyTransition=false;
 let freeEnabled=false,freeState=null,freeView=null,freeHeld=null,freeSize=2,freeShape='cube',freeTexture=null,freeModelSource=null,freeLibrary=[],freeHintUntil=0,freeNoticeUntil=0,freeLastNotice='';
@@ -10,7 +11,9 @@ let hotelHallPending=false,hotelNeighborPending=false,hotelViewEpoch=0,hotelView
 let accountsEnabled=false,accountProfile=null,authMode='login',studioOpen=false,editingFromGame=false,characterDraft=null,accountBusy=false;
 const weaponIds=['pistol','rifle','m16'];
 const weaponCycle=['none',...weaponIds];
-function nextWeapon(current,direction){const i=Math.max(0,weaponCycle.indexOf(current||'none'));return weaponCycle[(i+(direction>0?1:-1)+weaponCycle.length)%weaponCycle.length];}
+const freeInventoryCycle=[...weaponCycle,'block'];
+function nextWeapon(current,direction,includeBlock=false){const cycle=includeBlock?freeInventoryCycle:weaponCycle,i=Math.max(0,cycle.indexOf(current||'none'));return cycle[(i+(direction>0?1:-1)+cycle.length)%cycle.length];}
+function wheelInventorySlot(weapon,heldObject,inFreeWorld,direction){if(inFreeWorld&&heldObject&&(heldObject.kind!=='block'||heldObject.id))return null;return nextWeapon(inFreeWorld&&heldObject?'block':weapon,direction,inFreeWorld);}
 // Abstract, tunable game parameters, not real firearm specifications.
 const clipSize={pistol:12,rifle:1,m16:40};
 const ammo={...clipSize};let reloadLeft=0,reloadId=null;
@@ -112,11 +115,11 @@ const turnedSize=(s,a)=>a===90||a===270?[s[2],s[1],s[0]]:s;
 const savedBody=(s,id)=>spec[id].imported?importedSavedBody(spec[id].row,spec[id].savedSize||spec[id].s):({p:[...(s.placements?.[id]||spec[id].p)],v:[0,0,0],q:yawQuat(s.rotations?.[id]||0)});
 const movableDecor=id=>!!spec[id]?.decor;
 function boundsSize(s,q){if(!q)return s;return [0,1,2].map(i=>{const axis=[0,0,0];axis[i]=1;return rotateInverse(axis,q).reduce((n,v,j)=>n+Math.abs(v)*s[j],0);});}
-function turnHeld(delta){if(freeState){if(canPlay()&&freeHeld&&!freeState.editing){if(freeHeld.kind==='model')freeHeld.rotation=quarter(freeHeld.rotation+delta);else{[freeHeld.dims[0],freeHeld.dims[2]]=[freeHeld.dims[2],freeHeld.dims[0]];freeHeld.shape=freeHeld.shape==='wall-x'?'wall-z':freeHeld.shape==='wall-z'?'wall-x':freeHeld.shape;}updateFreeHint();}return;}if(!canPlay()||busy||!held)return;heldAngle=quarter(heldAngle+delta);$('notice').textContent='Drehung: '+heldAngle+'°';}
+function turnHeld(delta){if(freeState){if(canPlay()&&freeHeld&&!freeState.editing){if(freeHeld.kind==='model')freeHeld.rotation=quarter(freeHeld.rotation+delta);else{[freeHeld.dims[0],freeHeld.dims[2]]=[freeHeld.dims[2],freeHeld.dims[0]];freeHeld.shape=freeHeld.shape==='wall-x'?'wall-z':freeHeld.shape==='wall-z'?'wall-x':freeHeld.shape;rememberFreeBlockPreset();}updateFreeHint();}return;}if(!canPlay()||busy||!held)return;heldAngle=quarter(heldAngle+delta);$('notice').textContent='Drehung: '+heldAngle+'°';}
 function nextModelExtent(current,delta){
  return Math.max(.1,Math.min(2.4,Math.round((current+delta*.1)*100)/100));
 }
-function resizeHeld(delta){if(freeState){if(canPlay()&&freeHeld&&!freeState.editing){resizeFreeObject(freeHeld,delta);updateFreeHint();}return;}
+function resizeHeld(delta){if(freeState){if(canPlay()&&freeHeld&&!freeState.editing){resizeFreeObject(freeHeld,delta);rememberFreeBlockPreset();updateFreeHint();}return;}
  if(!canPlay()||busy||roomModelBusy||lobbyState||lobbyTransition||!held||!spec[held]?.imported||!state.objects[held])return;
  const o=spec[held],next=nextModelExtent(o.extent??o.row.extent,delta);
  if(next===(o.extent??o.row.extent))return;
@@ -675,11 +678,11 @@ $('character-save').onclick=async()=>{if(accountBusy||!studioOpen)return;account
 $('edit-character').onclick=()=>{if(lobbyState||freeState){$('notice').textContent='Bitte zuerst in dein Zimmer zurückkehren.';return;}openStudio(true);};
 $('account-logout').onclick=async()=>{if(accountBusy||!confirm('Vom Spiel abmelden? Dein Zimmer und Charakter bleiben gespeichert.'))return;accountBusy=true;try{await api('/api/account',{action:'logout'});location.reload();}catch(e){$('notice').textContent=e.message;accountBusy=false;}};
 $('start').onclick=()=>enterGame();
-const phonePages={welcome:'welcome',character:'character-editor',home:'phone-page-home',world:'phone-page-world',settings:'phone-page-settings',models:'phone-page-models',inventory:'arsenal',free:'phone-page-free'};
+const phonePages={welcome:'welcome',character:'character-editor',home:'phone-page-home',world:'phone-page-world',settings:'phone-page-settings',models:'phone-page-models',inventory:'arsenal',free:'phone-page-free',flashlight:'phone-page-flashlight'};
 function allowedPhonePage(page,playing,editing){
  if(editing)return 'character';
  if(!playing)return 'welcome';
- return ['home','world','settings','models','inventory','free'].includes(page)?page:'home';
+ return ['home','world','settings','models','inventory','free','flashlight'].includes(page)?page:'home';
 }
 function showPhonePage(page){
  page=allowedPhonePage(page,started,studioOpen);
@@ -688,11 +691,18 @@ function showPhonePage(page){
  $('closephone').hidden=!started||studioOpen;$('phone-home').hidden=!started||studioOpen;
  if(page==='settings'||page==='welcome')$(page==='settings'?'settings-graphics':'login-graphics').append($('phone-graphics'));
  $('free-inventory-items').hidden=!freeState;if(page==='free'){updateFreeUI();if(freeState)void freeRefreshModelLibrary();}
- $('phone').querySelector('.sl-phone-content').scrollTop=0;
+ updateFlashlightUI();$('phone').querySelector('.sl-phone-content').scrollTop=0;
 }
 function updatePhone(){const now=new Date();$('phone-clock').textContent=now.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});$('phone-date').textContent=now.toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'});$('phone-worldstate').textContent=$('worldstate').textContent;$('phone-volume').value=String(Math.round(audio.volume*100));$('phone-sound').checked=audio.enabled;$('phone-volume-label').textContent=Math.round(audio.volume*100)+' %';}
 $('phone-home').onclick=()=>{if(started&&!studioOpen&&$('updater').hidden)showPhonePage('home');};
 $('phone-app-models').onclick=$('world-open-models').onclick=()=>{if(freeState){showPhonePage('free');return;}showPhonePage('models');updateRoomModelUI();void refreshRoomModels(true).catch(e=>{$('room-model-message').textContent=e.message;});};$('phone-app-world').onclick=()=>{showPhonePage('world');updatePhone();};$('phone-app-settings').onclick=()=>{showPhonePage('settings');updatePhone();};$('phone-app-inventory').onclick=()=>arsenal();$('phone-app-free').onclick=()=>showPhonePage('free');
+function updateFlashlightUI(){
+ const button=$('flashlight-toggle');button.setAttribute('aria-pressed',String(flashlightOn));button.textContent=flashlightOn?'Ausschalten':'Einschalten';
+ $('flashlight-status').textContent=flashlightOn?'Taschenlampe ist eingeschaltet':'Taschenlampe ist ausgeschaltet';
+ $('phone-app-flashlight').classList.toggle('torch-active',flashlightOn);
+}
+$('phone-app-flashlight').onclick=()=>showPhonePage('flashlight');
+$('flashlight-toggle').onclick=()=>{if(!started||studioOpen)return;flashlightOn=!flashlightOn;updateFlashlightUI();};
 
 
 // Free World is a separate, authenticated shared scene and server lease.
@@ -736,6 +746,7 @@ function freeTake(h){
  chooseWeapon('none');freeHeld=h;freeHintUntil=performance.now()+4000;updateFreeUI();
  if(!$('phone').hidden)$('closephone').onclick();
 }
+function rememberFreeBlockPreset(){if(freeHeld?.kind==='block'&&!freeHeld.id){freeSize=Math.max(...freeHeld.dims);freeShape=freeHeld.shape;freeHeld.name=freeShapeLabel();}}
 function freeTakeBlock(){freeTake({kind:'block',dims:freeDims(),shape:freeShape,texture:freeTexture||null,name:freeShapeLabel()});}
 function freeTakeModel(){
  const r=freeLibrary.find(r=>r.id===freeModelSource);if(!r)return;
@@ -1205,10 +1216,11 @@ canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.poi
 canvas.addEventListener('contextmenu',e=>{if(canPlay()&&!mobile)e.preventDefault();});
 window.addEventListener('mousedown',e=>{if(e.button===2&&!mobile&&document.pointerLockElement===canvas&&canPlay()){e.preventDefault();if(freeState&&freeHeld)void freeEdit('place');else toggleScope();}});
 window.addEventListener('wheel',e=>{
- if(!canPlay()||lobbyState||(freeState&&freeHeld)||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
+ if(!canPlay()||lobbyState||freeState?.editing||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
+ const slot=wheelInventorySlot(equipped,freeHeld,!!freeState,e.deltaY);if(slot===null)return;
  e.preventDefault();
  const now=performance.now();if(now-lastWheel<140)return;lastWheel=now;
- chooseWeapon(nextWeapon(equipped,e.deltaY));
+ if(slot==='block')freeTakeBlock();else chooseWeapon(slot);
 },{passive:false});
 window.addEventListener('pointerup',e=>{if(triggerPointer===null||triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('pointercancel',releaseTrigger);
@@ -1377,6 +1389,7 @@ function frame(now,xrFrame){
     else{player.x=pose.x;player.z=pose.z;player.y=pose.y;player.vy=0;posture.yaw=pose.yaw;}
   }
   let d=dir(),eye=playerEye(),target=eye.map((v,i)=>v+d[i]);
+  const torch=started&&flashlightOn&&!vr&&!posture?.sleeping?{origin:eye,direction:d}:null;
   if(!first&&!vr&&!posture){let t=eye.map((v,i)=>v-d[i]*2.1);if(!coll(t[0],t[2])){eye=t;target=eye.map((v,i)=>v+d[i]);}}
   renderer.begin();
   if(freeState){
@@ -1385,7 +1398,7 @@ function frame(now,xrFrame){
     $('free-time').textContent=String(hours).padStart(2,'0')+':'+String(minutes).padStart(2,'0');
     freeView.step(dt,player,accountProfile,!first&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5,renderer.weaponModels,equipped);
     if(canPlay()&&freeHeld)freeView.showPreview(freeCandidate(freeHeld),freeHeld,loadFreeHeldModel);else freeView.showPreview(null);
-    audio.listener(eye,d);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom,false,freeView.scene);
+    audio.listener(eye,d);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom,false,freeView.scene,torch);
     updateMinimap(now,vr);
     if(now-lastInteractionHint>=100){lastInteractionHint=now;updateInteractionHint(vr);}return;
   }
@@ -1393,7 +1406,7 @@ function frame(now,xrFrame){
     renderer.setHotelOpenings(lobbyState.slot,{},true);
     renderer.lobby.step(dt,player,!first&&!vr&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5);
     audio.listener(eye,d);updateGreeting(now,eye,d);
-    renderer.equip(null,false);renderer.render(canvas,eye,target,mobile,dt,player,false,true);
+    renderer.equip(null,false);renderer.render(canvas,eye,target,mobile,dt,player,false,true,null,torch);
     updateMinimap(now,vr);
     if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}
     return;
@@ -1414,7 +1427,7 @@ function frame(now,xrFrame){
   const third=!first&&!vr&&!posture&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5;
   renderer.showCharacter(player,third&&started,dt,!posture&&(keys.has('KeyW')||keys.has('KeyA')||keys.has('KeyS')||keys.has('KeyD')||Math.hypot(...touchMove)>.05),started&&!vr,{posture,weapon:equipped});
   renderer.syncMarks(state.marks||[]);
-  if(started&&active)audio.listener(eye,d);renderer.equip(equipped,first&&started&&!scopeZoom);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom);
+  if(started&&active)audio.listener(eye,d);renderer.equip(equipped,first&&started&&!scopeZoom);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom,false,null,torch);
   updateMinimap(now,vr);
   if(performance.now()-lastInteractionHint>=100){lastInteractionHint=performance.now();updateInteractionHint(vr);}
 }

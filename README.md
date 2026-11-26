@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.11.5 · Hotel Service Build Fix**
+**v0.14.6 · Inventory Wheel & Phone Flashlight**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.14.6 – Mausrad-Inventar und Taschenlampe
+
+In der [Free World](docs/FREE-WORLD.md) lässt sich der Baublock über das Mausrad auswählen und wieder ablegen. Das virtuelle Smartphone besitzt eine Taschenlampen-App mit lokaler 3D-Beleuchtung im Hotel und in der Free World. Die Lampe folgt der Blickrichtung und bleibt bei geschlossenem Smartphone aktiv. Die vollständige Entwicklungshistorie steht im [Changelog](CHANGELOG.md).
 
 ## Neu in 0.11.5 – Build-Fix für Namensschilder
 
