@@ -1,4 +1,4 @@
-# Free World (0.15.14)
+# Free World (0.15.15)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -76,3 +76,6 @@ The six ground floors have a server-defined layout with 80 furniture items, stab
 
 ## Shared seating (0.15.14)
 Aim at a furnished chair within 2.5 m and use E (or the touch interaction) to sit. The server owns the seat ID, floor anchor, facing direction, and occupancy. Look around freely, switch camera using V, and press E again to stand. Movement, equipment and building edits are disabled while seated. The server validates the approach and selects an unobstructed exit position; a blocked exit leaves the player seated. Destroyed seats or missing support release occupants; if no nearby safe exit exists the normal spawn is used. Disconnect and respawn release occupancy. Seated player poses are synchronized, using the existing hotel rig overlay; hotel seating and NPC routines remain unchanged. Only the provided village chairs are supported, not arbitrary imported models.
+
+## Dynamic weather (0.15.15)
+Snapshots include the server wall-clock `weatherTime`, aligned with `dayPhase`. All clients derive an eight-minute continuous repeating clear/cloudy/rain/thunder/clearing cycle and five deterministic distant lightning events per storm. Shader clouds drift; rain uses at most 1,400 reusable local streaks, clipped by spatially indexed existing solid collision geometry (half-metre shelter samples, exact query for indoor audio). Fog, daylight and lamps respond to weather. Thunder is delayed and rain audio is filtered/attenuated under cover; both use synthesized local audio and existing sound settings. No new downloads, damage, precipitation persistence, or extra shadow maps. Weather is visible in the Free World HUD; other areas remain unchanged.

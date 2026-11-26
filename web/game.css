@@ -194,3 +194,5 @@ body:has(#phone:not([hidden])) #free-hud{display:none!important}
   .mobile.free-playing:has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden])) #actions{bottom:max(76px,calc(env(safe-area-inset-bottom) + 68px))}
   .mobile.free-playing:has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden]) #held-mount:not([hidden])) #actions{bottom:max(118px,calc(env(safe-area-inset-bottom) + 110px))}
 }
+
+.fw-time-weather{display:flex;flex-direction:column;align-items:flex-end;gap:2px;white-space:nowrap}#free-weather{color:#b6cddd;font-size:10px;line-height:1.1}.mobile #free-weather{font-size:9px}

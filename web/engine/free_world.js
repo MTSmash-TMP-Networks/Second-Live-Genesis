@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import layout from './free_world_layout.json';
 import {RoomModels} from './room_customization.js';
 import {VillageView} from './village.js';
+import {FreeWeather} from './free_weather.js';
 import {VillageNpcMotion,villageFallPose,villagePrismOverlap,villagePrismRay,villagePrismTop,villageSurfaceIntact,patchVillageShader} from './village_damage.js';
 import {FreeWorldImpactMarks} from './impact_marks.js';
 import {villageTreeParts} from './village_landscape.js';
@@ -170,6 +171,7 @@ export class FreeWorldView{
   this.sky.add(new THREE.Mesh(new THREE.SphereGeometry(420,32,20),skyMat));this.skyMat=skyMat;
   this.sun=new THREE.Mesh(new THREE.SphereGeometry(7,24,16),new THREE.MeshBasicMaterial({color:0xffdf99,toneMapped:false}));
   this.moon=new THREE.Mesh(new THREE.SphereGeometry(4.5,24,16),new THREE.MeshBasicMaterial({color:0xe3eaff,toneMapped:false}));this.sky.add(this.sun,this.moon);
+  this.weather=new FreeWeather(this.scene,this.sky,freeBox,freeRay);
   this.phase=0.5;this.phaseTime=0;this.effects=new ShotEffects(this.scene,Math.max(...Object.values(layout.weaponReach)));this.models=new RoomModels(this.scene);this.models.root.name='Shared Free World models';this.modelRefs=new Map();
   this.heldModels=new RoomModels(this.scene);this.heldModels.root.name='Local object placement preview';this.heldModels.root.visible=false;this.heldAsset=null;
   this.cube=new THREE.BoxGeometry(1,1,1);this.materials=new Map();this.textures=new Map();this.meshes=[];this.peers=new Map();this.local=null;this.revision=-1;this.generation=0;
@@ -186,20 +188,27 @@ export class FreeWorldView{
   const outline=new THREE.LineSegments(new THREE.EdgesGeometry(this.cube),new THREE.LineBasicMaterial({color:0x138a78,transparent:true,opacity:.92}));this.preview.add(outline);
   this.hitFlash=0;
  }
- syncClock(phase,now){if(Number.isFinite(phase)){this.phase=phase;this.phaseTime=now;}}
+ syncClock(phase,now,weatherTime){if(Number.isFinite(phase)){this.phase=phase;this.phaseTime=now;}this.weather.sync(weatherTime,now);}
+ setWeatherObstacles(rows){this.weather.setObstacles(rows);}
  updateSky(now,player){
   const phase=(this.phase+Math.max(0,now-this.phaseTime)/1000/layout.daySeconds)%1,s=freeSkyState(phase),d=new THREE.Vector3(...s.direction).normalize();
   this.sky.position.set(player.x,player.y,player.z);this.sun.position.copy(d).multiplyScalar(395);this.moon.position.copy(d).multiplyScalar(-395);
+  const weather=this.weather.update(now,player,s);
   this.sun.visible=d.y>-.04;this.moon.visible=d.y<.04;
   const top=new THREE.Color(0x08142f).lerp(new THREE.Color(0x4e99d5),s.day),horizon=new THREE.Color(0x15233c).lerp(new THREE.Color(0xcadfec),s.day).lerp(new THREE.Color(0xf5a06b),s.twilight*.72);
+  const overcast=weather.cloud*.42+weather.storm*.35;
+  top.lerp(new THREE.Color(0x142338).lerp(new THREE.Color(0x7b8999),s.day),overcast).lerp(new THREE.Color(0xd5e7ff),weather.flash*.21);
+  horizon.lerp(new THREE.Color(0x1c2636).lerp(new THREE.Color(0x9da9b3),s.day),overcast).lerp(new THREE.Color(0xe0ecff),weather.flash*.18);
+  this.scene.fog.near=145-105*weather.rain;this.scene.fog.far=330-205*weather.rain;
   this.skyMat.uniforms.top.value.copy(top);this.skyMat.uniforms.horizon.value.copy(horizon);this.scene.background.copy(horizon);this.scene.fog.color.copy(horizon);
-  this.sunlight.castShadow=d.y>.16;
+  this.sunlight.castShadow=d.y>.16&&weather.cloud<.86;
   this.sunlight.target.position.set(Math.round(player.x/2)*2,0,Math.round(player.z/2)*2);
-  this.sunlight.position.copy(this.sunlight.target.position).addScaledVector(d,95);this.sunlight.color.set(0xfff4dc).lerp(new THREE.Color(0xffa76b),s.twilight*.75);this.sunlight.intensity=2.1*Math.max(0,d.y)**.45;
-  this.moonlight.position.copy(d).multiplyScalar(-150);this.moonlight.intensity=.22*s.night;
-  this.hemi.color.set(0x99b3ec).lerp(new THREE.Color(0xffffff),s.day);this.hemi.intensity=.20+1.6*s.day;
-  this.village.roads.setNight(s.night);
-  this.village.interior.setNight(s.night,player);
+  this.sunlight.position.copy(this.sunlight.target.position).addScaledVector(d,95);this.sunlight.color.set(0xfff4dc).lerp(new THREE.Color(0xffa76b),s.twilight*.75);this.sunlight.intensity=2.1*Math.max(0,d.y)**.45*(1-.78*weather.cloud)*(1-.25*weather.storm);
+  this.moonlight.position.copy(d).multiplyScalar(-150);this.moonlight.intensity=.22*s.night*(1-.7*weather.cloud);
+  this.hemi.color.set(0x99b3ec).lerp(new THREE.Color(0xffffff),s.day);this.hemi.intensity=(.20+1.6*s.day)*(1-.38*weather.cloud-.20*weather.storm)+weather.flash*.9;
+  const darkness=Math.max(s.night,weather.storm*.72);
+  this.village.roads.setNight(darkness);
+  this.village.interior.setNight(darkness,player);
   return phase;
  }
  material(id,load,hp=100){
@@ -369,6 +378,7 @@ export class FreeWorldView{
   }else if(this.local)this.local.visible=false;
  }
  clear(){
+  this.weather.clear();
   this.impactMarks.clearWorld();for(const root of this.impactProxies.values())root.removeFromParent();this.impactProxies.clear();
   this.generation++;this.revision=-1;this.village.rubble.clear();this.showPreview(null);this.sync([]);this.models.clear();this.modelRefs.clear();
   while(this.effects.items.length)this.effects.remove(0);this.effects.light.intensity=0;

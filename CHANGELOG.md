@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.15 – Dynamic Weather
+- Gemeinsamer dynamischer Wetterzyklus in der Free World: heiter, bewölkt, Regen, Gewitter und Aufklarung. Weiche Übergänge, animierte prozedurale Wolken, lokale windbewegte Regenstreifen, entfernte Blitze, angepasste Sichtweite und Beleuchtung. Der vorhandene Tag-/Nacht-Zyklus bleibt unabhängig erhalten.
+- Dächer und selbst gebaute Unterstände schützen vor Regen anhand der vorhandenen Kollisionsgeometrie. Zerstörte Dächer lassen Regen wieder durch. Regengeräusch und verzögerter Donner werden lokal synthetisiert; drinnen gedämpft und über die vorhandene Lautstärke steuerbar. Wetteranzeige im HUD. Keine zusätzlichen Schattenkarten oder externen Assets, kein Gewitterschaden.
+
 ## 0.15.14 – Shared Seating
 - Stühle in den Dorfhäusern und im Café mit E bzw. Touch benutzbar. Gemeinsame Sitzplatzbelegung, serverseitig geprüfte Sitzposition und freier Aufstehplatz. Sitzpose aus dem Hotel auf die vorhandene Stuhlhöhe und Ausrichtung angepasst, inklusive abgesenkter Kamera und Darstellung für Mitspieler. Aufstehen bei zerstörtem Sitz oder Boden; Freigabe bei Respawn und Verbindungsende. Keine Änderungen am Hotel, NPC-Routen oder den Gebäudemodellen.
 

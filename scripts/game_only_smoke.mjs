@@ -450,3 +450,9 @@ assert.ok(updater.includes('Kein manueller Import erforderlich.'));
  assert.ok(game.includes('!posture&&!freeState?.seat&&!lobbyTransition'));
  assert.ok(game.includes('renderer.weaponModels,equipped,freeState.seat)'));
 }
+
+assert.ok(ids.includes('free-weather'));
+assert.ok(game.includes('freeView.syncClock(result.dayPhase,s.lastOK,result.weatherTime)'));
+assert.ok(game.includes('freeView.setWeatherObstacles(s.obstacles)'));
+assert.ok(game.includes('audio.weather(weather.rain,weather.sheltered,weather.thunder)'));
+assert.ok(game.includes('freeState=null;audio.stopWeather()'));

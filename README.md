@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.14 · Shared Seating**
+**v0.15.15 · Dynamic Weather**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.15 – Dynamisches Wetter
+
+Die Free World hat einen gemeinsamen, rund acht Minuten langen Wetterzyklus mit ziehenden Wolken, Regen, Gewittern und anschließender Aufklarung. Sichtweite und Beleuchtung passen sich an; entfernte Blitze und Donner sind rein visuelle beziehungsweise akustische Effekte. Dächer und intakte Baublöcke schützen vor Regen, Regengeräusche sind drinnen gedämpft. Das Wetter steht im HUD. Tag-/Nacht-Zyklus und Hotel bleiben unverändert.
 
 ## Neu in 0.15.14 – Sitzplätze in der Free World
 

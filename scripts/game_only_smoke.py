@@ -359,6 +359,8 @@ class GameOnlyTest(unittest.TestCase):
                 result=req('a',a,'pulse',direction=[1,0,0],weapon=weapon)
                 self.assertTrue(result['shot']['impact'])
             self.assertTrue(0<=result['dayPhase']<1)
+            self.assertTrue(abs(result['weatherTime']-time.time())<5)
+            self.assertAlmostEqual(result['dayPhase'],(result['weatherTime']%1200)/1200)
             self.assertEqual(result['score'],1)
             respawn=req('b',b,'update',position=[2,0,142],yaw=0,revision=result['revision'])
             self.assertEqual(respawn['life'],2);self.assertEqual(respawn['hp'],100)
@@ -802,6 +804,23 @@ class GameOnlyTest(unittest.TestCase):
             migrated=Village(path,[part['bounds']],lambda:102.)
             self.assertEqual(migrated.structure.parts[key]['stage'],4)
             self.assertFalse(any(p['id']==key for p in migrated.solids()))
+
+    def test_free_world_shared_weather_clock(self):
+        from free_world import FreeWorld,L
+        now=[100.]
+        profile=lambda slot:{'slot':slot,'nickname':'Guest','avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            world=FreeWorld(tmp,lambda:now[0])
+            with patch('free_world.time.time',return_value=1234567.25):
+                a=world.enter('a',profile(0));b=world.enter('b',profile(1))
+                self.assertEqual(a['weatherTime'],1234567.25)
+                self.assertEqual(a['weatherTime'],b['weatherTime'])
+                self.assertEqual(a['dayPhase'],b['dayPhase'])
+                self.assertAlmostEqual(a['dayPhase'],(a['weatherTime']%L['daySeconds'])/L['daySeconds'])
+                c=world.request('a',{'action':'update','lease':a['lease'],'life':a['life'],
+                    'position':a['position'],'yaw':0,'revision':world.revision})
+                self.assertEqual(c['weatherTime'],a['weatherTime'])
+                self.assertNotIn('scenery',c)
 
     def test_free_world_shared_chair_seating(self):
         from free_world import FreeWorld, chair_pose

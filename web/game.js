@@ -834,7 +834,7 @@ function applyFreeSnapshot(s,result,initial=false){
  s.hp=result.hp;s.life=result.life;s.score=result.score;s.online=result.online;s.peers=result.peers||[];s.textures=result.textures||[];
  if(Array.isArray(result.blocks)){s.blocks=result.blocks;s.revision=result.revision;freeView.setBlocks(s.blocks,s.revision,loadFreeTexture,loadFreeModel);if(freeHeld?.id){const b=s.blocks.find(b=>b.id===freeHeld.id);if(!b||!b.hp||b.version!==freeHeld.version){freeHeld=null;$('notice').textContent='Objekt wurde verändert. Bitte erneut aufnehmen.';}}}
  if(Array.isArray(result.scenery)){s.scenery=result.scenery;s.villageRoads=result.villageRoads||[];freeView.village.set(s.scenery,s.villageRoads);}
- if(Array.isArray(result.scenery)||Array.isArray(result.blocks)||!s.obstacles)rebuildFreeObstacles(s);
+ if(Array.isArray(result.scenery)||Array.isArray(result.blocks)||!s.obstacles){rebuildFreeObstacles(s);freeView.setWeatherObstacles(s.obstacles);}
  if(Array.isArray(result.impacts))s.impacts=result.impacts;
  freeView.syncImpactMarks(s.impacts||[],s.blocks,s.scenery||[]);
  s.npcs=result.npcs||[];
@@ -845,7 +845,7 @@ function applyFreeSnapshot(s,result,initial=false){
    renderer.shot('pistol',npc.shot,freeView.effects);audio.play('shot',null,0);
   }
  }
- s.npcShots=nextShots;freeView.sync([...s.peers,...s.npcs,...(result.corpses||[])]);s.lastOK=performance.now();freeView.syncClock(result.dayPhase,s.lastOK);
+ s.npcShots=nextShots;freeView.sync([...s.peers,...s.npcs,...(result.corpses||[])]);s.lastOK=performance.now();freeView.syncClock(result.dayPhase,s.lastOK,result.weatherTime);
  if(result.notice)$('notice').textContent=result.notice;
  updateWorldStatus();updateFreeUI();
 }
@@ -872,7 +872,7 @@ async function leaveFreeWorld(){
   if(s.pending)await s.pending.catch(()=>{});
   const result=await freeRequest({action:'leave',lease:s.lease});
   if(freeState!==s)return;
-  chooseWeapon('none');freeState=null;freeView?.clear();document.body.classList.remove('free-playing','free-armed');$('free-hud').hidden=true;
+  chooseWeapon('none');freeState=null;audio.stopWeather();freeView?.clear();document.body.classList.remove('free-playing','free-armed');$('free-hud').hidden=true;
   lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
   resetHotelViews();renderer.lobby.restoreProjection();renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);renderer.lobby.syncNpc(result.npc);renderer.syncHallFacades(result.facades||[],result.slot,state);
   Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0,stance:'walk',eyeHeight:1.65});
@@ -1502,6 +1502,8 @@ function frame(now,xrFrame){
     $('npc-greeting').hidden=true;renderer.equip(equipped,first&&!scopeZoom);
     const phase=freeView.updateSky(now,player),hours=Math.floor(phase*24),minutes=Math.floor(phase*1440)%60;
     $('free-time').textContent=String(hours).padStart(2,'0')+':'+String(minutes).padStart(2,'0');
+    const weather=freeView.weather.state;$('free-weather').textContent=weather.label;
+    if(document.hidden||!document.hasFocus()||!$('phone').hidden)audio.stopWeather();else audio.weather(weather.rain,weather.sheltered,weather.thunder);
     freeView.step(dt,player,accountProfile,!first&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5,renderer.weaponModels,equipped,freeState.seat);
     if(canPlay()&&freeHeld)freeView.showPreview(freeCandidate(freeHeld),freeHeld,loadFreeHeldModel);else freeView.showPreview(null);
     audio.listener(eye,d);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom,false,freeView.scene,torch);

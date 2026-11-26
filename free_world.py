@@ -186,8 +186,9 @@ class FreeWorld:
             return [{'id':i,'name':n} for i,n in db.execute('SELECT id,name FROM textures WHERE owner=? ORDER BY rowid',(player,))]
     def snapshot(self,player,row,revision=-1,corrected=False,notice=''):
         self.release_invalid_seats(self.clock())
+        wall_time=time.time()
         peers=[{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life','score','weapon')},'seat':r.get('seat')} for key,r in self.players.items() if key!=player]
-        out={'slot':row['slot'],'hp':row['hp'],'life':row['life'],'score':row['score'],'position':row['position'],'yaw':row['yaw'],'corrected':corrected,'peers':peers,'online':len(self.players),'revision':self.revision,'notice':notice,'seat':row.get('seat'),'textures':self.own_textures(player),'dayPhase':(time.time()%L['daySeconds'])/L['daySeconds']}
+        out={'slot':row['slot'],'hp':row['hp'],'life':row['life'],'score':row['score'],'position':row['position'],'yaw':row['yaw'],'corrected':corrected,'peers':peers,'online':len(self.players),'revision':self.revision,'notice':notice,'seat':row.get('seat'),'textures':self.own_textures(player),'dayPhase':(wall_time%L['daySeconds'])/L['daySeconds'],'weatherTime':wall_time}
         out['npcs']=self.village.snapshot()
         out['corpses']=self.village.corpses(self.clock())
         if revision!=self.revision:

@@ -798,3 +798,62 @@ console.log('Village furniture meshes, collision, repair and interior lighting v
  disposeCharacter(avatar);
 }
 console.log('Free World chair pose and standing restoration verified');
+
+import {WEATHER_SECONDS,freeWeatherState,WeatherClock,RainShelter,FreeWeather} from './free_weather.js';
+import {rainLoopWave,soundWave} from './audio.js';
+
+{
+ const period=WEATHER_SECONDS,base=period*3712345;
+ assert.equal(freeWeatherState(base+40).label,'Heiter');
+ assert.equal(freeWeatherState(base+128).label,'Bewölkt');
+ assert.equal(freeWeatherState(base+200).label,'Regen');
+ assert.equal(freeWeatherState(base+300).label,'Gewitter');
+ assert.equal(freeWeatherState(base+470).rain,0);
+ for(let t=0;t<period;t+=.1){
+  const s=freeWeatherState(base+t),next=freeWeatherState(base+t+.1);
+  assert.ok([s.cloud,s.rain,s.storm,s.flash].every(v=>Number.isFinite(v)&&v>=0&&v<=1));
+  assert.ok(Math.abs(next.cloud-s.cloud)<.01&&Math.abs(next.rain-s.rain)<.01&&Math.abs(next.storm-s.storm)<.015);
+ }
+ assert.ok(Math.abs(freeWeatherState(base+period-.001).cloud-freeWeatherState(base+period).cloud)<1e-6);
+ const flashes=new Set();
+ for(let t=264;t<342;t+=.025){const s=freeWeatherState(base+t);if(s.flash>0){assert.ok(s.strike&&s.strike.age<.42);flashes.add(s.strike.id);}}
+ assert.equal(flashes.size,5);
+ const a=new WeatherClock(),b=new WeatherClock();a.sync(base,1000);b.sync(base,9000);
+ assert.equal(a.time(1200),b.time(9200));
+ a.sync(base+.19,1200);assert.ok(a.time(1200)>=base+.2-1e-7);
+ a.sync(base+5,1400);assert.equal(a.time(1400),base+5);
+ a.reset();assert.equal(a.time(2000),0);
+ const roof={id:'roof',bounds:[[-25,6,-25],[50,.5,50]],hp:100};
+ const shelter=new RainShelter(b=>b.bounds,freeRay);
+ shelter.set([roof]);assert.equal(shelter.height(0,0),6.5);assert.equal(shelter.height(0,0,true),6.5);assert.equal(shelter.height(40,0),0);
+ roof.hp=0;shelter.set([roof]);assert.equal(shelter.height(0,0),0);roof.hp=100;
+ const scene=new THREE.Scene(),sky=new THREE.Group(),weather=new FreeWeather(scene,sky,b=>b.bounds,freeRay);scene.add(sky);
+ weather.setObstacles([roof]);weather.sync(base+300,1000);
+ let state=weather.update(1000,{x:0,y:0,z:0},{day:1,twilight:0});
+ assert.ok(state.sheltered&&state.rain===1&&weather.rain.visible);
+ assert.ok(weather.rainGeometry.drawRange.count>0&&weather.rainGeometry.drawRange.count<=2800);
+ for(let i=0;i<weather.rainGeometry.drawRange.count;i++)assert.ok(weather.positions[i*3+1]>=6.5);
+ roof.hp=0;weather.setObstacles([roof]);
+ state=weather.update(1050,{x:0,y:0,z:0},{day:1,twilight:0});
+ assert.ok(!state.sheltered);assert.ok(Array.from({length:weather.rainGeometry.drawRange.count/2},(_,i)=>weather.positions[i*6+1]).some(y=>y<6));
+ let event=null;for(let t=264;t<290;t+=.02){const s=freeWeatherState(base+t);if(s.flash>.2){event={time:base+t-s.strike.age,...s.strike};break;}}
+ assert.ok(event);
+ weather.clear();weather.sync(event.time+.18,2000);weather.update(2000,{x:event.x,y:0,z:event.z},{day:0,twilight:0});
+ assert.ok(weather.bolt.visible);assert.equal(weather.boltGeometry.drawRange.count,44);
+ assert.ok([...weather.boltPositions].every(Number.isFinite));
+ let thunder=0;for(let i=1;i<=180;i++){state=weather.update(2000+i*1000/60,{x:event.x,y:0,z:event.z},{day:0,twilight:0});if(state.thunder)thunder++;}
+ assert.equal(thunder,1);
+ weather.clear();assert.ok(!weather.rain.visible&&!weather.bolt.visible);assert.equal(weather.rainGeometry.drawRange.count,0);
+}
+{
+ for(const rate of [16000,44100,48000]){
+  const rain=rainLoopWave(rate),thunder=soundWave('thunder',rate);
+  assert.equal(rain.length,rate*4);assert.equal(thunder.length,Math.ceil(rate*3.2));
+  assert.ok(rain.every(x=>Number.isFinite(x)&&Math.abs(x)<1));
+  assert.ok(thunder.every(x=>Number.isFinite(x)&&Math.abs(x)<=.851));
+  assert.ok(Math.abs(rain[0]-rain.at(-1))<.5);
+  assert.ok(thunder.some(x=>Math.abs(x)>.025));assert.equal(thunder[0],0);
+ }
+}
+
+console.log('Free World weather cycle, lightning, shelters and audio checks passed');
