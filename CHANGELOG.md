@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.16 – Dynamic Weather Hotfix
+- Audio-Hüllkurve erzeugt an stillen Grenzen kanonisches `0` statt `-0`. Behebt den strikten Donner-Smoke-Test im Docker-Build, ohne die Testprüfung abzuschwächen oder den Klang zu ändern.
+- Regressionstest für alle sieben synthetisierten Soundeffekte, vier Varianten und drei Abtastraten (16, 44,1 und 48 kHz). Wetter und übrige Spielfunktionen bleiben unverändert.
+
 ## 0.15.15 – Dynamic Weather
 - Gemeinsamer dynamischer Wetterzyklus in der Free World: heiter, bewölkt, Regen, Gewitter und Aufklarung. Weiche Übergänge, animierte prozedurale Wolken, lokale windbewegte Regenstreifen, entfernte Blitze, angepasste Sichtweite und Beleuchtung. Der vorhandene Tag-/Nacht-Zyklus bleibt unabhängig erhalten.
 - Dächer und selbst gebaute Unterstände schützen vor Regen anhand der vorhandenen Kollisionsgeometrie. Zerstörte Dächer lassen Regen wieder durch. Regengeräusch und verzögerter Donner werden lokal synthetisiert; drinnen gedämpft und über die vorhandene Lautstärke steuerbar. Wetteranzeige im HUD. Keine zusätzlichen Schattenkarten oder externen Assets, kein Gewitterschaden.

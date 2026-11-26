@@ -34,7 +34,10 @@ export function soundWave(kind,rate,variant=0){
     else if(kind==='door')v=(.24*low+.10*Math.sin(2*Math.PI*(118+30*t)*t))*Math.sin(Math.PI*t/duration)*Math.exp(-t*2);
     else if(kind==='phone')v=.19*Math.sin(2*Math.PI*(660+variant*90)*t)*Math.exp(-t*47);
     else v=(.37*n+.11*Math.sin(2*Math.PI*1200*t))*Math.exp(-t*86);
-    out[i]=Math.max(-.85,Math.min(.85,v))*Math.min(1,t/.001,(duration-t)/.012);
+    const envelope=Math.min(1,t/.001,(duration-t)/.012);
+    // Explicit positive zero at silent envelope boundaries: negative noise
+    // multiplied by zero would otherwise store -0 in the Float32Array.
+    out[i]=envelope===0?0:Math.max(-.85,Math.min(.85,v))*envelope;
   }return out;
 }
 export class GameAudio {

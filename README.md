@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.15 · Dynamic Weather**
+**v0.15.16 · Dynamic Weather Hotfix**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.16 – Wetter-Hotfix
+
+Die synthetisierten Soundeffekte beginnen garantiert mit einem positiven Nullsample. Der strikte Audio-Smoke-Test für Regen und Donner bleibt aktiv und prüft zusätzlich alle Soundvarianten bei 16, 44,1 und 48 kHz. Damit ist der Signed-Zero-Fehler im Docker-Build behoben; Wetterzyklus und bestehende Spielfunktionen bleiben unverändert.
 
 ## Neu in 0.15.15 – Dynamisches Wetter
 

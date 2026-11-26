@@ -853,6 +853,15 @@ import {rainLoopWave,soundWave} from './audio.js';
   assert.ok(thunder.every(x=>Number.isFinite(x)&&Math.abs(x)<=.851));
   assert.ok(Math.abs(rain[0]-rain.at(-1))<.5);
   assert.ok(thunder.some(x=>Math.abs(x)>.025));assert.equal(thunder[0],0);
+  // Every synthesized effect and variant must start at canonical silence.
+  // Keep the strict zero assertion so signed-zero regressions cannot slip through.
+  for(const kind of ['shot','click','reload','impact','phone','door','thunder']){
+   for(let variant=0;variant<4;variant++){
+    const wave=kind==='thunder'&&variant===0?thunder:soundWave(kind,rate,variant);
+    assert.equal(wave[0],0,`${kind} variant ${variant} at ${rate} Hz`);
+    assert.ok(wave.every(Number.isFinite));
+   }
+  }
  }
 }
 
