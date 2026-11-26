@@ -523,6 +523,37 @@ class GameOnlyTest(unittest.TestCase):
             self.assertAlmostEqual(trail[-1][0],row['motionTime'])
             self.assertTrue(row['moving'])
 
+    def test_village_sidewalk_patrols_and_spawn_fallback(self):
+        from village import Village, NPC_STEP, NPC_SIDEWALKS, NPC_PATROL_SEEDS, SIDEWALK_Y, sidewalk_height
+        from village_structure import prism_overlap
+        now=[100.]
+        with tempfile.TemporaryDirectory() as tmp:
+            village=Village(Path(tmp)/'sidewalk.sqlite3',[],lambda:now[0])
+            self.assertEqual(len(village.npcs),4)
+            players={'observer':{'position':[-65.,0.,-30.]}}
+            def body(p):
+                return [p[0]-.25,p[1]+.015,p[2]-.25],[.5,1.585,.5]
+            def blocked(p):
+                return any(prism_overlap(*body(p),o) for o in village.solids())
+            extremes={n['slot']:[n['position'][2],n['position'][2]] for n in village.npcs}
+            for _ in range(800):
+                now[0]+=NPC_STEP
+                village.tick(now[0],players,blocked,lambda *a:math.inf,village.solids,body,[0,0,0])
+                for j,npc in enumerate(village.npcs):
+                    x,y,z=npc['position'];lane=NPC_SIDEWALKS[NPC_PATROL_SEEDS[j][0]]
+                    self.assertAlmostEqual(x,lane['x'])
+                    self.assertEqual(y,SIDEWALK_Y)
+                    self.assertEqual(sidewalk_height(x,z),y)
+                    self.assertLessEqual(abs(z-lane['z']),lane['d']/2-.25)
+                    self.assertFalse(blocked(npc['position']))
+                    lo,hi=extremes[npc['slot']];extremes[npc['slot']]=[min(lo,z),max(hi,z)]
+            self.assertTrue(all(hi-lo>9.8 for lo,hi in extremes.values()))
+        with tempfile.TemporaryDirectory() as tmp:
+            x=NPC_SIDEWALKS[0]['x'];z=NPC_PATROL_SEEDS[0][1]
+            village=Village(Path(tmp)/'blocked.sqlite3',[([x-.5,0,z-.4],[1,2,.8])],lambda:10.)
+            self.assertEqual(len(village.npcs),4)
+            self.assertEqual(village.npcs[0]['home'],[x,SIDEWALK_Y,z+1])
+
     def test_hidden_village_damage_retaliation_and_migration(self):
         from free_world import FreeWorld
         from village import Village, make_scenery

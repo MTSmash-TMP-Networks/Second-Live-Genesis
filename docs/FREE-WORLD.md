@@ -1,4 +1,4 @@
-# Free World (0.15.6)
+# Free World (0.15.7)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -52,3 +52,6 @@ The village NPC flag is supplied before animation loading, so the same in-place 
 
 ## Natural NPC gait (0.15.6)
 Village NPCs walk at 1.35 m/s and send up to 32 confirmed samples at the 20 Hz simulation rate, including heading and pace. The client interpolates a delayed trajectory with a 500 ms target buffer and gentle clock correction, derives stride playback from the whole movement segment, and keeps idle and walk clips alive with complementary weights. A brief stop does not restart the walk cycle. Frame-time handling supports rendering down to 4 FPS before the safety cap applies; tests exercise 8 to 144 FPS. The turn pause is 650 ms; hotel NPCs and death/respawn behavior are unchanged. The original GLB appearance still requires a visual game check.
+
+## Sidewalk patrols and streetlights (0.15.7)
+Two NPCs patrol on each of the two longitudinal sidewalks. Their default routes and spawn fallback positions stay on the sidewalk at 0.075 m above terrain. Pursuit may leave the sidewalk; after combat the NPC returns to its normal route. Eight staggered warm point lights (17 m range) illuminate the village locally. The sky's night factor smoothly controls illumination and emissive intensity. All streetlights turn off in daylight, and they use no additional shadow maps. The world sky, movement interpolation, NPC animations and persistent builds are unchanged.

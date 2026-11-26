@@ -580,3 +580,28 @@ for(const fps of [8,15,30,60,144]){
 }
 
 console.log('Village NPC continuous gait, animation blending and low-FPS playback verified');
+
+{
+ const root=new THREE.Group(),cube=new THREE.BoxGeometry(1,1,1);
+ const roads=new VillageRoads(root,(r,p,s,m)=>{const o=new THREE.Mesh(cube,m);o.position.set(...p);o.scale.set(...s);r.add(o);return o;});
+ const plan=[{x:-65,z:-30,w:7,d:57,kind:'street'},{x:-69.57,z:-30,w:2,d:57,kind:'walk'},{x:-60.43,z:-30,w:2,d:57,kind:'walk'}];
+ roads.set(plan);
+ assert.equal(roads.lights.length,8);
+ assert.ok(roads.lights.every(l=>l.isPointLight&&l.intensity===0&&!l.visible&&!l.castShadow));
+ assert.ok(roads.lights.every(l=>l.distance===17&&l.decay===2&&l.position.y===3.2));
+ assert.equal(new Set(roads.lights.map(l=>l.position.x+','+l.position.z)).size,8);
+ roads.setNight(.5);assert.ok(roads.lights[0].intensity>0&&roads.lights[0].intensity<115);
+ roads.setNight(1);assert.ok(roads.lights.every(l=>l.visible&&l.intensity===115));assert.ok(roads.lamp.emissiveIntensity>2);
+ for(let x=-70.57;x<=-59.43;x+=.5)for(let z=-58.5;z<=-1.5;z+=.5){
+  const contribution=roads.lights.reduce((sum,l)=>{const d=Math.hypot(x-l.position.x,z-l.position.z,l.position.y);const cutoff=Math.max(0,1-(d/l.distance)**4)**2;return sum+l.intensity*cutoff*l.position.y/(d*d*d);},0);
+  assert.ok(contribution>.1,'street and sidewalk are within the modeled local light coverage');
+ }
+ const old=roads.lights.slice();roads.set(plan);assert.ok(roads.lights.every((l,i)=>l===old[i]));
+ roads.set(plan.concat({x:-65,z:-1,w:3,d:18,kind:'path'}));
+ assert.equal(roads.lights.length,8);assert.ok(roads.lights.every(l=>l.intensity===115));
+ roads.setNight(0);assert.ok(roads.lights.every(l=>!l.visible&&l.intensity===0));
+ assert.equal(roads.lamp.emissiveIntensity,.12);
+ roads.set([]);assert.equal(roads.lights.length,0);
+ cube.dispose();
+}
+console.log('Village streetlights: day/night, staggered coverage and scene rebuild checks passed');

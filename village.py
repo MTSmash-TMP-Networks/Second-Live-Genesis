@@ -33,6 +33,14 @@ ROADS=[
     {'x':-65,'z':-28,'w':7,'d':3.1,'kind':'crosswalk'},
 ]
 
+# The two continuous sidewalks are derived from the actual village road plan.
+NPC_SIDEWALKS=tuple(sorted((r for r in ROADS if r['kind']=='walk' and r['d']>r['w']),key=lambda r:r['x']))
+NPC_PATROL_SEEDS=((0,-48.),(1,-33.),(0,-18.),(1,-8.))
+SIDEWALK_Y=.075
+
+def sidewalk_height(x,z):
+    return SIDEWALK_Y if any(r['kind']=='walk' and abs(x-r['x'])<=r['w']/2 and abs(z-r['z'])<=r['d']/2 for r in ROADS) else 0.
+
 def overlap(a,s,b,t):
     return all(x<y+v and x+u>y for x,u,y,v in zip(a,s,b,t))
 
@@ -91,9 +99,13 @@ class Village:
                         self.regrow_at[key]=due
         self.structure=VillageStructure(path,self.rows.values())
         self.npcs=[]
-        for i,(x,z) in enumerate([(-65,-48),(-67,-33),(-63,-18),(-65,-8)]):
-            candidates=([x+dx,0.,z+dz] for dx,dz in ((0,0),(2,0),(-2,0),(0,2),(0,-2),(2,3),(-2,-3)))
-            home=next((p for p in candidates if not any(overlap([p[0]-.3,0.,p[2]-.3],[.6,1.6,.6],*box) for box in blocks)),None)
+        for i,(side,z) in enumerate(NPC_PATROL_SEEDS):
+            lane=NPC_SIDEWALKS[side];x=lane['x']
+            # Move only along the sidewalk if the preferred spawn is occupied.
+            # Leave sufficient room for the full ten-metre patrol.
+            candidates=([x,SIDEWALK_Y,z+dz] for dz in (0,1,-1,2,-2,3,-3)
+                        if abs(z+dz-lane['z'])<=lane['d']/2-5.4)
+            home=next((p for p in candidates if not any(overlap([p[0]-.3,p[1],p[2]-.3],[.6,1.6,.6],*box) for box in blocks)),None)
             if home is None:continue
             self.npcs.append({'slot':-100-i,'nickname':f'Test-NPC {i+1}','avatar':{'model':i+1,'height':1},
                 'position':home[:],'home':home,'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,
@@ -177,7 +189,7 @@ class Village:
             if target and math.hypot(target['position'][0]-home[0],target['position'][2]-home[2])>25:target=None
             if not target:
                 npc.update(target=None,weapon=None,stance='walk')
-                goal=[home[0],0,home[2]+(5 if npc['route']==0 else -5)]
+                goal=[home[0],home[1],home[2]+(5 if npc['route']==0 else -5)]
             else:
                 goal=target['position'];npc['stance']='walk';npc['weapon']='pistol'
             dx,dz=goal[0]-p[0],goal[2]-p[2];dist=math.hypot(dx,dz)
@@ -186,7 +198,7 @@ class Village:
             if not target and dist<=.06:
                 npc['route']=1-npc['route']
                 npc['patrol_turn_until']=now+NPC_TURN_SECONDS
-                goal=[home[0],0,home[2]+(5 if npc['route']==0 else -5)]
+                goal=[home[0],home[1],home[2]+(5 if npc['route']==0 else -5)]
                 dx,dz=goal[0]-p[0],goal[2]-p[2];dist=math.hypot(dx,dz)
             if dist>.06:
                 npc['yaw']=math.atan2(-dx,-dz)
@@ -194,7 +206,8 @@ class Village:
                     step=min(max(0.,dist-(4. if target else 0.)),dt*(NPC_CHASE_SPEED if target else NPC_WALK_SPEED))
                     steps=max(1,math.ceil(step/.12))
                     for j in range(steps):
-                        q=[p[0]+dx/dist*step/steps,0.,p[2]+dz/dist*step/steps]
+                        x=p[0]+dx/dist*step/steps;z=p[2]+dz/dist*step/steps
+                        q=[x,sidewalk_height(x,z),z]
                         if blocked(q) or any(math.hypot(q[0]-r['position'][0],q[2]-r['position'][2])<=.6 for r in players.values()):
                             break
                         npc['position']=q;p=q
@@ -203,7 +216,7 @@ class Village:
             if not target or now<npc['next_action']:continue
             npc['next_action']=now+1.0
             if now<target['shield']:continue
-            origin=[p[0],1.4,p[2]];aim=[target['position'][0],target['position'][1]+1.,target['position'][2]]
+            origin=[p[0],p[1]+1.4,p[2]];aim=[target['position'][0],target['position'][1]+1.,target['position'][2]]
             delta=[b-a for a,b in zip(origin,aim)];distance=math.sqrt(sum(v*v for v in delta))
             if not .3<distance<=8:continue
             direction=[v/distance for v in delta]

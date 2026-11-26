@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.6 · Natural NPC Gait**
+**v0.15.7 · Sidewalk Patrols & Streetlights**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.7 – Gehwege und Dorfbeleuchtung
+
+Die NPCs patrouillieren auf den Gehwegen statt auf der Fahrbahn. Acht Straßenlaternen beleuchten die Umgebung bei Nacht mit echten Lichtquellen und dimmen automatisch bei Sonnenauf- und -untergang. Laufanimationen bleiben unverändert.
 
 ## Neu in 0.15.6 – Natürlicherer NPC-Gang
 

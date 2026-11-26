@@ -34,10 +34,17 @@ export class VillageRoads{
   this.paint=new THREE.MeshStandardMaterial({color:0xd6d4c3,roughness:.94});
   this.metal=new THREE.MeshStandardMaterial({color:0x414747,roughness:.82,metalness:.24});
   this.wood=new THREE.MeshStandardMaterial({color:0x80624a,roughness:.91});
-  this.lamp=new THREE.MeshStandardMaterial({color:0xf7e4ae,emissive:0xeed19d,emissiveIntensity:.32,roughness:.4});
+  this.lamp=new THREE.MeshStandardMaterial({color:0xf7e4ae,emissive:0xffdfac,emissiveIntensity:.12,roughness:.4});
+  this.lights=[];this.night=0;
   this.cap=new THREE.CylinderGeometry(.5,.5,1,20);this.dynamic=[];this.key='';
  }
- clear(){for(const g of this.dynamic)g.dispose();this.dynamic=[];this.root.clear();}
+ clear(){for(const g of this.dynamic)g.dispose();this.dynamic=[];for(const light of this.lights)light.dispose?.();this.lights=[];this.root.clear();}
+ setNight(night){
+  this.night=Number.isFinite(night)?Math.max(0,Math.min(1,night)):0;
+  const t=Math.max(0,Math.min(1,(this.night-.10)/.75)),level=t*t*(3-2*t);
+  this.lamp.emissiveIntensity=.12+2.4*level;
+  for(const light of this.lights){light.intensity=115*level;light.visible=level>.005;}
+ }
  surface(r,y){
   const g=new THREE.PlaneGeometry(r.w,r.d);g.rotateX(-Math.PI/2);
   const uv=g.attributes.uv;const meters=r.kind==='street'?3:r.kind==='walk'?2:3.5;
@@ -79,12 +86,21 @@ export class VillageRoads{
      this.cylinder(r.x+1.9,.023,z,.35,.018,this.metal);
      for(let j=-2;j<=2;j++)box([r.x+1.9,.035,z+j*.09],[.38,.003,.022],this.edge);
     }
-    // Small village street furniture, outside the road and travel corridor.
-    for(const [x,z] of [[r.x-5.6,start+8],[r.x+5.6,start+20],[r.x-5.6,end-12],[r.x+5.6,end-3]]){
-     this.cylinder(x,.12,z,.19,.24,this.metal);
-     this.cylinder(x,1.75,z,.065,3.45,this.metal);
-     box([x,3.40,z],[.49,.10,.37],this.metal,true);
-     box([x,3.32,z],[.34,.15,.26],this.lamp);
+    // Staggered lamps on both sidewalks: real local lighting, not only glowing meshes.
+    // No extra shadow maps, so the eight lights stay relatively inexpensive.
+    for(const side of [-1,1]){
+     const offset=side<0?5:11;
+     for(let z=start+offset;z<end-1;z+=14){
+      const x=r.x+side*(r.w/2+2.10),armX=x-side*.40;
+      this.cylinder(x,.12,z,.19,.24,this.metal);
+      this.cylinder(x,1.75,z,.065,3.45,this.metal);
+      box([(x+armX)/2,3.41,z],[.65,.08,.10],this.metal,true);
+      box([armX,3.40,z],[.49,.10,.37],this.metal,true);
+      box([armX,3.32,z],[.34,.15,.26],this.lamp);
+      const light=new THREE.PointLight(0xffe5bd,0,17,2);
+      light.name='Village streetlight';light.position.set(armX,3.20,z);light.castShadow=false;light.visible=false;
+      this.root.add(light);this.lights.push(light);
+     }
     }
    }
   }
@@ -92,6 +108,7 @@ export class VillageRoads{
    for(let x=r.x-r.w/2+.38;x<r.x+r.w/2-.12;x+=.58)
     box([x,.024,r.z],[.32,.005,r.d-.25],this.paint);
   }
+  this.setNight(this.night);
  }
 }
 function variedGeometry(g,amount){

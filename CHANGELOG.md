@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.7 – Sidewalk Patrols & Streetlights
+- Die vier Trainings-NPCs patrouillieren jetzt auf den beiden durchgehenden Gehwegen, jeweils zwei pro Straßenseite. Startpunkte, Ausweichpositionen bei der Initialisierung und normale Patrouillenziele liegen auf der Pflasteroberfläche (7,5 cm über dem Gelände). Verfolgung bei einem Angriff bleibt möglich, danach kehrt der NPC zum Gehweg zurück. Schrittanimation, Bewegungspuffer, Todesanimation und Respawn-Verhalten bleiben unverändert.
+- Acht versetzt angeordnete Straßenlaternen mit echten warmweißen 3D-Punktlichtern, jeweils 17 m Reichweite. Leuchten blenden bei Dämmerung sanft ein und morgens aus; Straße, Gehwege, Fassaden und nahe Vegetation erhalten lokales Licht. Keine zusätzlichen Schattenkarten und keine globale Aufhellung der Free World.
+
 ## 0.15.6 – Natural NPC Gait
 - Free-World-NPCs laufen mit 1,35 m/s wie der Hotelservice. Der Server überträgt zusätzlich einen kurzen Bewegungsverlauf mit 20 Hz, sodass der Client gleichmäßige Bewegungsabschnitte statt einzelner Paketpositionen interpoliert.
 - Die Darstellung nutzt einen ruhigen Zeitpuffer von 500 ms und eine begrenzte Taktkorrektur. Die Schrittgeschwindigkeit stammt aus dem Bewegungsabschnitt, nicht aus winzigen Positionsdifferenzen einzelner Bilder. Niedrige Bildraten verlangsamen den Schrittzyklus nicht künstlich.

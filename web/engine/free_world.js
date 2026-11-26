@@ -195,6 +195,7 @@ export class FreeWorldView{
   this.sunlight.position.copy(this.sunlight.target.position).addScaledVector(d,95);this.sunlight.color.set(0xfff4dc).lerp(new THREE.Color(0xffa76b),s.twilight*.75);this.sunlight.intensity=2.1*Math.max(0,d.y)**.45;
   this.moonlight.position.copy(d).multiplyScalar(-150);this.moonlight.intensity=.22*s.night;
   this.hemi.color.set(0x99b3ec).lerp(new THREE.Color(0xffffff),s.day);this.hemi.intensity=.20+1.6*s.day;
+  this.village.roads.setNight(s.night);
   return phase;
  }
  material(id,load,hp=100){
