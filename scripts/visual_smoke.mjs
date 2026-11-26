@@ -605,3 +605,41 @@ console.log('Village NPC continuous gait, animation blending and low-FPS playbac
  cube.dispose();
 }
 console.log('Village streetlights: day/night, staggered coverage and scene rebuild checks passed');
+
+{
+ function simulateColdNpc(stale,withServerClock){
+  const motion=new VillageNpcMotion(),pace=1.35,boot=20,epoch=boot+stale;
+  motion.push({motionTime:boot,...(withServerClock?{serverTime:epoch}:{}),position:[0,0,0],moving:false,velocity:[0,0,0],yaw:-Math.PI/2,motionTrail:[]},0);
+  const events=[];
+  for(let i=1;i<=49;i++){
+   const t=i*.25,stamp=epoch+t,trail=[];
+   for(let n=31;n>=0;n--){const u=t-n*.05;if(u>=0)trail.push([epoch+u,Math.max(0,u-1)*pace,0,0,-Math.PI/2,u>1?pace:0]);}
+   events.push({arrive:t+[.025,.05,.012,.08][i%4],packet:{motionTime:stamp,...(withServerClock?{serverTime:stamp+.018}:{}),motionTrail:trail,position:[Math.max(0,t-1)*pace,0,0],moving:t>1,velocity:[t>1?pace:0,0,0],yaw:-Math.PI/2}});
+  }
+  let j=0,prev=0,first=null;
+  for(let i=0;i<=720;i++){
+   const t=i/60;
+   while(j<events.length&&events[j].arrive<=t)motion.push(events[j++].packet,t*1000);
+   const pose=motion.frame(t*1000,1/60);if(!pose)continue;
+   assert.ok(pose.position[0]>=prev-1e-8,'no backward step at cold start');
+   if(t>=3){
+    if(first===null)first=pose.position[0];
+    assert.ok(pose.moving,'gait stays active after first appearance');
+    assert.ok(pose.position[0]-prev<.04,'no packet-sized jump');
+    assert.ok(motion.samples.at(-1).stamp-motion.time<.8,'timeline recovered');
+   }
+   prev=pose.position[0];
+  }
+  const speed=(prev-first)/9;
+  assert.ok(Math.abs(speed-pace)<.08,'normal patrol speed: '+speed);
+  return speed;
+ }
+ for(const seconds of [0,3,180,3600])for(const clock of [false,true])simulateColdNpc(seconds,clock);
+ const motion=new VillageNpcMotion();
+ const trail=Array.from({length:21},(_,i)=>[100+i*.05,i*.05*1.35,0,0,-Math.PI/2,1.35]);
+ motion.push({motionTime:101,serverTime:101,position:[1.35,0,0],velocity:[1.35,0,0],moving:true,yaw:-Math.PI/2,motionTrail:trail},2000);
+ const initial=motion.frame(2000,0),next=motion.frame(2016,0.016);
+ assert.ok(Math.abs(initial.position[0]-.675)<1e-6);
+ assert.ok(next.position[0]>initial.position[0]&&next.position[0]-initial.position[0]<.04);
+}
+console.log('Village NPC cold start, stale simulation timestamps and initial display pose verified');

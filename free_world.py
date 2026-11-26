@@ -145,7 +145,9 @@ class FreeWorld:
             now=self.clock();self.prune(now)
             row={'slot':profile['slot'],'nickname':profile['nickname'],'avatar':profile['avatar'],'lease':secrets.token_urlsafe(24),'seen':now,'move_at':now,'edit_at':-100.,'pulse_at':-100.,'position':list(SPAWN),'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,'shield':now+3}
             self.players[player]=row
-            self.regrow_village()
+            # Initial NPC snapshots must use the current simulation timeline,
+            # even after the world has been idle for a long time.
+            self.tick_village(now)
             return {**self.snapshot(player,row),'lease':row['lease']}
     def body_box(self,p,height=1.6):
         return [p[0]-.25,p[1]+.015,p[2]-.25],[.5,height-.015,.5]

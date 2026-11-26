@@ -1,4 +1,4 @@
-# Free World (0.15.7)
+# Free World (0.15.8)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -55,3 +55,6 @@ Village NPCs walk at 1.35 m/s and send up to 32 confirmed samples at the 20 Hz s
 
 ## Sidewalk patrols and streetlights (0.15.7)
 Two NPCs patrol on each of the two longitudinal sidewalks. Their default routes and spawn fallback positions stay on the sidewalk at 0.075 m above terrain. Pursuit may leave the sidewalk; after combat the NPC returns to its normal route. Eight staggered warm point lights (17 m range) illuminate the village locally. The sky's night factor smoothly controls illumination and emissive intensity. All streetlights turn off in daylight, and they use no additional shadow maps. The world sky, movement interpolation, NPC animations and persistent builds are unchanged.
+
+## NPC cold-start fix (0.15.8)
+Before the entry snapshot, the server ticks the village, including after extended idle periods. Each NPC snapshot includes `serverTime` from the same monotonic clock as `motionTime`. The client detects discontinuous motion timestamps or missing history, reanchors the playback timeline, and starts a newly created avatar at the delayed trajectory pose. Stale and duplicate samples remain ignored. Cold-start and respawn tests cover idle intervals from zero to one hour. Existing gait blending, sidewalk routes, death timing and streetlights are unchanged.

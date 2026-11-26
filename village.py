@@ -73,6 +73,7 @@ class Village:
     def __init__(self,path,blocks,clock,wall_clock=time.time):
         self.path=path
         self.rows={}
+        self.clock=clock
         self.last_tick=clock();self.motion_time=self.last_tick;self.motion_accumulator=0.
         self.wall_clock=wall_clock;self.next_regrow_check=0.
         self.regrow_at={}
@@ -117,7 +118,8 @@ class Village:
         yield from (row for row in self.rows.values() if row['kind']=='tree' and row['hp']>0)
         yield from self.structure.targets(origin,reach)
     def snapshot(self):
-        return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','weapon','hp','life','score','shot_seq','shot','velocity','moving')},'motionTime':self.motion_time,'motionTrail':list(r['trail'])} for r in self.npcs if r['hp']>0]
+        server_time=max(self.motion_time,self.clock())
+        return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','weapon','hp','life','score','shot_seq','shot','velocity','moving')},'motionTime':self.motion_time,'serverTime':server_time,'motionTrail':list(r['trail'])} for r in self.npcs if r['hp']>0]
     def corpses(self,now):
         return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life')},
                  'weapon':None,'dead':True,'deadAge':max(0.,now-r['dead_at'])}

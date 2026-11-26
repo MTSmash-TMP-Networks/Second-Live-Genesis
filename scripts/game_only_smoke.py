@@ -501,6 +501,41 @@ class GameOnlyTest(unittest.TestCase):
             self.assertEqual(npc['hp'],100)
             self.assertIsNone(npc['dead_at'])
 
+    def test_village_initial_snapshot_after_server_idle(self):
+        from free_world import FreeWorld
+        now=[10.]
+        profile={'slot':0,'nickname':'Guest','avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            world=FreeWorld(tmp,lambda:now[0])
+            now[0]+=3600.
+            session=world.enter('a',profile)
+            self.assertEqual(len(session['npcs']),4)
+            for npc in session['npcs']:
+                self.assertEqual(npc['serverTime'],now[0])
+                self.assertGreaterEqual(npc['motionTime'],now[0]-.06)
+                self.assertTrue(npc['motionTrail'])
+                self.assertAlmostEqual(npc['motionTrail'][-1][0],npc['motionTime'])
+            row=world.players['a']
+            npc=world.village.npcs[0]
+            x,y,z=npc['position']
+            row.update(position=[x+10,y,z])
+            for _ in range(12):
+                now[0]+=.25
+                world.tick_village(now[0])
+            fresh=next(n for n in world.village.snapshot() if n['slot']==npc['slot'])
+            self.assertEqual(fresh['serverTime'],now[0])
+            self.assertGreaterEqual(fresh['motionTime'],now[0]-.06)
+            self.assertTrue(fresh['moving'])
+            self.assertGreater(fresh['position'][2],z+2.)
+            self.assertTrue(world.village.damage_npc(npc,'a',100,now[0]))
+            now[0]+=16.
+            world.tick_village(now[0])
+            revived=next(n for n in world.village.snapshot() if n['slot']==npc['slot'])
+            self.assertEqual(revived['life'],fresh['life']+1)
+            self.assertGreaterEqual(revived['motionTime'],now[0]-.06)
+            self.assertEqual(revived['serverTime'],now[0])
+            self.assertTrue(revived['motionTrail'])
+
     def test_village_npc_motion_history_and_pace(self):
         from village import Village, NPC_WALK_SPEED, NPC_TRAIL_LENGTH
         now=[10.]

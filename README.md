@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.7 · Sidewalk Patrols & Streetlights**
+**v0.15.8 · NPC Cold Start Fix**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.8 – NPC-Erstinitialisierung
+
+Veraltete Zeitstempel nach Server-Leerlauf können die NPC-Bewegung beim ersten Betreten der Free World stören, obwohl sie nach einem Respawn normal läuft. Der Server aktualisiert nun den Simulationszeitpunkt vor dem Einstieg. Der Client synchronisiert den Bewegungspuffer bei veralteten Zeitbereichen sofort neu. Die Laufanimation bleibt unverändert.
 
 ## Neu in 0.15.7 – Gehwege und Dorfbeleuchtung
 

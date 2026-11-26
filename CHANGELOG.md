@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.8 – NPC Cold Start Fix
+- Beim Betreten der Free World wird die NPC-Simulation vor dem ersten Snapshot auf den aktuellen Serverzeitpunkt gebracht. Zusätzlich enthält jeder NPC-Snapshot einen aktuellen Serverzeitstempel, unabhängig vom letzten Bewegungsschritt.
+- Der Client erkennt veraltete oder unterbrochene Bewegungshistorien, richtet den Puffer sofort auf die aktuelle Zeitleiste aus und überspringt nicht mehr minutenlang alte Zeitbereiche. Erstinitialisierung und Respawn beginnen beide an der tatsächlich dargestellten Position im Bewegungspuffer statt an der neuesten Paketposition. Laufanimation, Geschwindigkeit, Patrouillen und Laternen bleiben unverändert.
+
 ## 0.15.7 – Sidewalk Patrols & Streetlights
 - Die vier Trainings-NPCs patrouillieren jetzt auf den beiden durchgehenden Gehwegen, jeweils zwei pro Straßenseite. Startpunkte, Ausweichpositionen bei der Initialisierung und normale Patrouillenziele liegen auf der Pflasteroberfläche (7,5 cm über dem Gelände). Verfolgung bei einem Angriff bleibt möglich, danach kehrt der NPC zum Gehweg zurück. Schrittanimation, Bewegungspuffer, Todesanimation und Respawn-Verhalten bleiben unverändert.
 - Acht versetzt angeordnete Straßenlaternen mit echten warmweißen 3D-Punktlichtern, jeweils 17 m Reichweite. Leuchten blenden bei Dämmerung sanft ein und morgens aus; Straße, Gehwege, Fassaden und nahe Vegetation erhalten lokales Licht. Keine zusätzlichen Schattenkarten und keine globale Aufhellung der Free World.

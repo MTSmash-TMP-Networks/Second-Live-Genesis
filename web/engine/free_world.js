@@ -264,7 +264,12 @@ export class FreeWorldView{
     if(p.dead){
      if(a.deadSince===undefined){a.deadSince=now-Math.max(0,p.deadAge||0)*1000;clearRoomAvatarProps(a.g);resetRoomAvatarPose(a.g);}
      else a.deadSince=Math.min(a.deadSince,now-Math.max(0,p.deadAge||0)*1000);
-    }else{a.motion??=new VillageNpcMotion();a.motion.push(p,now);}
+    }else{
+     const first=!a.motion;a.motion??=new VillageNpcMotion();a.motion.push(p,now);
+     // Initial appearance and respawn start at the same delayed pose, not
+     // at the newest packet followed by a backward jump into its history.
+     if(first){const pose=a.motion.frame(now,0);if(pose){a.g.position.set(...pose.position);a.g.rotation.y=pose.yaw;}}
+    }
    }
    a.target=p;
   }
