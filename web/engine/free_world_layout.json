@@ -22,5 +22,9 @@
   "textureBytes": 262144,
   "textureSize": 512,
   "leaseSeconds": 15,
-  "pollMilliseconds": 250
+  "pollMilliseconds": 250,
+  "daySeconds": 1200,
+  "maxModels": 16,
+  "maxOwnModels": 4,
+  "maxModelBytes": 134217728
 }

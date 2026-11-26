@@ -134,3 +134,13 @@ body:has(#phone:not([hidden])) #minimap,body.character-editing #minimap,.xr-play
 body:has(#phone:not([hidden])) #free-hud{display:none!important}
 .mobile #free-hud{top:88px;left:10px;width:min(196px,48vw);font-size:10px;padding:6px 9px}
 @media(max-height:500px){.mobile #free-hud{top:67px}.fw-hud-top{margin-bottom:4px}#free-hud-detail,#free-hud-size{margin-top:3px}}
+
+/* Free World keeps only status, map and short event notices on screen. */
+.free-playing footer{display:none!important}
+.free-playing.free-notice footer{display:block!important;width:auto;right:auto;max-width:min(440px,65vw);padding:7px 12px;bottom:20px}
+.free-playing footer #hint,.free-playing footer #weaponstatus,.free-playing footer #ammo,.free-playing footer small{display:none!important}
+.free-playing footer #notice{margin:0;font-size:12px}
+.mobile.free-playing.free-notice footer{bottom:auto;top:158px;max-width:60vw;left:10px}
+#free-time{color:#f2d8a8;font-variant-numeric:tabular-nums}
+#phone #free-model-file{font-size:10px;padding:7px}
+#phone #free-model-message{overflow-wrap:anywhere}

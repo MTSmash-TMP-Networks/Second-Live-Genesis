@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.3 – Free World Models, Sky & Damage
+- Eigene GLB-Modelle aus der privaten Bibliothek können als öffentliche Kopie im Baumodus platziert werden, inklusive Neuimport im Smartphone. Begrenzter gemeinsamer Speicher und persistente Modellreferenzen; private Originale bleiben getrennt.
+- Offener Himmel mit sichtbarer Sonne und Mond, 20-Minuten-Tag-Nacht-Zyklus nach Serverzeit, fließender Dämmerung und wechselnder Beleuchtung. Steingrauer Boden und weiße Seitenwände bleiben; Bauhöhe bleibt 24 m.
+- Hotel-Spielschadensklassen, Nachladen, Trefferfeedback und vorhandene grafische Spieleffekte auch in der Free World. Blöcke und Modelle besitzen persistenten Schaden, können zerstört und vom Besitzer repariert werden; gemeinsame Modelle werden bei passenden Treffern auf dem Raster versetzt. Die Rasterkollision ersetzt hier die unabhängige Rapier-Zimmerphysik.
+- Steuerungsbanner nur kurz bei Moduswechsel oder kontextbezogen am Ausgang; Statusmeldungen verschwinden automatisch, Minimap und HP bleiben sichtbar.
+
 ## 0.14.2 – Free World Expansion & PvP Inventory
 - Free World auf 300 × 300 × 24 m vergrößert, matt steingrauer Boden mit dezentem Raster, weiße Wände und Decke. Eingang, Spawn, Kollisionsgrenzen und Karte angepasst; vorhandene Bauwerke und Texturen bleiben gespeichert.
 - Vorhandenes Waffeninventar, Auswahl mit 1–3, Ablegen mit 0, Nachladen mit T und Spielmodelle im PvP-Modus aktiviert. Baumodus behält die Größenwahl. Gemeinsame serverseitige PvP-Spielbalance, Prüfung der gewählten Spielklasse und automatische Entwaffnung bei der Rückkehr zum Hotel.

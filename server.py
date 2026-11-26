@@ -389,7 +389,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
     lobby = HotelLobby() if accounts else None
     facades = FacadeDirectory(accounts) if accounts else None
     room_models = RoomModelStore(store.path) if accounts else None
-    free_world = FreeWorld(store.path) if accounts else None
+    free_world = FreeWorld(store.path,damage_profiles=GameStore.WEAPON_DAMAGE,model_library=room_models) if accounts else None
     world_transition = threading.RLock()
     # Keep the original player/cookie/home database, independent of image capture.
     panorama = None
@@ -397,7 +397,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.14.2"
+        server_version = "SecondLive/0.14.3"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -604,17 +604,19 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.14.2", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "free_world": bool(free_world), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.14.3", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "free_world": bool(free_world), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
-            elif path.startswith("/api/free-world/texture/"):
+            elif path.startswith("/api/free-world/texture/") or path.startswith("/api/free-world/model/"):
                 if not free_world:
                     self.send_json(404,{'error':'Free World nicht verfuegbar'});return
                 if not self.require_game():return
                 try:
-                    identifier=path.removeprefix('/api/free-world/texture/')
+                    kind='model' if path.startswith('/api/free-world/model/') else 'texture'
+                    identifier=path.removeprefix('/api/free-world/'+kind+'/')
                     if not ID_RE.fullmatch(identifier):raise CaptureError('Textur nicht gefunden',404)
-                    self.send_data(200,free_world.texture(self.player(),identifier),'image/jpeg')
+                    if kind=='model':self.send_data(200,free_world.model(self.player(),identifier),'model/gltf-binary')
+                    else:self.send_data(200,free_world.texture(self.player(),identifier),'image/jpeg')
                 except CaptureError as e:self.send_json(e.status,capture_error_body(e))
                 except (OSError,sqlite3.Error):self.send_json(503,{'error':'Texturspeicher nicht verfuegbar'})
             elif path == "/api/room-models" or path.startswith("/api/room-models/"):

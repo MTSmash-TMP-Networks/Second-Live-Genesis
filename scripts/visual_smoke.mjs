@@ -340,7 +340,7 @@ import {stabilizePatrolClip} from './realistic_character.js';
 }
 console.log('Hotel patrol: steady route clock, stationary turns and horizontal root-motion removal verified');
 
-import {freeBounds,freeRay,freePlacement,freeBlocked,freeGround,freeExitAt,validFreeGrid} from './free_world.js';
+import {freeBounds,freeRay,freePlacement,freeBlocked,freeGround,freeExitAt,validFreeGrid,freeSkyState} from './free_world.js';
 import {freeWorldDoorAt} from './lobby_layout.js';
 {
  const hit=freeRay([0,1.5,0],[0,-1,0],[]);
@@ -368,3 +368,14 @@ import {freeWorldDoorAt} from './lobby_layout.js';
  assert.ok(!freeBlocked([],149,0,149));assert.ok(freeBlocked([],150,0,150));
 }
 console.log('Free World raster, wall/floor placement, stacking, collision and portal tests passed');
+
+{
+ assert.ok(freeSkyState(.5).day>.99);assert.equal(freeSkyState(0).day,0);
+ assert.ok(freeSkyState(.25).twilight>.99);assert.ok(freeSkyState(.75).twilight>.99);
+ assert.equal(freeRay([0,23,0],[0,1,0],[]),null);
+ const broken={id:2,cell:[-1,0,-1],dims:[2,2,2],hp:0};
+ assert.ok(!freeBlocked([broken],0,.1,0));assert.equal(freeGround([broken],0,2,0),0);
+ assert.equal(freeRay([0,2,0],[0,-1,0],[broken]).id,null);
+ assert.equal(freeRay([0,2,0],[0,-1,0],[broken],8,true).id,2);
+}
+console.log('Free World open sky, solar cycle and destroyed-object collision checks passed');

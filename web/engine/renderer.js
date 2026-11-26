@@ -22,7 +22,7 @@ import { HOTEL_LAYOUT, hotelMaterials, applyPhotoMaterials, createHotelModel } f
 export { HOTEL_LAYOUT };
 import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
 import { HotelLobbyView } from './hotel_lobby.js';
-export { FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeBlocked, freeGround, freeExitAt } from './free_world.js';
+export { FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeBlocked, freeGround, freeExitAt, freeSkyState } from './free_world.js';
 import { NeighborRoomView, HallFacadeViews, hotelOpenings } from './hotel_connections.js';
 export { hotelOpenings } from './hotel_connections.js';
 import { CharacterStudio, createCharacter, animateCharacter, disposeCharacter } from './character.js';
@@ -523,7 +523,7 @@ export class RoomRenderer {
   syncMarks(marks){this.impacts.sync(marks);}
   equip(id,first){this.currentWeapon=id||null;this.weaponRoot.visible=!!id&&first&&!this.xrMode.active;for(const [key,g] of Object.entries(this.weaponModels))g.visible=key===id;for(const [key,g] of Object.entries(this.viewHands))g.visible=key===id;this.xrMode.equip(this.xrMode.active?id:null);}
   setLoop(fn){this.renderer.setAnimationLoop(fn);}
-  shot(kind,ray){
+  shot(kind,ray,effects=this.effects){
     // Distinct fictional viewmodel feedback, independent of real ballistics.
     this.kick=({pistol:.060,m16:.078,rifle:.13})[kind]??.060;
     if(ray){
@@ -535,7 +535,7 @@ export class RoomRenderer {
         if(front.distanceTo(new THREE.Vector3(...ray.origin))<ray.distance)source=front.toArray();
         caseSource=this.weaponRoot.localToWorld(new THREE.Vector3(.055,.025,0)).toArray();
       }
-      this.effects.fire({...ray,source,caseSource});
+      effects.fire({...ray,source,caseSource});
     }
   }
   reload(progress){this.reloadProgress=Math.max(0,Math.min(1,progress||0));}
@@ -600,7 +600,7 @@ export class RoomRenderer {
     if(this.xrMode.active){if(player)this.xrMode.place(player);this.renderer.render(scene,this.camera);return;}
     const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),dpr=Math.min(devicePixelRatio||1,this.quality==='1k'||mobile?1.25:1.75);
     if(w!==this.width||h!==this.height||dpr!==this.dpr){this.width=w;this.height=h;this.dpr=dpr;this.renderer.setPixelRatio(dpr);this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
-    const fov=scopeZoom?28:65;if(this.camera.fov!==fov){this.camera.fov=fov;this.camera.updateProjectionMatrix();}
+    const fov=scopeZoom?28:65,far=worldScene?600:350;if(this.camera.fov!==fov||this.camera.far!==far){this.camera.fov=fov;this.camera.far=far;this.camera.updateProjectionMatrix();}
     this.camera.position.set(...eye);this.camera.lookAt(...target);this.renderer.render(scene,this.camera);
   }
 }

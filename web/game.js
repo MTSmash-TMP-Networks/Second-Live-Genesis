@@ -5,7 +5,7 @@ const $=id=>document.getElementById(id), canvas=$('world');
 let renderer=null, physicsWorld=null, graphicsReady=false;
 let equipped=null, xrEntering=false, xrReturnFirst=true, posture=null, scopeZoom=false, lastWheel=-Infinity;
 let lobbyEnabled=false,lobbyState=null,lobbyTransition=false;
-let freeEnabled=false,freeState=null,freeView=null,freeTool='build',freeSize=2,freeShape='cube',freeTexture=null,freeLastWeapon='pistol';
+let freeEnabled=false,freeState=null,freeView=null,freeTool='build',freeSize=2,freeShape='cube',freeTexture=null,freeLastWeapon='pistol',freeModelSource=null,freeHintUntil=0,freeNoticeUntil=0,freeLastNotice='';
 let hotelHallPending=false,hotelNeighborPending=false,hotelViewEpoch=0,hotelViewMask='',hotelNeighborAt=0;
 let accountsEnabled=false,accountProfile=null,authMode='login',studioOpen=false,editingFromGame=false,characterDraft=null,accountBusy=false;
 const weaponIds=['pistol','rifle','m16'];
@@ -397,7 +397,7 @@ function pickUp(id){
 }
 function updateInteractionHint(vr=false){
   if(freeState){updateFreeHint(vr);return;}
-  $('touchFreeMode').hidden=true;$('touchFire').textContent='Feuer';$('touchArsenal').textContent='Inventar';
+  document.body.classList.remove('free-notice');$('touchFreeMode').hidden=true;$('touchFire').textContent='Feuer';$('touchArsenal').textContent='Inventar';
   const playing=canPlay()&&!vr,panel=$('interaction-prompt'),actionButton=$('touchInteract'),repairButton=$('touchRepair');
   $('touchRotateLeft').hidden=$('touchRotateRight').hidden=!held;
   const resize=playing&&!lobbyState&&!lobbyTransition&&!!held&&!!spec[held]?.imported&&state.objects[held]>0;
@@ -687,7 +687,7 @@ function showPhonePage(page){
  $('phone').hidden=false;
  $('closephone').hidden=!started||studioOpen;$('phone-home').hidden=!started||studioOpen;
  if(page==='settings'||page==='welcome')$(page==='settings'?'settings-graphics':'login-graphics').append($('phone-graphics'));
- if(page==='free')updateFreeUI();
+ if(page==='free'){updateFreeUI();if(freeState)void freeRefreshModelLibrary();}
  $('phone').querySelector('.sl-phone-content').scrollTop=0;
 }
 function updatePhone(){const now=new Date();$('phone-clock').textContent=now.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});$('phone-date').textContent=now.toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'});$('phone-worldstate').textContent=$('worldstate').textContent;$('phone-volume').value=String(Math.round(audio.volume*100));$('phone-sound').checked=audio.enabled;$('phone-volume-label').textContent=Math.round(audio.volume*100)+' %';}
@@ -704,7 +704,7 @@ function freeShapeLabel(){return {'cube':'Würfel','wall-z':'Wandplatte Z','wall
 function freeCandidate(){
  if(!freeState||freeExitAt(playerEye(),dir()))return null;
  const hit=freeRay(playerEye(),dir(),freeState.blocks);
- return freePlacement(hit,freeDims(),freeState.blocks,[[player.x,player.y,player.z],...freeState.peers.map(p=>p.position)]);
+ return freePlacement(hit,freeDims(freeSize,freeModelSource?'cube':freeShape),freeState.blocks,[[player.x,player.y,player.z],...freeState.peers.map(p=>p.position)]);
 }
 function freeTextureHeaders(){return protectedGame?{'X-SecondLive-Token':token}:{};}
 async function freeRequest(data,keepalive=false){
@@ -713,6 +713,11 @@ async function freeRequest(data,keepalive=false){
   const r=await fetch('/api/free-world',{method:'POST',cache:'no-store',credentials:'same-origin',keepalive,signal:controller.signal,headers:{...freeTextureHeaders(),'Content-Type':'application/json'},body:JSON.stringify(data)});
   const j=await r.json();if(!r.ok){const e=Error(j.error||'HTTP '+r.status);e.status=r.status;throw e;}return j;
  }finally{clearTimeout(timer);}
+}
+async function loadFreeModel(id,signal){
+ if(!id)throw Error('Modell nicht verfügbar');
+ const r=await fetch('/api/free-world/model/'+encodeURIComponent(id),{headers:freeTextureHeaders(),credentials:'same-origin',cache:'no-store',signal});
+ if(!r.ok)throw Error('Modell nicht verfügbar');return r.arrayBuffer();
 }
 async function loadFreeTexture(id){
  const r=await fetch('/api/free-world/texture/'+encodeURIComponent(id),{headers:freeTextureHeaders(),credentials:'same-origin',cache:'no-store'});
@@ -726,8 +731,8 @@ function applyFreeSnapshot(s,result,initial=false){
   else if(!initial&&result.corrected)$('notice').textContent='Position korrigiert';
  }
  s.hp=result.hp;s.life=result.life;s.score=result.score;s.online=result.online;s.peers=result.peers||[];s.textures=result.textures||[];
- if(Array.isArray(result.blocks)){s.blocks=result.blocks;s.revision=result.revision;freeView.setBlocks(s.blocks,s.revision,loadFreeTexture);}
- freeView.sync(s.peers);s.lastOK=performance.now();
+ if(Array.isArray(result.blocks)){s.blocks=result.blocks;s.revision=result.revision;freeView.setBlocks(s.blocks,s.revision,loadFreeTexture,loadFreeModel);}
+ freeView.sync(s.peers);s.lastOK=performance.now();freeView.syncClock(result.dayPhase,s.lastOK);
  if(result.notice)$('notice').textContent=result.notice;
  updateWorldStatus();updateFreeUI();
 }
@@ -741,9 +746,9 @@ async function enterFreeWorld(){
   lobbyState=null;resetHotelViews();renderer.lobby.clear();resetGreeting();chooseWeapon('none');
   freeView??=new FreeWorldView();freeView.clear();
   freeState={lease:result.lease,life:0,blocks:[],peers:[],textures:[],revision:-1,online:1,hp:100,score:0,lastOK:performance.now(),pending:null,editing:false};
-  freeTool='build';freeSize=2;freeShape='cube';freeTexture=null;freeLastWeapon='pistol';document.body.classList.remove('free-pvp');
+  freeTool='build';freeSize=2;freeShape='cube';freeTexture=null;freeLastWeapon='pistol';freeModelSource=null;freeHintUntil=performance.now()+4000;freeNoticeUntil=0;freeLastNotice='';document.body.classList.remove('free-pvp');
   document.body.classList.add('free-playing');$('free-hud').hidden=false;
-  applyFreeSnapshot(freeState,result,true);audio.play('door');$('notice').textContent='Willkommen in der Free World · B: Baumodus / PvP · P: Texturen';
+  applyFreeSnapshot(freeState,result,true);audio.play('door');$('notice').textContent='Willkommen in der Free World';
  }catch(e){$('notice').textContent=e.message||'Free World nicht erreichbar';}
  finally{lobbyTransition=false;clearControls();}
 }
@@ -782,16 +787,17 @@ async function freeEdit(op,weapon=null){
   if(freeState!==s||lobbyTransition||!canPlay())return;
   const life=s.life;
   applyFreeSnapshot(s,await freeRequest(freeMove(s)));
-  if(freeState!==s||lobbyTransition||s.life!==life||!canPlay()||(op==='pulse'&&(freeTool!=='pvp'||weapon!==equipped)))return;
+  if(freeState!==s||lobbyTransition||s.life!==life||!canPlay()||(op==='pulse'&&(freeTool!=='pvp'||weapon!==equipped))||(op!=='pulse'&&freeTool!=='build'))return;
   let extra={};
-  if(op==='place'){const c=freeCandidate();if(!c){$('notice').textContent='Kein freier Bauplatz';return;}extra={...c,texture:freeTexture||null};}
-  else if(op==='remove'){const hit=freeRay(playerEye(),dir(),s.blocks);if(!hit?.id){$('notice').textContent='Kein Block ausgewählt';return;}extra={id:hit.id};}
+  if(op==='place'){const c=freeCandidate();if(!c){$('notice').textContent='Kein freier Bauplatz';return;}extra={...c,texture:freeModelSource?null:freeTexture||null,sourceModel:freeModelSource||null};}
+  else if(op==='remove'||op==='repair'){const hit=freeRay(playerEye(),dir(),s.blocks,FREE_LAYOUT.reach,true);if(!hit?.id){$('notice').textContent='Kein Objekt ausgewählt';return;}extra={id:hit.id};}
   else if(op==='pulse'){extra={direction:dir(),weapon};}
   const result=await freeRequest({action:op,lease:s.lease,revision:s.revision,life:s.life,...extra});
   applyFreeSnapshot(s,result);
   if(op==='pulse'&&freeState===s){
-   ammo[weapon]=Math.max(0,ammo[weapon]-1);fireCooldown=Math.max(fireCooldown,.55);updateAmmo();
-   renderer.shot(weapon);audio.play('shot',null,weaponIds.indexOf(weapon));
+   ammo[weapon]=Math.max(0,ammo[weapon]-1);fireCooldown=Math.max(fireCooldown,FIRE_INTERVAL[weapon]);updateAmmo();
+   renderer.shot(weapon,result.shot,freeView.effects);audio.play('shot',null,weaponIds.indexOf(weapon));
+   if(result.shot?.impact)audio.play('impact',result.shot.origin.map((v,i)=>v+result.shot.direction[i]*result.shot.distance));
    $('cross').classList.add('pulse');setTimeout(()=>$('cross').classList.remove('pulse'),100);
    if(equipped===weapon&&ammo[weapon]===0)startReload(true);
   }else audio.play('click');
@@ -802,7 +808,7 @@ function freePrimary(){if(freeTool==='build'){void freeEdit('remove');return;}if
 function setFreeTool(mode){
  if(!freeState)return;
  const next=mode==='pvp'?'pvp':'build';if(next!==freeTool){
-  freeTool=next;document.body.classList.toggle('free-pvp',next==='pvp');
+  freeTool=next;freeHintUntil=performance.now()+4000;document.body.classList.toggle('free-pvp',next==='pvp');
   chooseWeapon(next==='pvp'?freeLastWeapon:'none');
  }
  updateFreeUI();updateFreeHint(false);
@@ -821,19 +827,31 @@ function freeKey(code){
  if(/^Digit[1-4]$/.test(code)){freeSize=FREE_LAYOUT.sizes[Number(code.at(-1))-1];updateFreeUI();return true;}
  if(code==='KeyE'){void interact();return true;}
  if(code==='KeyG'){if(freeTool==='build')void freeEdit('remove');return true;}
+ if(code==='KeyR'){void freeEdit('repair');return true;}
  if(code==='KeyI'){phone('free');return true;}
  if(['Digit0','KeyR','KeyT','KeyF'].includes(code))return true;
  return false;
 }
-let freeTextureKey='';
+let freeTextureKey='',freeLibraryKey='',freeModelUploading=false;
+async function freeRefreshModelLibrary(){
+ const s=freeState;if(!s)return;
+ try{
+  const result=await api('/api/room-models');if(freeState!==s)return;
+  const rows=result.models||[],key=JSON.stringify(rows.map(r=>[r.id,r.name]));
+  if(key!==freeLibraryKey){const select=$('free-model-select');select.replaceChildren(new Option('Normale Baublöcke',''));for(const r of rows)select.add(new Option(r.name,r.id));freeLibraryKey=key;}
+  if(!rows.some(r=>r.id===freeModelSource))freeModelSource=null;
+  $('free-model-select').value=freeModelSource||'';
+ }catch(e){$('free-model-message').textContent=e.message;}
+}
 function updateFreeUI(){
  const s=freeState;$('free-outside').hidden=!!s;$('free-tools').hidden=!s;
  $('free-hud').hidden=!s||!$('phone').hidden||studioOpen;
  if(!s)return;
  $('free-online').textContent=s.online+' Spieler';$('free-health-bar').style.width=Math.max(0,Math.min(100,s.hp))+'%';
  $('free-hud-detail').textContent=s.hp+' HP · '+(freeTool==='build'?'Baumodus':'PvP')+' · '+s.score+' Punkte';
- $('free-hud-size').textContent=freeTool==='pvp'?(({pistol:'Pistole',rifle:'Scharfschützengewehr',m16:'M16'})[equipped]||'Unbewaffnet')+(equipped?' · '+ammo[equipped]+' / '+clipSize[equipped]:''):(freeSize*FREE_LAYOUT.grid).toFixed(2).replace('.',',')+' m · '+freeShapeLabel();
- $('free-size').value=String(freeSize);$('free-shape').value=freeShape;
+ $('free-hud-size').textContent=freeTool==='pvp'?(({pistol:'Pistole',rifle:'Scharfschützengewehr',m16:'M16'})[equipped]||'Unbewaffnet')+(equipped?' · '+ammo[equipped]+' / '+clipSize[equipped]:''):(freeSize*FREE_LAYOUT.grid).toFixed(2).replace('.',',')+' m · '+(freeModelSource?'GLB-Modell':freeShapeLabel());
+ $('free-size').value=String(freeSize);$('free-shape').value=freeShape;$('free-shape').disabled=!!freeModelSource;
+ $('free-model-select').value=freeModelSource||'';
  $('free-build-mode').disabled=freeTool==='build';$('free-pvp-mode').disabled=freeTool==='pvp';
  const key=JSON.stringify(s.textures);if(key!==freeTextureKey){
   const select=$('free-texture-select');select.replaceChildren(new Option('Weiß / Standard',''));
@@ -849,13 +867,15 @@ function updateFreeUI(){
 function updateFreeHint(vr=false){
  const s=freeState;if(!s)return;
  const playing=canPlay()&&!vr,exit=freeExitAt(playerEye(),dir()),candidate=playing&&freeTool==='build'?freeCandidate():null;
- const panel=$('interaction-prompt');panel.hidden=!playing;
+ const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!exit&&now>=freeHintUntil);
+ const msg=$('notice').textContent;if(msg!==freeLastNotice){freeLastNotice=msg;freeNoticeUntil=now+3500;}
+ document.body.classList.toggle('free-notice',playing&&!!msg&&now<freeNoticeUntil);
  $('held-model-size').hidden=true;$('touchRotateLeft').hidden=$('touchRotateRight').hidden=true;
  $('touchZoom').hidden=freeTool!=='pvp'||equipped!=='rifle';$('touchZoom').disabled=!!reloadId;
  $('touchSecondary').hidden=true;$('touchFreeMode').hidden=false;
  $('touchFire').disabled=!playing||s.editing||(freeTool==='pvp'&&(!equipped||!!reloadId));$('touchFire').textContent=freeTool==='build'?'Abbauen':'Feuer';
  $('touchInteract').disabled=!playing||(!exit&&!candidate)||s.editing;$('touchInteract').textContent=exit?'Hotel':'Setzen';
- $('touchRepair').disabled=true;$('touchReload').disabled=freeTool!=='pvp'||!equipped||!!reloadId;$('touchArsenal').disabled=false;$('touchArsenal').textContent=freeTool==='pvp'?'Inventar':'Bauen';
+ $('touchRepair').disabled=freeTool!=='build';$('touchReload').disabled=freeTool!=='pvp'||!equipped||!!reloadId;$('touchArsenal').disabled=false;$('touchArsenal').textContent=freeTool==='pvp'?'Inventar':'Bauen';
  $('touchJump').disabled=player.stance==='crouch';$('touchSprint').disabled=$('touchCrouch').disabled=!playing;
  $('touchSprint').setAttribute('aria-pressed',String(player.stance==='sprint'||touchSprint));$('touchCrouch').setAttribute('aria-pressed',String(player.stance==='crouch'||touchCrouch));
  $('interaction-name').textContent=exit?'HOTEL · Ausgang':freeTool==='build'?(candidate?'Bauplatz frei':'Baumodus'):'PvP-Modus';
@@ -864,6 +884,17 @@ function updateFreeHint(vr=false){
  $('hint').textContent=freeTool==='pvp'?'Free World · B: Bauen / PvP · I: Inventar':'Free World · B: Bauen / PvP · I: Bauwerkzeug';
  updateFreeUI();
 }
+$('free-model-select').onchange=()=>{freeModelSource=$('free-model-select').value||null;if(freeModelSource)setFreeTool('build');freeHintUntil=performance.now()+4000;updateFreeUI();};
+$('free-model-upload').onclick=async()=>{
+ const s=freeState,file=$('free-model-file').files?.[0];if(!s||freeModelUploading||!file)return;
+ freeModelUploading=true;$('free-model-upload').disabled=true;
+ try{
+  if(!file.name.toLowerCase().endsWith('.glb')||!file.size||file.size>16*1024*1024)throw Error('GLB bis 16 MiB auswählen');
+  $('free-model-message').textContent='Modell wird privat gespeichert und geprüft …';
+  const r=await fetch('/api/room-models/upload?name='+encodeURIComponent(file.name),{method:'POST',credentials:'same-origin',headers:{...freeTextureHeaders(),'Content-Type':'model/gltf-binary'},body:file});const result=await r.json();if(!r.ok)throw Error(result.error||'Import fehlgeschlagen');
+  if(freeState!==s)return;freeModelSource=result.added;await freeRefreshModelLibrary();$('free-model-file').value='';setFreeTool('build');$('free-model-message').textContent='Modell bereit. Erst beim Setzen wird eine Kopie freigegeben.';
+ }catch(e){$('free-model-message').textContent=e.message;}finally{freeModelUploading=false;$('free-model-upload').disabled=false;}
+};
 $('free-size').onchange=()=>{freeSize=Number($('free-size').value);updateFreeUI();};
 $('free-shape').onchange=()=>{freeShape=$('free-shape').value;updateFreeUI();};
 $('free-texture-select').onchange=()=>{freeTexture=$('free-texture-select').value||null;updateFreeUI();};
@@ -1200,7 +1231,7 @@ function repair(ray=null){
 $('mode').onclick=()=>setMode(!mobile);setMode(mobile);
 const stick=$('stick');let stickId=null;function moveStick(e){let r=stick.getBoundingClientRect(),x=(e.clientX-r.left-r.width/2)/(r.width*.36),y=(e.clientY-r.top-r.height/2)/(r.height*.36),l=Math.max(1,Math.hypot(x,y));touchMove=[x/l,-y/l];stick.style.setProperty('--jx',`${x/l*33}px`);stick.style.setProperty('--jy',`${y/l*33}px`);}stick.addEventListener('pointerdown',e=>{if(!canPlay()||stickId!==null)return;e.preventDefault();stickId=e.pointerId;stick.setPointerCapture(e.pointerId);moveStick(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId&&canPlay())moveStick(e);});for(const n of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(n,e=>{if(e.pointerId===stickId){stickId=null;touchMove=[0,0];stick.style.setProperty('--jx','0px');stick.style.setProperty('--jy','0px');}});
 canvas.addEventListener('pointerdown',e=>{if(!canPlay()||posture?.sleeping||(!mobile&&document.pointerLockElement===canvas))return;if(look)return;look={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!look||look.id!==e.pointerId||!canPlay()||posture?.sleeping)return;const sensitivity=scopeZoom ? .002 : .005;player.yaw-=(e.clientX-look.x)*sensitivity;player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch+(e.clientY-look.y)*sensitivity));look.x=e.clientX;look.y=e.clientY;});for(const n of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(n,e=>{if(look?.id===e.pointerId)look=null;});
-for(const [id,fn] of [['touchFreeMode',()=>setFreeTool(freeTool==='build'?'pvp':'build')],['touchInteract',interact],['touchSecondary',secondaryInteraction],['touchZoom',toggleScope],['touchRotateLeft',()=>turnHeld(-90)],['touchRotateRight',()=>turnHeld(90)],['touchReload',startReload],['touchRepair',()=>repair()],['touchView',()=>{if(!posture){setScopeZoom(false);first=!first;}}],['touchPhone',phone],['touchArsenal',arsenal],['touchSprint',()=>{if(!posture&&!held&&!scopeZoom){touchSprint=!touchSprint;if(touchSprint)touchCrouch=false;}}],['touchCrouch',()=>{if(!posture){touchCrouch=!touchCrouch;if(touchCrouch)touchSprint=false;}}],['touchJump',()=>{if(!posture&&player.stance!=='crouch'&&!wantsCrouch()&&Math.abs(player.y-groundAt(player.x,player.z))<1e-5)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});const fireButton=$('touchFire');fireButton.addEventListener('pointerdown',e=>{e.preventDefault();if(!canPlay()||triggerPointer!==null)return;void audio.unlock();if(freeState)freePrimary();else pressTrigger();if(triggerHeld){triggerPointer=e.pointerId;fireButton.setPointerCapture?.(e.pointerId);}});
+for(const [id,fn] of [['touchFreeMode',()=>setFreeTool(freeTool==='build'?'pvp':'build')],['touchInteract',interact],['touchSecondary',secondaryInteraction],['touchZoom',toggleScope],['touchRotateLeft',()=>turnHeld(-90)],['touchRotateRight',()=>turnHeld(90)],['touchReload',startReload],['touchRepair',()=>freeState&&freeTool==='build'?void freeEdit('repair'):repair()],['touchView',()=>{if(!posture){setScopeZoom(false);first=!first;}}],['touchPhone',phone],['touchArsenal',arsenal],['touchSprint',()=>{if(!posture&&!held&&!scopeZoom){touchSprint=!touchSprint;if(touchSprint)touchCrouch=false;}}],['touchCrouch',()=>{if(!posture){touchCrouch=!touchCrouch;if(touchCrouch)touchSprint=false;}}],['touchJump',()=>{if(!posture&&player.stance!=='crouch'&&!wantsCrouch()&&Math.abs(player.y-groundAt(player.x,player.z))<1e-5)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});const fireButton=$('touchFire');fireButton.addEventListener('pointerdown',e=>{e.preventDefault();if(!canPlay()||triggerPointer!==null)return;void audio.unlock();if(freeState)freePrimary();else pressTrigger();if(triggerHeld){triggerPointer=e.pointerId;fireButton.setPointerCapture?.(e.pointerId);}});
 for(const event of ['pointerup','pointercancel','lostpointercapture'])fireButton.addEventListener(event,e=>{if(triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('blur',()=>{clearControls();audio.stopAll();});document.addEventListener('visibilitychange',()=>{if(document.hidden)clearControls();});
 
@@ -1245,7 +1276,7 @@ function updateMinimap(now,vr=false){
  ctx.save();ctx.translate(96,96);ctx.scale(scale,scale);ctx.rotate(player.yaw);ctx.translate(-player.x,-player.z);
  if(freeState){
   const half=FREE_LAYOUT.half;box([0,0,0],[half*2,0,half*2],'#46535d');
-  for(const b of freeState.blocks){const {p,s}=freeBounds(b);box(p,s,b.texture?'#9bbeb8':'#a9b5bc');}
+  for(const b of freeState.blocks){if((b.hp??100)<=0)continue;const {p,s}=freeBounds(b);box(p,s,b.model?'#e1bc85':b.texture?'#9bbeb8':'#a9b5bc');}
   for(const x of [-half,half])box([x,0,0],[.2,0,2*half],'#abb8bf');
   for(const z of [-half,half])box([0,0,z],[2*half,0,.2],'#abb8bf');box([0,0,half],[2,0,.3],'#68e3b7');
  }else if(lobbyState){
@@ -1322,6 +1353,8 @@ function frame(now,xrFrame){
   renderer.begin();
   if(freeState){
     $('npc-greeting').hidden=true;renderer.equip(freeTool==='pvp'?equipped:null,first&&!scopeZoom);
+    const phase=freeView.updateSky(now,player),hours=Math.floor(phase*24),minutes=Math.floor(phase*1440)%60;
+    $('free-time').textContent=String(hours).padStart(2,'0')+':'+String(minutes).padStart(2,'0');
     freeView.step(dt,player,accountProfile,!first&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5,renderer.weaponModels,freeTool==='pvp'?equipped:null);
     if(canPlay()&&freeTool==='build')freeView.showPreview(freeCandidate());else freeView.showPreview(null);
     audio.listener(eye,d);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom,false,freeView.scene);

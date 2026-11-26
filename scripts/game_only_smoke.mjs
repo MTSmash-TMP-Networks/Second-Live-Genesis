@@ -299,3 +299,9 @@ freeKeyTest(assert);
 assert.ok(game.includes("weapon:freeTool==='pvp'?equipped:null"));
 assert.ok(game.includes("void freeEdit('pulse',weapon)"));
 console.log('Free World PvP inventory, keyboard selection, reload and independent building controls passed');
+
+assert.ok(ids.includes('free-model-select')&&ids.includes('free-model-upload')&&ids.includes('free-time'));
+assert.ok(game.includes("sourceModel:freeModelSource||null")&&game.includes("freeView.syncClock(result.dayPhase"));
+assert.ok(game.includes("renderer.shot(weapon,result.shot,freeView.effects)"));
+assert.ok(game.includes("now>=freeHintUntil")&&game.includes("freeNoticeUntil=now+3500"));
+console.log('Free World private model selection, shared damage effects, clock and timed hints checks passed');

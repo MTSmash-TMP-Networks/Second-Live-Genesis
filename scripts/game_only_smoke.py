@@ -257,13 +257,15 @@ class GameOnlyTest(unittest.TestCase):
             reopened=FreeWorld(tmp)
             self.assertEqual(len(reopened.blocks),1)
             self.assertEqual(reopened.own_textures('a')[0]['id'],tex)
-            # All three selectable game props retain the existing PvP balance.
+            # Existing hotel damage profiles apply to the shared scene.
             with self.assertRaises(CaptureError):req('a',a,'pulse',direction=[1,0,0],weapon='unknown')
             with self.assertRaises(CaptureError):req('a',a,'pulse',direction=[1,0,0],weapon='m16')
-            for weapon in ('pistol','rifle','m16','pistol'):
+            for weapon in ('pistol','rifle'):
                 now[0]+=.6
                 req('a',a,'update',position=[0,0,142],yaw=0,weapon=weapon)
                 result=req('a',a,'pulse',direction=[1,0,0],weapon=weapon)
+                self.assertTrue(result['shot']['impact'])
+            self.assertTrue(0<=result['dayPhase']<1)
             self.assertEqual(result['score'],1)
             respawn=req('b',b,'update',position=[2,0,142],yaw=0,revision=result['revision'])
             self.assertEqual(respawn['life'],2);self.assertEqual(respawn['hp'],100)
@@ -281,6 +283,45 @@ class GameOnlyTest(unittest.TestCase):
             with self.assertRaises(CaptureError):world.texture('a','missing')
             req('b',b,'abandon')
             self.assertEqual(world.players,{})
+
+    def test_free_world_model_sharing_damage_repair_and_migration(self):
+        from free_world import FreeWorld
+        from room_models import RoomModelStore
+        now=[10.]
+        profile=lambda slot:{'slot':slot,'nickname':'Guest '+str(slot),'avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            library=RoomModelStore(tmp);blob=room_model_fixture()
+            source=library.add('a','model.glb',blob)['added']
+            world=FreeWorld(tmp,lambda:now[0],GameStore.WEAPON_DAMAGE,library)
+            a=world.enter('a',profile(0));b=world.enter('b',profile(1))
+            def req(who,session,op,**kw):
+                return world.request(who,{'action':op,'lease':session['lease'],'life':session['life'],**kw})
+            now[0]+=4
+            req('a',a,'update',position=[0,0,142],yaw=0,weapon='pistol')
+            req('b',b,'update',position=[4,0,142],yaw=0)
+            with self.assertRaises(CaptureError):
+                req('b',b,'place',cell=[-2,0,274],dims=[4,4,4],sourceModel=source)
+            made=req('a',a,'place',cell=[-2,0,274],dims=[4,4,4],sourceModel=source)
+            item=made['blocks'][0];self.assertEqual(item['hp'],100);self.assertEqual(item['modelBytes'],len(blob))
+            self.assertEqual(world.model('b',item['model']),blob)
+            with self.assertRaises(CaptureError):world.model('outside',item['model'])
+            now[0]+=.6
+            hit=req('a',a,'pulse',direction=[0,0,-1],weapon='pistol')
+            self.assertEqual(hit['blocks'][0]['hp'],75)
+            self.assertEqual(hit['blocks'][0]['cell'],[-2,0,273])
+            self.assertTrue(hit['shot']['impact'])
+            now[0]+=.6
+            req('a',a,'update',position=[0,0,142],yaw=0,weapon='rifle')
+            hit=req('a',a,'pulse',direction=[0,0,-1],weapon='rifle')
+            self.assertEqual(hit['blocks'][0]['hp'],0)
+            with self.assertRaises(CaptureError):req('b',b,'repair',id=item['id'])
+            req('a',a,'repair',id=item['id'])
+            restored=FreeWorld(tmp,model_library=library)
+            self.assertEqual(restored.blocks[item['id']]['hp'],100)
+            self.assertEqual(library.get('a',source),blob)
+            req('a',a,'remove',id=item['id'])
+            self.assertEqual(world.models,{})
+            self.assertEqual(library.get('a',source),blob)
 
     def test_free_world_http_auth_and_transition(self):
         with tempfile.TemporaryDirectory() as tmp:
