@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.8 · NPC Cold Start Fix**
+**v0.15.9 · NPC Hit Reactions & World Impact Marks**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.9 – Trefferreaktionen und Einschussmarkierungen
+
+NPCs reagieren auf Treffer mit Taumeln, Humpeln und schnellem Umfallen bei Kopftreffern. Das Scharfschützengewehr erreicht in der Free World bis zu 300 Spielmeter. Einschussmarkierungen nutzen die bereits im Hotel verwendete Decal-Technik und werden gemeinsam gespeichert. Reparaturen und zerstörte Oberflächen entfernen zugehörige Markierungen.
 
 ## Neu in 0.15.8 – NPC-Erstinitialisierung
 

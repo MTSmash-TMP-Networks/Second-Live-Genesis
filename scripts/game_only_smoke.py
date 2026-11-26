@@ -211,6 +211,99 @@ class GameOnlyTest(unittest.TestCase):
                 store.action('a',{'action':'motion','id':added,'revision':near_wall['revision'],'position':[-5.1,.05,2],'quaternion':[0,0,0,1],'base_y':0})
             self.assertEqual(store.get('a',added),room_model_fixture())
 
+    def test_free_world_npc_hit_reactions_and_long_range_game_ray(self):
+        from free_world import FreeWorld, L
+        from village import NPC_WALK_SPEED
+        now=[100.]
+        profile={'slot':0,'nickname':'Guest','avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            world=FreeWorld(tmp,lambda:now[0]);world.enter('a',profile)
+            row=world.players['a'];row.update(position=[0.,0.,0.],shield=0.)
+            npc=world.village.npcs[0];world.village.npcs=[npc]
+            npc.update(position=[80.,0.,0.],yaw=0.)
+            def pulse(weapon,d):
+                now[0]+=1.;row['weapon']=weapon
+                length=math.sqrt(sum(x*x for x in d))
+                return world.pulse('a',row,{'weapon':weapon,'direction':[x/length for x in d]},now[0])[1]
+            with patch.object(world.village,'targets',return_value=[]):
+                self.assertEqual(pulse('pistol',[1,0,0])['distance'],L['reach'])
+                self.assertEqual(npc['hp'],100)
+                row['position']=[38.,0.,0.]
+                with patch.object(world.village,'solids',return_value=[]):
+                    world.build('a',row,{'cell':[80,0,-1],'dims':[2,4,2]},now[0])
+                block=next(iter(world.blocks.values()))
+                row['position']=[0.,0.,0.]
+                first=pulse('rifle',[1,0,0])
+                self.assertAlmostEqual(first['distance'],40.)
+                self.assertEqual(npc['hp'],100)
+                self.assertEqual(block['hp'],10)
+                self.assertEqual(len(world.impact_snapshot()),1)
+                pulse('rifle',[1,0,0])
+                self.assertEqual(block['hp'],0)
+                self.assertEqual(world.impact_snapshot(),[])
+                hit=pulse('rifle',[1,0,0])
+                self.assertGreater(hit['distance'],79.)
+                self.assertEqual(hit['npcHit']['zone'],'head')
+                self.assertTrue(hit['npcHit']['defeated'])
+                self.assertEqual(row['score'],1)
+                self.assertEqual(world.village.corpses(now[0])[0]['hitZone'],'head')
+                now[0]+=16
+                world.tick_village(now[0])
+                self.assertEqual(npc['hp'],100)
+                self.assertEqual(npc['injured_legs'],[])
+                npc.update(position=[80.,0.,0.],yaw=0.)
+                row['position']=[79.88,0.,4.]
+                hit=pulse('pistol',[0,.42-1.58,-4])
+                self.assertEqual(hit['npcHit']['zone'],'left-leg')
+                self.assertEqual(npc['hp'],75)
+                snap=world.village.snapshot()[0]
+                self.assertEqual(snap['injuredLegs'],['left-leg'])
+                self.assertEqual(snap['hitSeq'],1)
+                self.assertEqual(snap['hitZone'],'left-leg')
+                self.assertEqual(snap['hitAge'],0.)
+                npc.update(position=npc['home'][:],route=0,target=None)
+                row['position']=[npc['home'][0]+10,npc['home'][1],npc['home'][2]]
+                now[0]+=.1;world.tick_village(now[0])
+                self.assertFalse(npc['moving'])
+                now[0]+=.5;world.tick_village(now[0])
+                self.assertTrue(npc['moving'])
+                self.assertAlmostEqual(math.hypot(npc['velocity'][0],npc['velocity'][2]),NPC_WALK_SPEED*.65)
+
+    def test_free_world_shared_impact_marks_persistence_and_repair(self):
+        from free_world import FreeWorld
+        now=[100.]
+        profile={'slot':0,'nickname':'Builder','avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            world=FreeWorld(tmp,lambda:now[0]);world.enter('a',profile)
+            row=world.players['a'];row.update(position=[0.,0.,.5],shield=0.,weapon='pistol')
+            with patch.object(world.village,'solids',return_value=[]):
+                world.build('a',row,{'cell':[8,0,0],'dims':[2,4,2]},now[0])
+            block=next(iter(world.blocks.values()))
+            now[0]+=1.
+            with patch.object(world.village,'targets',return_value=[]):
+                notice,shot=world.pulse('a',row,{'weapon':'pistol','direction':[1,0,0]},now[0])
+            marks=world.impact_snapshot()
+            self.assertEqual(len(marks),1)
+            self.assertEqual(marks[0]['target'],'block:'+str(block['id']))
+            self.assertEqual(marks[0]['object'],block['id'])
+            self.assertEqual(marks[0]['distance'],4.)
+            self.assertEqual(world.snapshot('a',row)['impacts'],marks)
+            self.assertEqual(FreeWorld(tmp,lambda:now[0]).impact_snapshot(),marks)
+            world.repair('a',row,{'id':block['id']},now[0]+1.)
+            self.assertEqual(world.impact_snapshot(),[])
+            row['position']=[0.,0.,0.]
+            now[0]+=2.
+            with patch.object(world.village,'targets',return_value=[]):
+                _,ground=world.pulse('a',row,{'weapon':'pistol','direction':[0,-1,0]},now[0])
+            self.assertTrue(ground['impact'])
+            self.assertEqual(world.impact_snapshot()[0]['kind'],'terrain')
+            # Budget limits persist in SQLite, even after restarting the world.
+            for i in range(16):world.record_impact('terrain','terrain','terrain',ground,1)
+            self.assertEqual(len(world.impact_snapshot()),12)
+            for i in range(400):world.record_impact('fixture:'+str(i),'terrain','terrain',ground,1)
+            self.assertEqual(len(world.impact_snapshot()),384)
+            self.assertEqual(len(FreeWorld(tmp,lambda:now[0]).impact_snapshot()),384)
+
     def test_free_world_shared_build_pvp_and_persistence(self):
         from free_world import FreeWorld, grid_box, SPAWN, HALF
         from hotel_lobby import HotelLobby

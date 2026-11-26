@@ -83,6 +83,10 @@ export class ImpactMarks {
     const ray=new THREE.Raycaster(p.clone().addScaledVector(n,.06),n.clone().negate(),0,.12);
     const hit=ray.intersectObjects(meshes(root),false).find(h=>h.face&&Math.abs(normalAt(h).dot(n))>.55);
     if(!hit)return null;
+    return this.projectHit(hit,target,n,stage);
+  }
+  projectHit(hit,target,n,stage){
+    const {root,kind}=target;
     const orient=new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),n));
     const size=sizeFor(kind,stage);
     const geo=new DecalGeometry(hit.object,hit.point,orient,new THREE.Vector3(size,size,.018+.003*stage));
@@ -105,4 +109,42 @@ export class ImpactMarks {
       const mesh=this.project(mark,target);if(mesh)this.live.set(mark.id,mesh);else this.failed.add(mark.id);
     }
   }
+}
+
+/** Shared world decals use the hotel textures/geometry on the actual visible
+ * surface near the server-confirmed contact. They are never camera billboards. */
+export class FreeWorldImpactMarks extends ImpactMarks{
+  constructor(){super();this.worldSignatures=new Map();}
+  forgetWorld(id){
+    const mesh=this.live.get(id);
+    if(mesh?.userData.ownedImpactMaterial)mesh.material.dispose();
+    this.forget(id);this.worldSignatures.delete(id);
+  }
+  syncWorld(marks,resolve){
+    const wanted=new Set(marks.map(m=>m.id));
+    for(const id of this.worldSignatures.keys())if(!wanted.has(id))this.forgetWorld(id);
+    for(const mark of marks){
+      const candidates=resolve(mark).filter(t=>t.root?.visible);
+      if(!candidates.length){this.forgetWorld(mark.id);continue;}
+      const signature=JSON.stringify([mark,candidates.map(t=>[t.root.uuid,t.version||''])]);
+      const prior=this.worldSignatures.get(mark.id);
+      if(prior===signature&&(!this.live.has(mark.id)||this.live.get(mark.id).parent))continue;
+      this.forgetWorld(mark.id);this.worldSignatures.set(mark.id,signature);
+      const d=v(mark.direction).normalize();
+      if(d.lengthSq()<.5||!Number.isFinite(mark.distance))continue;
+      // Imported facade geometry can be inset from the authoritative collision shell.
+      this.ray.set(v(mark.origin),d);this.ray.near=Math.max(.005,mark.distance-1.2);this.ray.far=mark.distance+1.2;
+      let best=null,target=null;
+      for(const t of candidates){
+        t.root.updateWorldMatrix(true,true);
+        const hit=this.ray.intersectObjects(meshes(t.root),false).find(h=>h.face&&(!t.accept||t.accept(h.point)));
+        if(hit&&(!best||hit.distance<best.distance)){best=hit;target=t;}
+      }
+      if(!best)continue;
+      const n=normalAt(best);if(n.dot(d)>0)n.negate();
+      const mesh=this.projectHit(best,target,n,clampStage(mark.severity));
+      if(mesh){target.decorate?.(mesh);this.live.set(mark.id,mesh);}
+    }
+  }
+  clearWorld(){for(const id of this.worldSignatures.keys())this.forgetWorld(id);}
 }

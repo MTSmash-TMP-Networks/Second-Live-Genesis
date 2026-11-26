@@ -1,4 +1,4 @@
-# Free World (0.15.8)
+# Free World (0.15.9)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -58,3 +58,6 @@ Two NPCs patrol on each of the two longitudinal sidewalks. Their default routes 
 
 ## NPC cold-start fix (0.15.8)
 Before the entry snapshot, the server ticks the village, including after extended idle periods. Each NPC snapshot includes `serverTime` from the same monotonic clock as `motionTime`. The client detects discontinuous motion timestamps or missing history, reanchors the playback timeline, and starts a newly created avatar at the delayed trajectory pose. Stale and duplicate samples remain ignored. Cold-start and respawn tests cover idle intervals from zero to one hour. Existing gait blending, sidewalk routes, death timing and streetlights are unchanged.
+
+## NPC hit reactions and surface marks (0.15.9)
+Regional NPC hit volumes are simplified arcade collision triggers. Head hits trigger immediate defeat and a faster fall; surviving torso/leg hits trigger a short stagger, and injured legs affect movement pace and the reversible pose overlay until respawn. No change to healthy movement, player damage rules, or death/respawn durations. The fictional rifle ray and its tracer extend to 300 world units/metres, bounded by game terrain and collision geometry; building/repair range stays 8 m. The hotel decal projection and material textures are reused for server-confirmed surface hits. A bounded SQLite table stores up to 384 shared marks (12 per target), cleared on repair, destruction or relocation. Inset imported geometry is projected only where a suitable surface exists, and village fracture shaders clip building decals. Marks on a model moved by a hit are not retained. Rendering with installed GLBs needs an in-game check.

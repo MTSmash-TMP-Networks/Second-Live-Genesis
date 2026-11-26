@@ -15,6 +15,7 @@
   ],
   "hallEnd": -66,
   "reach": 8,
+  "weaponReach": {"pistol": 8, "m16": 8, "rifle": 300},
   "maxBlocks": 1200,
   "maxOwned": 240,
   "maxTextures": 64,

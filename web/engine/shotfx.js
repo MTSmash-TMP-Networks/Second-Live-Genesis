@@ -4,8 +4,8 @@ import * as THREE from 'three';
 const MAX_EFFECTS=32;
 const vec=a=>new THREE.Vector3(...a);
 export class ShotEffects {
-  constructor(scene){
-    this.scene=scene;this.items=[];this.light=new THREE.PointLight(0xffb95d,0,2.2,2);scene.add(this.light);
+  constructor(scene,maxDistance=8){
+    this.maxDistance=maxDistance;this.scene=scene;this.items=[];this.light=new THREE.PointLight(0xffb95d,0,2.2,2);scene.add(this.light);
     this.trailGeo=new THREE.CylinderGeometry(.008,.014,1,6);this.trailMat=new THREE.MeshBasicMaterial({color:0xffd68a,toneMapped:false});
     this.caseGeo=new THREE.CylinderGeometry(.013,.013,.065,10);this.caseMat=new THREE.MeshStandardMaterial({color:0xc29d50,metalness:.72,roughness:.38});
     this.glowGeo=new THREE.SphereGeometry(1,12,8);this.glowMat=new THREE.MeshBasicMaterial({color:0xffd8a0,transparent:true,opacity:.9,toneMapped:false,depthWrite:false});
@@ -16,9 +16,9 @@ export class ShotEffects {
   fire({origin,direction,distance,impact,source=null,caseSource=null}){
     if(!Array.isArray(origin)||!Array.isArray(direction)||![...origin,...direction,distance].every(Number.isFinite))return;
     const from=source?vec(source):vec(origin),d=vec(direction).normalize();if(d.lengthSq()<.5)return;
-    const to=vec(origin).addScaledVector(d,Math.min(8,Math.max(.05,distance)));
+    const to=vec(origin).addScaledVector(d,Math.min(this.maxDistance,Math.max(0,distance)));
     const path=to.clone().sub(from),length=path.length();if(length<.03)return;
-    const duration=.12+Math.min(.13,length*.012); // intentionally legible game VFX, not real velocity
+    const duration=.12+Math.min(.13,length*.012)+Math.min(.19,Math.max(0,length-8)*.0015); // deliberately stylized game VFX
     const trail=new THREE.Mesh(this.trailGeo,this.trailMat);trail.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),path.clone().normalize());
     trail.position.copy(from);trail.scale.y=.02;
     this.add(trail,{kind:'trail',from,to,length,duration,impact});
@@ -34,7 +34,7 @@ export class ShotEffects {
     const impacts=[];
     for(let i=this.items.length-1;i>=0;i--){const e=this.items[i];e.age+=dt;const t=Math.min(1,e.age/e.duration);
       if(e.kind==='trail'){
-        const head=e.length*t,tail=Math.max(0,head-.24),mid=(head+tail)*.5/e.length;
+        const head=e.length*t,tail=Math.max(0,head-Math.max(.24,Math.min(3.5,e.length*.04))),mid=(head+tail)*.5/e.length;
         e.mesh.position.lerpVectors(e.from,e.to,mid);e.mesh.scale.y=Math.max(.001,head-tail);
         if(t===1&&e.impact)impacts.push(e.to);
       }else if(e.kind==='flash'){e.mesh.scale.setScalar(.07*(1+t));e.mesh.material.opacity=.9*(1-t);}

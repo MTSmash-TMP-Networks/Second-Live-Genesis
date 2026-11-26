@@ -1,7 +1,7 @@
 // Local avatar presentation only; no camera, movement or weapon simulation changes.
 import * as THREE from 'three';
 const X=new THREE.Vector3(1,0,0),Y=new THREE.Vector3(0,1,0);
-const keys=['Hips','Head','LeftArm','LeftForeArm','LeftHand','RightArm','RightForeArm','RightHand',
+const keys=['Hips','Spine','Spine1','Spine2','Head','LeftArm','LeftForeArm','LeftHand','RightArm','RightForeArm','RightHand',
  'LeftUpLeg','LeftLeg','LeftFoot','LeftToeBase','RightUpLeg','RightLeg','RightFoot','RightToeBase'];
 export function roomRig(root){
  const r=root.userData.realistic;if(!r)return null;
@@ -89,6 +89,62 @@ export function applyRoomAvatarPose(root,pose=null,weapon=null,lookYaw=0){
    remember(root,u.arms[1]);remember(root,u.elbows[1]);u.arms[1].rotation.x=.18;u.elbows[1].rotation.x=.95;
    if(weapon!=='pistol'){remember(root,u.arms[0]);remember(root,u.elbows[0]);u.arms[0].rotation.x=.20;u.elbows[0].rotation.x=.95;}
   }
+ }
+ root.updateWorldMatrix(true,true);
+}
+// Local, reversible game-pose overlay. No new animation assets or blood effects.
+// A healthy NPC runs the original locomotion path without any pose modifications.
+export function villageReactionPose(age,zone,legs,phase,moving){
+ const sides=Array.isArray(legs)?legs:[],left=sides.includes('left-leg'),right=sides.includes('right-leg');
+ const hit=Number.isFinite(age)&&age>=0&&age<.55?Math.sin(Math.PI*age/.55):0;
+ const legHit=zone==='left-leg'||zone==='right-leg',side=left&&!right?-1:right&&!left?1:0;
+ const cycle=Math.sin(phase),weight=side===0?.5:.5+.5*side*cycle;
+ const limp=(left||right)&&moving?1:0;
+ return {flinch:hit,legHit,left,right,limp,roll:limp*side*(.055+.065*weight)+(zone==='left-leg'?-1:zone==='right-leg'?1:.65)*hit*.12,
+  pitch:hit*(legHit?.17:.22)+limp*.045,dip:limp*(.018+.038*weight)+hit*.028,
+  leftBend:left?limp*(.12+.16*(.5+.5*cycle)):0,rightBend:right?limp*(.12+.16*(.5-.5*cycle)):0};
+}
+function avatarBoneOffset(root,node,axis,angle){
+ if(!node||!node.parent||Math.abs(angle)<1e-7)return;
+ const worldAxis=axis.clone().applyQuaternion(root.getWorldQuaternion(new THREE.Quaternion()));
+ const delta=new THREE.Quaternion().setFromAxisAngle(worldAxis,angle);
+ const world=delta.multiply(node.getWorldQuaternion(new THREE.Quaternion()));
+ remember(root,node);node.quaternion.copy(node.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(world)).normalize();
+ node.updateWorldMatrix(true,true);
+}
+export function applyVillageNpcReaction(root,{age=Infinity,zone=null,legs=[],moving=false}={}){
+ if(!root.userData.villageNpc)return;
+ if(!(age>=0&&age<.55)&&!legs.length)return;
+ const u=root.userData,r=u.realistic,action=r?.actions?.walk;
+ const phase=action?2*Math.PI*(action.time/(action.getClip().duration||1)):(u.phase||0);
+ const pose=villageReactionPose(age,zone,legs,phase,moving);
+ const body=r?.pivot||u.body;
+ if(!body)return;
+ // Store the mixer-produced pose and undo the overlay before the next frame.
+ remember(root,body);body.quaternion.premultiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(pose.pitch,0,pose.roll,'XYZ')));
+ body.position.y-=pose.dip;body.updateWorldMatrix(true,true);
+ if(r){
+  const rig=roomRig(root);
+  // Match the hit side to the rig's actual root-local side (some models rotate
+  // their imported armature by 180 degrees).
+  const leftName=rig.LeftUpLeg&&rig.RightUpLeg&&point(root,rig.LeftUpLeg).x>point(root,rig.RightUpLeg).x?'Right':'Left';
+  const rightName=leftName==='Left'?'Right':'Left';
+  for(const [name,bend] of [[leftName,pose.leftBend],[rightName,pose.rightBend]]){
+   if(!bend)continue;
+   avatarBoneOffset(root,rig[name+'UpLeg'],X,-bend*.5);
+   avatarBoneOffset(root,rig[name+'Leg'],X,bend);
+  }
+  if(pose.flinch){
+   avatarBoneOffset(root,rig.Spine2||rig.Spine1||rig.Spine,X,pose.flinch*(pose.legHit?.12:.20));
+   avatarBoneOffset(root,rig.Head,X,-pose.flinch*.13);
+   avatarBoneOffset(root,rig.LeftArm,X,-pose.flinch*.28);
+  }
+ }else{
+  for(const [i,bend] of [[0,pose.leftBend],[1,pose.rightBend]]){
+   if(!bend)continue;
+   remember(root,u.legs[i]);remember(root,u.knees[i]);u.legs[i].rotation.x-=bend*.5;u.knees[i].rotation.x+=bend;
+  }
+  if(pose.flinch){remember(root,u.head);remember(root,u.arms[0]);u.head.rotation.x-=pose.flinch*.13;u.arms[0].rotation.x-=pose.flinch*.28;}
  }
  root.updateWorldMatrix(true,true);
 }

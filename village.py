@@ -110,7 +110,7 @@ class Village:
             if home is None:continue
             self.npcs.append({'slot':-100-i,'nickname':f'Test-NPC {i+1}','avatar':{'model':i+1,'height':1},
                 'position':home[:],'home':home,'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,
-                'target':None,'velocity':[0.,0.,0.],'moving':False,'trail':[],'route':i%2,'patrol_turn_until':0.,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None})
+                'target':None,'velocity':[0.,0.,0.],'moving':False,'trail':[],'route':i%2,'patrol_turn_until':0.,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None,'hit_seq':0,'hit_zone':None,'hit_at':None,'injured_legs':[],'stagger_until':0.})
     def solids(self):
         yield from (row for row in self.rows.values() if row['kind']=='tree' and row['hp']>0)
         yield from self.structure.solids()
@@ -119,10 +119,12 @@ class Village:
         yield from self.structure.targets(origin,reach)
     def snapshot(self):
         server_time=max(self.motion_time,self.clock())
-        return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','weapon','hp','life','score','shot_seq','shot','velocity','moving')},'motionTime':self.motion_time,'serverTime':server_time,'motionTrail':list(r['trail'])} for r in self.npcs if r['hp']>0]
+        return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','weapon','hp','life','score','shot_seq','shot','velocity','moving')},'motionTime':self.motion_time,'serverTime':server_time,'motionTrail':list(r['trail']),
+                 'hitSeq':r['hit_seq'],'hitZone':r['hit_zone'],'hitAge':max(0.,server_time-r['hit_at']) if r['hit_at'] is not None else None,
+                 'injuredLegs':list(r['injured_legs'])} for r in self.npcs if r['hp']>0]
     def corpses(self,now):
         return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life')},
-                 'weapon':None,'dead':True,'deadAge':max(0.,now-r['dead_at'])}
+                 'weapon':None,'dead':True,'deadAge':max(0.,now-r['dead_at']),'hitZone':r['hit_zone']}
                 for r in self.npcs if r['hp']<=0 and r['dead_at'] is not None and now-r['dead_at']<NPC_CORPSE_SECONDS]
     def damage_tree(self,row,damage):
         if row['kind']!='tree':return 'Gebaeude'
@@ -150,8 +152,14 @@ class Village:
             self.rows[key]['hp']=100
             del self.regrow_at[key]
         return True
-    def damage_npc(self,npc,player,damage,now):
-        npc['hp']=max(0,npc['hp']-damage)
+    def damage_npc(self,npc,player,damage,now,zone='torso'):
+        # Gameplay-only damage states and animation triggers.
+        if npc['hp']<=0:return False
+        npc['hit_seq']+=1;npc['hit_zone']=zone;npc['hit_at']=now
+        npc['hp']=0 if zone=='head' else max(0,npc['hp']-damage)
+        if zone in ('left-leg','right-leg') and zone not in npc['injured_legs']:
+            npc['injured_legs'].append(zone)
+        npc['stagger_until']=now+.24
         if not npc['hp']:
             npc.update(target=None,weapon=None,respawn=now+15,dead_at=now,shot=None,velocity=[0.,0.,0.],moving=False)
             return True
@@ -180,7 +188,7 @@ class Village:
         for npc in self.npcs:
             if npc['hp']<=0:
                 if now>=npc['respawn'] and not blocked(npc['home']):
-                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None,patrol_turn_until=0.,trail=[])
+                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None,patrol_turn_until=0.,trail=[],hit_seq=0,hit_zone=None,hit_at=None,injured_legs=[],stagger_until=0.)
                 else:continue
             p=npc['position'];home=npc['home'];before=p[:]
             npc.update(velocity=[0.,0.,0.],moving=False)
@@ -204,8 +212,10 @@ class Village:
                 dx,dz=goal[0]-p[0],goal[2]-p[2];dist=math.hypot(dx,dz)
             if dist>.06:
                 npc['yaw']=math.atan2(-dx,-dz)
-                if (target and dist>4. or not target and now>=npc['patrol_turn_until']):
-                    step=min(max(0.,dist-(4. if target else 0.)),dt*(NPC_CHASE_SPEED if target else NPC_WALK_SPEED))
+                if now>=npc['stagger_until'] and (target and dist>4. or not target and now>=npc['patrol_turn_until']):
+                    pace=NPC_CHASE_SPEED if target else NPC_WALK_SPEED
+                    if npc['injured_legs']:pace*=.65 if len(npc['injured_legs'])==1 else .48
+                    step=min(max(0.,dist-(4. if target else 0.)),dt*pace)
                     steps=max(1,math.ceil(step/.12))
                     for j in range(steps):
                         x=p[0]+dx/dist*step/steps;z=p[2]+dz/dist*step/steps

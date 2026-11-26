@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import layout from './free_world_layout.json';
 import {RoomModels} from './room_customization.js';
 import {VillageView} from './village.js';
-import {VillageNpcMotion,villageFallPose,villagePrismOverlap,villagePrismRay,villagePrismTop} from './village_damage.js';
+import {VillageNpcMotion,villageFallPose,villagePrismOverlap,villagePrismRay,villagePrismTop,villageSurfaceIntact,patchVillageShader} from './village_damage.js';
+import {FreeWorldImpactMarks} from './impact_marks.js';
+import {villageTreeParts} from './village_landscape.js';
 import {ShotEffects} from './shotfx.js';
 import {createCharacter,animateCharacter,disposeCharacter,normalizeCharacter} from './character.js';
-import {resetRoomAvatarPose,applyRoomAvatarPose,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
+import {resetRoomAvatarPose,applyRoomAvatarPose,applyVillageNpcReaction,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
 export const FREE_LAYOUT=layout;
 const H=layout.half,Y=layout.height,G=layout.grid;
 const ICE_GATE={x:48,width:2,height:2.65};
@@ -168,13 +170,14 @@ export class FreeWorldView{
   this.sky.add(new THREE.Mesh(new THREE.SphereGeometry(420,32,20),skyMat));this.skyMat=skyMat;
   this.sun=new THREE.Mesh(new THREE.SphereGeometry(7,24,16),new THREE.MeshBasicMaterial({color:0xffdf99,toneMapped:false}));
   this.moon=new THREE.Mesh(new THREE.SphereGeometry(4.5,24,16),new THREE.MeshBasicMaterial({color:0xe3eaff,toneMapped:false}));this.sky.add(this.sun,this.moon);
-  this.phase=0.5;this.phaseTime=0;this.effects=new ShotEffects(this.scene);this.models=new RoomModels(this.scene);this.models.root.name='Shared Free World models';this.modelRefs=new Map();
+  this.phase=0.5;this.phaseTime=0;this.effects=new ShotEffects(this.scene,Math.max(...Object.values(layout.weaponReach)));this.models=new RoomModels(this.scene);this.models.root.name='Shared Free World models';this.modelRefs=new Map();
   this.heldModels=new RoomModels(this.scene);this.heldModels.root.name='Local object placement preview';this.heldModels.root.visible=false;this.heldAsset=null;
   this.cube=new THREE.BoxGeometry(1,1,1);this.materials=new Map();this.textures=new Map();this.meshes=[];this.peers=new Map();this.local=null;this.revision=-1;this.generation=0;
   const box=(p,s,m)=>{const o=new THREE.Mesh(this.cube,m);o.position.set(...p);o.scale.set(...s);this.scene.add(o);return o;};
-  this.scene.add(grassSurface());this.village=new VillageView(this.scene);
+  this.impactMarks=new FreeWorldImpactMarks();this.impactProxies=new Map();this.impactProxyMaterial=new THREE.MeshBasicMaterial({visible:false});
+  this.terrainRoot=new THREE.Group();this.scene.add(this.terrainRoot);this.terrainRoot.add(grassSurface());this.village=new VillageView(this.scene);
   const iceMap=terrainTexture(false),iceMaterial=new THREE.MeshStandardMaterial({map:iceMap,vertexColors:true,roughness:.84});
-  for(let side=0;side<4;side++)this.scene.add(iceCliff(side,iceMaterial));
+  for(let side=0;side<4;side++)this.terrainRoot.add(iceCliff(side,iceMaterial));
   iceGate(this.scene,box,iceMap);
   const dark=new THREE.MeshStandardMaterial({color:0x405a68,roughness:.8});box([0,1.25,H-.045],[2,2.5,.09],dark);
   const sign=textSprite('HOTEL',2.3,.55);sign.position.set(0,2.98,H-.18);this.scene.add(sign);
@@ -235,6 +238,40 @@ export class FreeWorldView{
    mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();this.scene.add(mesh);this.meshes.push(mesh);
   }
  }
+ impactProxy(key,geometry,p,s,angle=0){
+  let root=this.impactProxies.get(key);
+  if(!root){root=new THREE.Group();const mesh=new THREE.Mesh(geometry,this.impactProxyMaterial);root.add(mesh);this.scene.add(root);this.impactProxies.set(key,root);}
+  root.position.set(...p);root.rotation.y=angle;root.children[0].scale.set(...s);return root;
+ }
+ syncImpactMarks(marks,blocks,scenery){
+  const blockRows=new Map(blocks.map(b=>[b.id,b])),sceneRows=new Map(scenery.map(r=>[r.id,r])),needed=new Set();
+  this.impactMarks.syncWorld(marks,mark=>{
+   if(mark.kind==='terrain')return [{root:this.terrainRoot,kind:'wall'},{root:this.village.roadRoot,kind:'wall',version:this.village.roads.key}];
+   if(mark.kind==='block'){
+    const b=blockRows.get(mark.object);if(!b||b.hp<=0)return [];
+    if(b.model){const root=this.models.entries.get('block-'+b.id)?.root;return root?[{root,kind:'wall'}]:[];}
+    const {p,s}=freeBounds(b);needed.add(mark.target);return [{root:this.impactProxy(mark.target,this.cube,p,s),kind:'wall'}];
+   }
+   if(mark.kind==='tree'){
+    const row=sceneRows.get(mark.object);if(!row||row.hp<=0)return [];
+    const trunk=villageTreeParts(row).find(p=>p.type==='trunk');if(!trunk)return [];
+    needed.add(mark.target);return [{root:this.impactProxy(mark.target,this.village.forest.geometry.trunk,trunk.p,trunk.s,trunk.a),kind:'wood'}];
+   }
+   if(mark.kind==='building'){
+    const entry=this.village.buildings.get(mark.object),row=entry?.row,part=mark.target.slice(mark.object.length+1);
+    if(!entry||(row.damage?.[part]||0)>=4)return [];
+    const root=entry.imported||entry.fallback;
+    return [{root,kind:'wall',accept:p=>villageSurfaceIntact(row,p),decorate:mesh=>{
+     const material=mesh.material.clone();
+     material.onBeforeCompile=shader=>patchVillageShader(shader,entry.mask.uniforms,false);
+     material.customProgramCacheKey=()=> 'world-impact-fracture-v1';
+     material.needsUpdate=true;mesh.material=material;mesh.userData.ownedImpactMaterial=true;
+    }}];
+   }
+   return [];
+  });
+  for(const [key,root] of this.impactProxies)if(!needed.has(key)){root.removeFromParent();this.impactProxies.delete(key);}
+ }
  showPreview(candidate,held=null,load=null){
   this.preview.visible=!!candidate;
   if(candidate){const {p,s}=freeBounds(candidate);this.preview.position.set(...p);this.preview.scale.set(...s);}
@@ -266,6 +303,7 @@ export class FreeWorldView{
      else a.deadSince=Math.min(a.deadSince,now-Math.max(0,p.deadAge||0)*1000);
     }else{
      const first=!a.motion;a.motion??=new VillageNpcMotion();a.motion.push(p,now);
+     if(Number.isInteger(p.hitSeq)&&p.hitSeq>0&&p.hitSeq!==a.hitSeq){a.hitSeq=p.hitSeq;a.hitAt=now-Math.max(0,p.hitAge??1e6)*1000;a.hitZone=p.hitZone;}
      // Initial appearance and respawn start at the same delayed pose, not
      // at the newest packet followed by a backward jump into its history.
      if(first){const pose=a.motion.frame(now,0);if(pose){a.g.position.set(...pose.position);a.g.rotation.y=pose.yaw;}}
@@ -282,7 +320,7 @@ export class FreeWorldView{
   for(const a of this.peers.values()){
    const g=a.g,p=a.target;let moving,animationDt=dt;
    if(p.dead){
-    const age=Math.max(0,(performance.now()-a.deadSince)/1000),pose=villageFallPose(age,p.slot%2===0?1:-1);
+    const age=Math.max(0,(performance.now()-a.deadSince)/1000),pose=villageFallPose(age,p.slot%2===0?1:-1,p.hitZone==='head'?.36:.78);
     g.position.x+=(p.position[0]-g.position.x)*t;g.position.z+=(p.position[2]-g.position.z)*t;
     g.position.y=p.position[1]+pose.lift;g.visible=age<10;
     g.rotation.set(pose.tilt,p.yaw,0,'YXZ');
@@ -302,7 +340,9 @@ export class FreeWorldView{
     const d=new THREE.Vector3(...p.position);moving=g.position.distanceTo(d)>.035;
     g.position.lerp(d,t);g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;
    }
-   resetRoomAvatarPose(g);animateCharacter(g,animationDt,moving,p.stance);applyRoomAvatarPose(g,null,p.weapon);updateRoomAvatarProp(g,models,p.weapon);
+   resetRoomAvatarPose(g);animateCharacter(g,animationDt,moving,p.stance);applyRoomAvatarPose(g,null,p.weapon);
+   if(p.slot<0)applyVillageNpcReaction(g,{age:a.hitAt===undefined?Infinity:Math.max(0,(performance.now()-a.hitAt)/1000),zone:a.hitZone,legs:p.injuredLegs||[],moving});
+   updateRoomAvatarProp(g,models,p.weapon);
   }
   if(third&&profile){
    if(!this.local)this.local=this.avatar(profile);
@@ -312,6 +352,7 @@ export class FreeWorldView{
   }else if(this.local)this.local.visible=false;
  }
  clear(){
+  this.impactMarks.clearWorld();for(const root of this.impactProxies.values())root.removeFromParent();this.impactProxies.clear();
   this.generation++;this.revision=-1;this.village.rubble.clear();this.showPreview(null);this.sync([]);this.models.clear();this.modelRefs.clear();
   while(this.effects.items.length)this.effects.remove(0);this.effects.light.intensity=0;
   if(this.local){clearRoomAvatarProps(this.local);disposeCharacter(this.local);this.local=null;}

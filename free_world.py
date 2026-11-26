@@ -78,6 +78,35 @@ def ray_box(origin,direction,b,s,limit):
             if lo>hi:return math.inf
     return lo
 
+def shot_boundary(origin,direction,limit):
+    """Stop the fictional ray at the playable terrain or ice border."""
+    for i in (0,2):
+        if abs(direction[i])>1e-9:
+            plane=L['half'] if direction[i]>0 else -L['half']
+            distance=(plane-origin[i])/direction[i]
+            if distance>=0:limit=min(limit,distance)
+    if direction[1]<-1e-9:
+        limit=min(limit,max(0.,-origin[1]/direction[1]))
+    return limit
+
+def npc_game_hit(origin,direction,npc,limit):
+    """Arcade hit volumes, aligned to the avatar's facing direction.
+    These are fictional animation triggers, not anatomical or physical models."""
+    x,y,z=npc['position'];c=math.cos(npc['yaw']);s=math.sin(npc['yaw'])
+    ox,oy,oz=origin[0]-x,origin[1]-y,origin[2]-z
+    local=[c*ox-s*oz,oy,s*ox+c*oz]
+    ray=[c*direction[0]-s*direction[2],direction[1],s*direction[0]+c*direction[2]]
+    # All village figures use the same medium-size 1.77 m avatar profile.
+    zones=(('head',[-.17,1.52,-.17],[.34,.30,.34]),
+           ('torso',[-.30,.85,-.22],[.60,.67,.44]),
+           ('left-leg',[-.25,0.,-.18],[.25,.85,.36]),
+           ('right-leg',[0.,0.,-.18],[.25,.85,.36]))
+    nearest,zone=math.inf,None
+    for name,bounds,size in zones:
+        t=ray_box(local,ray,bounds,size,limit)
+        if t<nearest:nearest,zone=t,name
+    return nearest,zone
+
 class FreeWorld:
     def __init__(self,path,clock=time.monotonic,damage_profiles=None,model_library=None):
         self.path=Path(path)/'free_world.sqlite3';self.clock=clock
@@ -98,8 +127,25 @@ class FreeWorld:
                 self.models[i]={'owner':owner,'name':name,'bytes':n}
             for i,owner,slot,cell,dims,texture,hp,model,pose,version in db.execute('SELECT id,owner,slot,cell,dims,texture,hp,model,pose,version FROM blocks'):
                 self.blocks[i]={'id':i,'owner':owner,'ownerSlot':slot,'cell':json.loads(cell),'dims':json.loads(dims),'texture':texture,'hp':hp,'model':model,'pose':json.loads(pose) if pose else None,'version':version}
+            db.execute('CREATE TABLE IF NOT EXISTS free_impacts(id INTEGER PRIMARY KEY AUTOINCREMENT,target TEXT NOT NULL,mark TEXT NOT NULL)')
+            db.execute('CREATE INDEX IF NOT EXISTS free_impacts_target ON free_impacts(target,id)')
         self.village=Village(self.path,[block_bounds(b) for b in self.blocks.values()],self.clock)
         self.revision=1
+    def clear_impacts(self,targets):
+        with closing(sqlite3.connect(self.path)) as db,db:
+            db.executemany('DELETE FROM free_impacts WHERE target=?',((t,) for t in targets))
+    def record_impact(self,target,kind,object_id,shot,severity):
+        # Server-derived game ray only. Shared cosmetic marks have a strict budget.
+        mark={'target':target,'kind':kind,'object':object_id,'origin':shot['origin'],'direction':shot['direction'],
+              'distance':shot['distance'],'severity':max(1,min(6,int(severity)))}
+        with closing(sqlite3.connect(self.path)) as db,db:
+            db.execute('INSERT INTO free_impacts(target,mark) VALUES(?,?)',(target,json.dumps(mark,separators=(',',':'))))
+            db.execute('DELETE FROM free_impacts WHERE target=? AND id NOT IN (SELECT id FROM free_impacts WHERE target=? ORDER BY id DESC LIMIT 12)',(target,target))
+            db.execute('DELETE FROM free_impacts WHERE id NOT IN (SELECT id FROM free_impacts ORDER BY id DESC LIMIT 384)')
+        self.revision+=1
+    def impact_snapshot(self):
+        with closing(sqlite3.connect(self.path)) as db:
+            return [{'id':i,**json.loads(mark)} for i,mark in db.execute('SELECT id,mark FROM free_impacts ORDER BY id')]
     def solid_rows(self):
         for b in self.blocks.values():
             if b['hp']>0:yield {'bounds':block_bounds(b)}
@@ -136,6 +182,7 @@ class FreeWorld:
         out['npcs']=self.village.snapshot()
         out['corpses']=self.village.corpses(self.clock())
         if revision!=self.revision:
+            out['impacts']=self.impact_snapshot()
             out['scenery']=[{**r,**({'damage':dict(r['damage'])} if 'damage' in r else {})} for r in self.village.rows.values()]
             out['villageRoads']=ROADS
             out['blocks']=[{**{k:v for k,v in b.items() if k!='owner'},**({'modelName':self.models[b['model']]['name'],'modelBytes':self.models[b['model']]['bytes']} if b['model'] in self.models else {})} for b in self.blocks.values()]
@@ -220,6 +267,7 @@ class FreeWorld:
         with closing(sqlite3.connect(self.path)) as db,db:
             db.execute('UPDATE blocks SET cell=?,dims=?,pose=?,texture=?,version=version+1 WHERE id=? AND owner=?',(json.dumps(cell),json.dumps(dims),json.dumps(pose) if pose else None,texture,i,player))
         old.update(cell=cell,dims=dims,pose=pose,texture=texture,version=old['version']+1)
+        self.clear_impacts(['block:'+str(i)])
         self.revision+=1;row['edit_at']=now
         return 'Objekt abgestellt und gespeichert'
 
@@ -235,6 +283,7 @@ class FreeWorld:
             db.execute('DELETE FROM blocks WHERE id=? AND owner=?',(i,player))
             if last:db.execute('DELETE FROM shared_models WHERE id=?',(model,))
         if last:self.models.pop(model,None)
+        self.clear_impacts(['block:'+str(i)])
         del self.blocks[i];self.revision+=1;row['edit_at']=now
         return 'Block entfernt'
     def model(self,player,identifier):
@@ -260,7 +309,9 @@ class FreeWorld:
             occupied=[block_bounds(b) for b in self.blocks.values()]
             occupied += [self.body_box(r['position'],1.12 if r.get('stance')=='crouch' else 1.6) for r in [*self.players.values(),*self.village.snapshot()]]
             need(not any(prism_overlap(*box,p) for p in repairs if p['stage']>=4 for box in occupied),'Wiederaufbau blockiert: Spieler oder Bauobjekt im Gebaeudeteil',409)
-            notice=structure.repair(part,whole);self.revision+=1;row['edit_at']=now
+            notice=structure.repair(part,whole)
+            self.clear_impacts(p['id'] for p in repairs)
+            self.revision+=1;row['edit_at']=now
             return notice
         need(type(i) is int and i in self.blocks,'Objekt nicht vorhanden',404)
         b=self.blocks[i];need(b['owner']==player,'Nur eigene Objekte reparieren',403)
@@ -268,7 +319,7 @@ class FreeWorld:
         need(distance_to_box(row['position'],p,s)<=L['reach'],'Objekt ausser Reichweite')
         need(not any(overlap(p,s,*self.body_box(r['position'])) for r in self.players.values()),'Spieler im Bauplatz',409)
         with closing(sqlite3.connect(self.path)) as db,db:db.execute('UPDATE blocks SET hp=100,version=version+1 WHERE id=?',(i,))
-        b['hp']=100;b['version']+=1;self.revision+=1
+        b['hp']=100;b['version']+=1;self.clear_impacts(['block:'+str(i)]);self.revision+=1
         return 'Objekt repariert'
 
     def damage_block(self,b,direction,damage):
@@ -308,39 +359,58 @@ class FreeWorld:
         need(.99<=norm<=1.01,'Ungueltige Blickrichtung')
         direction=[x/norm for x in direction];row['pulse_at']=now
         p=row['position'];origin=[p[0],p[1]+(1.02 if row['stance']=='crouch' else 1.58),p[2]]
-        reach=L['reach'];stop=reach;target_block=None
+        reach=L['weaponReach'][weapon];stop=shot_boundary(origin,direction,reach);boundary_hit=stop<reach
+        target_block=None
         for b in self.blocks.values():
             if b['hp']<=0:continue
             t=ray_box(origin,direction,*block_bounds(b),reach)
             if t<stop:stop=t;target_block=b
-        target=None;target_scenery=None;target_npc=None
+        target=None;target_scenery=None;target_npc=None;target_zone=None
         for b in self.village.targets(origin,reach):
             t=prism_ray(origin,direction,b,reach)
             if t<stop:stop=t;target_block=None;target_scenery=b
         for npc in self.village.npcs:
             if npc['hp']<=0:continue
-            t=ray_box(origin,direction,*self.body_box(npc['position']),reach)
-            if t<stop:stop=t;target_block=None;target_scenery=None;target_npc=npc
+            t,zone=npc_game_hit(origin,direction,npc,stop)
+            if t<stop:stop=t;target_block=None;target_scenery=None;target_npc=npc;target_zone=zone
         for key,other in self.players.items():
             if key==player:continue
             box,size=self.body_box(other['position'],1.12 if other['stance']=='crouch' else 1.6)
             t=ray_box(origin,direction,box,size,reach)
             if t<stop:stop=t;target=other;target_block=None;target_scenery=None;target_npc=None
-        shot={'origin':origin,'direction':direction,'distance':stop,'impact':any(x is not None for x in (target,target_block,target_scenery,target_npc))}
+        shot={'origin':origin,'direction':direction,'distance':stop,'impact':boundary_hit or any(x is not None for x in (target,target_block,target_scenery,target_npc))}
         if now<row['shield']:return 'Spawn-Schutz aktiv',shot
         damage=self.damage_profiles[weapon][0]
-        if target_block is not None:return self.damage_block(target_block,direction,damage),shot
+        if target_block is not None:
+            before=block_bounds(target_block);notice=self.damage_block(target_block,direction,damage)
+            key='block:'+str(target_block['id'])
+            if target_block['hp']<=0 or block_bounds(target_block)!=before:self.clear_impacts([key])
+            else:self.record_impact(key,'block',target_block['id'],shot,self.damage_profiles[weapon][2])
+            return notice,shot
         if target_scenery is not None:
+            key=target_scenery['id']
             if target_scenery['kind']=='building-part':
                 notice=self.village.structure.damage(target_scenery,self.damage_profiles[weapon][1])
-            else:notice=self.village.damage_tree(target_scenery,damage)
+                part=self.village.structure.parts[key]
+                if part['hp']<=0:self.clear_impacts([key])
+                else:self.record_impact(key,'building',part['building'],shot,part['stage'])
+            else:
+                notice=self.village.damage_tree(target_scenery,damage)
+                if target_scenery['hp']<=0:self.clear_impacts([key])
+                else:self.record_impact(key,'tree',key,shot,self.damage_profiles[weapon][2])
             self.revision+=1
             return notice,shot
         if target_npc is not None:
-            defeated=self.village.damage_npc(target_npc,player,damage,now)
+            defeated=self.village.damage_npc(target_npc,player,damage,now,target_zone)
             if defeated:row['score']+=1
-            return ('Trainings-NPC besiegt' if defeated else 'Trainings-NPC verteidigt sich'),shot
-        if target is None:return 'Kein Spieltreffer',shot
+            shot['npcHit']={'slot':target_npc['slot'],'zone':target_zone,'defeated':defeated}
+            notice='Trainings-NPC besiegt' if defeated else 'Trainings-NPC verletzt'
+            return ('Kopftreffer - '+notice if target_zone=='head' else notice),shot
+        if target is None:
+            if boundary_hit:
+                self.record_impact('terrain','terrain','terrain',shot,self.damage_profiles[weapon][2])
+                return 'Oberflaechentreffer',shot
+            return 'Kein Spieltreffer',shot
         if now<target['shield']:return 'Spawn-Schutz aktiv',shot
         target['hp']=max(0,target['hp']-damage)
         if target['hp']==0:

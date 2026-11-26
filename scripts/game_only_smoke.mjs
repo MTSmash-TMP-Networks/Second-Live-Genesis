@@ -424,3 +424,5 @@ const villageRepairRouting=new Function('assert',`
 assert.ok(game.includes('s.structureParts=buildings.flatMap(villageParts)'));
 assert.ok(game.includes('buildings.flatMap(villageColliders)'));
 console.log('Village repair targeting, full rebuild and own block repair routing passed');
+
+assert.ok(game.includes('freeView.syncImpactMarks(s.impacts||[],s.blocks,s.scenery||[])'));

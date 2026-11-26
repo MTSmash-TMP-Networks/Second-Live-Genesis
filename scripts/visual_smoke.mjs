@@ -45,7 +45,7 @@ console.log('Three.js geometry, optional furniture replacement, bounded world-sp
 
 // Imported display scenes must not show a second separated copy or loose art props.
 import { isolateDisplayProp } from './display_prop.js';
-import { ImpactMarks } from './impact_marks.js';
+import { ImpactMarks, FreeWorldImpactMarks } from './impact_marks.js';
 const display=new THREE.Group(),material=new THREE.MeshStandardMaterial();
 for(const x of [0,.7]){const body=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,.5),material);body.position.x=x;display.add(body);const detail=new THREE.Mesh(new THREE.BoxGeometry(.11,.1,.12),material);detail.position.set(x,-.09,.17);display.add(detail);}
 const loose=new THREE.Mesh(new THREE.BoxGeometry(.08,.11,.08),material);loose.position.set(1.5,0,0);display.add(loose);
@@ -643,3 +643,58 @@ console.log('Village streetlights: day/night, staggered coverage and scene rebui
  assert.ok(next.position[0]>initial.position[0]&&next.position[0]-initial.position[0]<.04);
 }
 console.log('Village NPC cold start, stale simulation timestamps and initial display pose verified');
+
+
+import {villageReactionPose,applyVillageNpcReaction,resetRoomAvatarPose} from './avatar_room_pose.js';
+{
+ 
+for(let frame=0;frame<=360;frame++){
+ const phase=frame*Math.PI/30,healthy=villageReactionPose(Infinity,null,[],phase,true);
+ assert.equal(healthy.roll,0);assert.equal(healthy.pitch,0);assert.equal(healthy.dip,0);assert.equal(healthy.leftBend,0);assert.equal(healthy.rightBend,0);
+ const left=villageReactionPose(1,'left-leg',['left-leg'],phase,true);
+ const right=villageReactionPose(1,'right-leg',['right-leg'],phase,true);
+ assert.ok(left.roll<0&&right.roll>0);assert.ok(left.leftBend>0&&right.rightBend>0);assert.equal(left.rightBend,0);assert.equal(right.leftBend,0);
+ const idle=villageReactionPose(1,'left-leg',['left-leg'],phase,false);
+ assert.equal(idle.limp,0);assert.equal(idle.dip,0);
+}
+const hit=villageReactionPose(.275,'torso',[],0,false);
+assert.ok(hit.flinch>.99&&hit.pitch>.20);
+assert.equal(villageReactionPose(.55,'torso',[],0,false).flinch,0);
+assert.ok(villageFallPose(.36,1,.36).fallen);assert.ok(!villageFallPose(.36).fallen);
+
+ const avatar=createCharacter(DEFAULT_CHARACTER,{legacyOnly:true,villageNpc:true});
+ animateCharacter(avatar,1/60,true,'walk');
+ const body=avatar.userData.body,before=body.quaternion.clone(),height=body.position.y,knee=avatar.userData.knees[0],kneeBefore=knee.quaternion.clone();
+ applyVillageNpcReaction(avatar,{age:.275,zone:'left-leg',legs:['left-leg'],moving:true});
+ assert.ok(body.quaternion.angleTo(before)>.05);assert.ok(body.position.y<height);assert.ok(knee.quaternion.angleTo(kneeBefore)>.05);
+ resetRoomAvatarPose(avatar);assert.ok(body.quaternion.angleTo(before)<1e-6);assert.ok(Math.abs(body.position.y-height)<1e-6);assert.ok(knee.quaternion.angleTo(kneeBefore)<1e-6);
+ disposeCharacter(avatar);
+}
+{
+ const scene=new THREE.Scene(),room=new ShotEffects(scene),world=new ShotEffects(scene,300);
+ for(const effect of [room,world])effect.fire({origin:[0,1.58,0],direction:[1,0,0],distance:200,impact:true});
+ assert.equal(room.items.find(e=>e.kind==='trail').to.x,8);
+ const trail=world.items.find(e=>e.kind==='trail');
+ assert.equal(trail.to.x,200);assert.equal(trail.length,200);
+ world.update(.05);assert.ok(trail.mesh.position.x>8);
+ for(let i=0;i<20;i++)world.update(.05);
+ assert.ok(world.items.every(e=>e.kind!=='trail'));
+ world.fire({origin:[0,1,0],direction:[1,0,0],distance:400,impact:false});
+ assert.equal(world.items.find(e=>e.kind==='trail').to.x,300);
+}
+console.log('NPC regional reactions, reversible pose overlays and extended Free World tracer regression passed');
+
+{
+ const root=new THREE.Group(),mesh=new THREE.Mesh(new THREE.BoxGeometry(1,2,1),new THREE.MeshBasicMaterial({visible:false}));root.position.set(80,1,0);root.add(mesh);
+ const marks=new FreeWorldImpactMarks();
+ const impact={id:1,target:'block:1',kind:'block',object:1,origin:[0,1,0],direction:[1,0,0],distance:79.5,severity:1};
+ const resolve=()=>[{root,kind:'wall'}];
+ marks.syncWorld([impact],resolve);assert.equal(marks.live.size,1);
+ const decal=marks.live.get(1);assert.equal(decal.parent,root);assert.ok(decal.geometry.attributes.position.count>0);
+ marks.syncWorld([impact],resolve);assert.equal(marks.live.get(1),decal);
+ marks.syncWorld([] ,resolve);assert.equal(marks.live.size,0);assert.equal(decal.parent,null);
+ marks.syncWorld([impact],()=>[]);assert.equal(marks.live.size,0);
+ marks.syncWorld([impact],resolve);assert.equal(marks.live.size,1);
+ marks.clearWorld();assert.equal(marks.live.size,0);
+}
+console.log('Free World hotel-style projected impacts, extended-distance surface projection and cleanup passed');

@@ -144,8 +144,8 @@ export class VillageNpcMotion {
   return {position,yaw:heading,moving:this.walking,speed:this.speed,playback:clamp(this.speed/1.35,.8,1.5),delta:step};
  }
 }
-export function villageFallPose(age,side=1){
- const t=clamp(age/.78,0,1),e=t*t*(3-2*t),bounce=t===1?0:Math.sin(Math.PI*t)*.035;
+export function villageFallPose(age,side=1,duration=.78){
+ const t=clamp(age/Math.max(.1,duration),0,1),e=t*t*(3-2*t),bounce=t===1?0:Math.sin(Math.PI*t)*.035;
  return {tilt:side*Math.PI/2*e,lift:.19*e+bounce,fallen:t===1};
 }
 // Site coordinates and the four damage stages are in a small floating-point
@@ -198,6 +198,21 @@ export function patchVillageShader(shader,uniforms,visible){
   float crack=1.0-smoothstep(0.025,0.045+villageStage*0.045,line);
   diffuseColor.rgb*=mix(1.0-villageStage*0.09,0.22,crack*0.85);
  }`);
+}
+// Mirror the shader's face selection when raycasting a visual surface for a decal.
+export function villageSurfaceIntact(row,point){
+ const [origin,size]=row.bounds,p=point.toArray(),q=p.map((x,j)=>clamp((x-origin[j])/size[j],0,.999999));
+ let face;
+ if(q[1]<.025)face=0;else if(q[1]>=.86)face=1;
+ else if(q[0]<.085)face=2;else if(q[0]>=.915)face=3;
+ else if(q[2]<.085)face=4;else if(q[2]>=.915)face=5;
+ else{const d=q.map((x,j)=>Math.min(x,1-x)*size[j]);face=d[0]<=d[1]&&d[0]<=d[2]?(q[0]<.5?2:3):d[1]<=d[2]?(q[1]<.5?0:1):(q[2]<.5?4:5);}
+ let nearest=Infinity,part=null;
+ for(const cell of villageFaces(row)[face].parts){
+  const distance=(p[cell.axes[0]]-cell.site[0])**2+(p[cell.axes[1]]-cell.site[1])**2;
+  if(distance<nearest){nearest=distance;part=cell;}
+ }
+ return !!part&&(row.damage?.[part.index]||0)<4;
 }
 // Exposed stone/mortar sides generated from precisely the hotel's fracture boundary.
 export function villageCutGeometry(row){

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.9 – NPC Hit Reactions & World Impact Marks
+- NPCs erhalten serverseitige, vereinfachte Trefferzonen und sichtbare, reversible Körperreaktionen. Ein Kopftreffer beendet den NPC-Spielzustand sofort und löst die schnelle Fallanimation aus. Beinverletzungen verändern Schritthaltung und Bewegungstempo bis zum Respawn; Körpertreffer lösen kurzes Taumeln aus. Gesunde Laufanimation und bisherige Respawn-Zeiten bleiben unverändert. Keine neuen MoCap-Clips oder Ragdoll-Simulation.
+- Das Scharfschützengewehr nutzt in der Free World bis zu 300 Spielmeter statt der bisherigen 8-m-Baureichweite. Server-Ray und sichtbare Schussspur verwenden dieselbe Reichweite. Gelände, Eisgrenze und intakte Kollisionen begrenzen die Spieltreffer. Hotelzimmer und Baureichweite bleiben unverändert.
+- Einschussmarkierungen auf Gebäuden, Blöcken, Baumstämmen, Gelände und passenden Modelloberflächen verwenden das Decal-System und die Schadentexturen des Hotels. Serverbestätigte Markierungen werden gemeinsam in SQLite gespeichert (384 insgesamt, maximal 12 pro Ziel); Reparatur, Zerstörung und Verschieben entfernen zugehörige Markierungen. Projektion auf die tatsächliche Modelloberfläche, Bruchmasken schneiden Markierungen an beschädigten Gebäuden ab. Fehlende passende sichtbare Oberflächen werden übersprungen.
+
 ## 0.15.8 – NPC Cold Start Fix
 - Beim Betreten der Free World wird die NPC-Simulation vor dem ersten Snapshot auf den aktuellen Serverzeitpunkt gebracht. Zusätzlich enthält jeder NPC-Snapshot einen aktuellen Serverzeitstempel, unabhängig vom letzten Bewegungsschritt.
 - Der Client erkennt veraltete oder unterbrochene Bewegungshistorien, richtet den Puffer sofort auf die aktuelle Zeitleiste aus und überspringt nicht mehr minutenlang alte Zeitbereiche. Erstinitialisierung und Respawn beginnen beide an der tatsächlich dargestellten Position im Bewegungspuffer statt an der neuesten Paketposition. Laufanimation, Geschwindigkeit, Patrouillen und Laternen bleiben unverändert.
