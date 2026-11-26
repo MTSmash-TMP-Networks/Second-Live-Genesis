@@ -148,6 +148,26 @@ export function applyVillageNpcReaction(root,{age=Infinity,zone=null,legs=[],mov
  }
  root.updateWorldMatrix(true,true);
 }
+// Subtle idle activity overlays while a village visitor is stopped near a
+// fixture. No root translation or locomotion phase reset.
+export function applyVillageActivity(root,activity,moving,dt){
+ const u=root.userData;if(!u.villageNpc)return;
+ const active=!moving&&['visit','browse','cafe'].includes(activity);
+ const t=1-Math.exp(-Math.max(0,Math.min(.25,dt))*5);
+ u.villageActivityWeight=(u.villageActivityWeight||0)+((active?1:0)-(u.villageActivityWeight||0))*t;
+ const weight=u.villageActivityWeight;if(weight<.001)return;
+ u.villageActivityPhase=(u.villageActivityPhase||0)+Math.max(0,Math.min(.25,dt));
+ const phase=u.villageActivityPhase,pitch=(.08+.06*Math.sin(phase*1.65))*weight,yaw=Math.sin(phase*.9)*.18*weight;
+ const rig=roomRig(root);
+ if(rig){
+  avatarBoneOffset(root,rig.Head,X,pitch);
+  avatarBoneOffset(root,rig.Head,Y,yaw);
+  if(activity==='browse'||activity==='cafe')avatarBoneOffset(root,rig.RightForeArm,X,-(.13+.07*Math.sin(phase*1.4))*weight);
+ }else if(u.head){
+  remember(root,u.head);u.head.rotation.x+=pitch;u.head.rotation.y+=yaw;
+ }
+ root.updateWorldMatrix(true,true);
+}
 // Borrow render meshes from existing game assets, never first-person arms or
 // camera transforms. Shared geometry/materials belong to the original renderer.
 export function clearRoomAvatarProps(root){

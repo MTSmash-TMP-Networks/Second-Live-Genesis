@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.12 · Bundled Village Assets**
+**v0.15.13 · Living Interiors**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.13 – Lebendige Innenräume
+
+Die vier Wohnhäuser, der Markt und das Café erhalten 80 Einrichtungsgegenstände, lokale Innenbeleuchtung und passende NPC-Besuche. Möbel besitzen eigene Kollisionen, gespeicherte Schäden und Reparaturmöglichkeiten. Die originalen Dorfmodelle bleiben unverändert.
 
 ## Neu in 0.15.12 – Dorfmodelle im Docker-Build
 

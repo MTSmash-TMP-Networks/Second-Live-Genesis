@@ -554,10 +554,10 @@ class GameOnlyTest(unittest.TestCase):
             session=world.enter('builder',profile);player=world.players['builder']
             row=world.village.rows['building-0-0']
             structure=world.village.structure
-            self.assertEqual(len(list(parts_for(row))),269)
-            self.assertEqual(len(structure.colliders[row['id']]),6)
+            self.assertEqual(len(list(parts_for(row))),269+len(row['interior']))
+            self.assertEqual(len(structure.colliders[row['id']]),6+len(row['interior']))
             parts=list(parts_for(row))
-            self.assertEqual(len({p['index'] for p in parts}),269)
+            self.assertEqual(len({p['index'] for p in parts}),269+len(row['interior']))
             self.assertTrue(any(abs(a[0]-b[0])>.01 and abs(a[1]-b[1])>.01 for p in parts if p.get('poly') for a,b in zip(p['poly'],p['poly'][1:]+p['poly'][:1])))
             # Street-facing wall, at the lowest two accessible wall levels.
             part=structure.parts[row['id']+':'+str(part_index(7,1,1))]
@@ -745,7 +745,7 @@ class GameOnlyTest(unittest.TestCase):
                 self.assertFalse(village.set_door(row,False,now[0],players,village.solids,body))
                 players['observer']['position']=[-65.,0.,-30.]
                 self.assertTrue(village.set_door(row,False,now[0],players,village.solids,body))
-            entered=set();returned=set();opened=set()
+            entered=set();returned=set();opened=set();activities=set()
             for _ in range(2200):
                 now[0]+=.05
                 village.tick(now[0],players,blocked,lambda *a:math.inf,village.solids,body,[0,0,0])
@@ -755,10 +755,12 @@ class GameOnlyTest(unittest.TestCase):
                     if (d['front']-x)*d['side']>1.2 and abs(z-d['z'])<3.:entered.add(npc['slot'])
                     elif npc['slot'] in entered and npc['visit_index']==-1:returned.add(npc['slot'])
                     if d['open']:opened.add(row['id'])
+                    if npc['activity']:activities.add(npc['activity'])
                 if len(returned)==6 and len(opened)==6:break
             self.assertEqual(len(entered),6)
             self.assertEqual(len(returned),6)
             self.assertEqual(len(opened),6)
+            self.assertEqual(activities,{'visit','browse','cafe'})
             row=village.structure.rows['building-0-0'];key=row['id']+':'+str(DOOR_INDEX)
             village.structure.damage(village.structure.parts[key],4)
             self.assertTrue(row['door']['open'])
@@ -767,6 +769,39 @@ class GameOnlyTest(unittest.TestCase):
             self.assertEqual(reopened.structure.parts[key]['stage'],4)
             reopened.structure.repair(reopened.structure.parts[key])
             self.assertEqual(reopened.structure.parts[key]['hp'],100)
+
+    def test_village_furniture_layout_and_persistence(self):
+        from village import Village
+        from village_structure import furniture_parts, prism_overlap, prism_ray
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'interior.sqlite3'
+            village=Village(path,[],lambda:100.)
+            self.assertEqual(sum(len(r['interior']) for r in village.structure.rows.values()),80)
+            for row in village.structure.rows.values():
+                parts=list(furniture_parts(row))
+                self.assertEqual(len({p['index'] for p in parts}),len(parts))
+                d=row['door'];floor=row['bounds'][1][1]*.025
+                for i,p in enumerate(parts):
+                    self.assertFalse(any(prism_overlap(*p['bounds'],q) for q in parts[i+1:]))
+                    self.assertTrue(any(q['id']==p['id'] for q in village.solids()))
+                    # The complete entry and visit path remains free of furniture.
+                    for step in range(41):
+                        t=step/40;x=d['front']-d['side']*2.8*t;z=d['z']+1.2*max(0.,(t-.70)/.30)
+                        self.assertFalse(prism_overlap([x-.25,floor+.015,z-.25],[.5,1.585,.5],p))
+            row=village.structure.rows['building-0-0']
+            part=next(p for p in furniture_parts(row) if p['type']=='sofa')
+            key=part['id'];b,s=part['bounds']
+            self.assertLess(prism_ray([b[0]-1,b[1]+.5,b[2]+s[2]/2],[1,0,0],part,4),4)
+            village.structure.damage(part,4)
+            self.assertFalse(any(p['id']==key for p in village.solids()))
+            reopened=Village(path,[],lambda:101.)
+            self.assertEqual(reopened.structure.parts[key]['stage'],4)
+            reopened.structure.repair(reopened.structure.parts[key])
+            self.assertTrue(any(p['id']==key for p in reopened.solids()))
+            # Existing constructions inside an already generated building win.
+            migrated=Village(path,[part['bounds']],lambda:102.)
+            self.assertEqual(migrated.structure.parts[key]['stage'],4)
+            self.assertFalse(any(p['id']==key for p in migrated.solids()))
 
     def test_free_world_manual_door_interaction(self):
         from free_world import FreeWorld

@@ -7,7 +7,7 @@ import {FreeWorldImpactMarks} from './impact_marks.js';
 import {villageTreeParts} from './village_landscape.js';
 import {ShotEffects} from './shotfx.js';
 import {createCharacter,animateCharacter,disposeCharacter,normalizeCharacter} from './character.js';
-import {resetRoomAvatarPose,applyRoomAvatarPose,applyVillageNpcReaction,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
+import {resetRoomAvatarPose,applyRoomAvatarPose,applyVillageNpcReaction,applyVillageActivity,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
 export const FREE_LAYOUT=layout;
 const H=layout.half,Y=layout.height,G=layout.grid;
 const ICE_GATE={x:48,width:2,height:2.65};
@@ -199,6 +199,7 @@ export class FreeWorldView{
   this.moonlight.position.copy(d).multiplyScalar(-150);this.moonlight.intensity=.22*s.night;
   this.hemi.color.set(0x99b3ec).lerp(new THREE.Color(0xffffff),s.day);this.hemi.intensity=.20+1.6*s.day;
   this.village.roads.setNight(s.night);
+  this.village.interior.setNight(s.night,player);
   return phase;
  }
  material(id,load,hp=100){
@@ -260,6 +261,10 @@ export class FreeWorldView{
    if(mark.kind==='building'){
     const entry=this.village.buildings.get(mark.object),row=entry?.row,part=mark.target.slice(mark.object.length+1);
     if(!entry||(row.damage?.[part]||0)>=4)return [];
+    if(Number(part)>=512){
+     const e=this.village.interior.get(mark.target);if(!e?.root.visible)return [];
+     return [{root:e.root,kind:['sofa','bed','chair'].includes(e.item.type)?'fabric':e.item.type==='lamp'?'glass':'wood'}];
+    }
     if(part==='448'){
      const root=entry.doorPivot;
      return root&&!row.door?.open&&Math.abs(root.rotation.y)<.025?[{root,kind:'wood'}]:[];
@@ -347,7 +352,11 @@ export class FreeWorldView{
     g.position.lerp(d,t);g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;
    }
    resetRoomAvatarPose(g);animateCharacter(g,animationDt,moving,p.stance);applyRoomAvatarPose(g,null,p.weapon);
-   if(p.slot<0)applyVillageNpcReaction(g,{age:a.hitAt===undefined?Infinity:Math.max(0,(performance.now()-a.hitAt)/1000),zone:a.hitZone,legs:p.injuredLegs||[],moving});
+   if(p.slot<0){
+    const age=a.hitAt===undefined?Infinity:Math.max(0,(performance.now()-a.hitAt)/1000);
+    applyVillageNpcReaction(g,{age,zone:a.hitZone,legs:p.injuredLegs||[],moving});
+    if(!p.weapon&&age>=.55)applyVillageActivity(g,p.activity,moving,animationDt);
+   }
    updateRoomAvatarProp(g,models,p.weapon);
   }
   if(third&&profile){

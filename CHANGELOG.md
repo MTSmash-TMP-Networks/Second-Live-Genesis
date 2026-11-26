@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.13 – Living Interiors
+- Alle sechs vorhandenen Erdgeschosse erhalten 80 detaillierte Einrichtungsgegenstände: Wohn-, Schlaf- und Essbereich, Küche, Marktregale mit Waren und Kasse sowie Café-Tische, Stühle und Kaffee-Theke. Prozedurale Modelle mit Holz- und Stofftexturen, ohne neue externe Downloads. Bestehende Gebäudemodelle bleiben erhalten.
+- Einrichtung besitzt gemeinsame Kollisionsvolumen, persistente Schadenszustände, lokale Einschussmarkierungen und Wiederaufbau über R bzw. Umschalt+R. Die alten Wand- und Tür-IDs bleiben unverändert; bei bestehenden Spielerbauten wird kollidierende Standard-Einrichtung ausgelassen.
+- Warme Innenbeleuchtung, nachts heller. Maximal vier nahe Innenraum-Punktlichter ohne zusätzliche Schattenkarten. NPCs bleiben bei ihren bisherigen Besuchen länger im Gebäude, wenden sich zu passenden Möbeln und erhalten dezente Blick-/Gestenanimationen. Keine neuen NPCs oder vollständige Sitz-/Handlungsanimationen.
+
 ## 0.15.12 – Bundled Village Assets
 - Docker-Build unterstützt das vorbereitete Quaternius-Modell-ZIP direkt im Git-Checkout. Sobald das Archiv in `optional-village/Second-Live-Quaternius-Village-Models.zip` liegt, wird es anhand der fest hinterlegten SHA256-Prüfsumme geprüft, entpackt und mit den bestehenden GLB-Sicherheitsprüfungen validiert. Kein separater Admin-Import für das Standardpaket nötig. Bereits installierte Modelle im Datenvolume bleiben vorrangig; bei fehlendem ZIP bleiben die bisherigen Fallbacks verfügbar.
 - Admin-Modellimport in einen optionalen aufklappbaren Bereich verschoben; vorhandene Modellanzahl und Status werden weiterhin angezeigt.

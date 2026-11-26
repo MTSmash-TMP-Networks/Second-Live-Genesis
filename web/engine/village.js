@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {VillageDamageMask,VillageRubble,villageParts,VILLAGE_DOOR_INDEX} from './village_damage.js';
 import {VillageRoads,VillageForest} from './village_landscape.js';
+import {VillageInterior} from './village_interior.js';
 
 // Vertex ranges in the four prepared CC0 assemblies. Verify the source bounds
 // and exact triangle counts before separating a leaf; arbitrary custom models
@@ -30,7 +31,9 @@ export class VillageView{
  constructor(scene){
   this.root=new THREE.Group();this.root.name='Hidden village';scene.add(this.root);
   this.treeRoot=new THREE.Group();this.buildingRoot=new THREE.Group();this.roadRoot=new THREE.Group();
-  this.root.add(this.treeRoot,this.buildingRoot,this.roadRoot);
+  this.interiorRoot=new THREE.Group();this.interiorRoot.name='Village furnished interiors';
+  this.root.add(this.treeRoot,this.buildingRoot,this.roadRoot,this.interiorRoot);
+  this.interior=new VillageInterior(this.interiorRoot);
   this.cube=new THREE.BoxGeometry(1,1,1);
   this.forest=new VillageForest(this.treeRoot);
   this.roads=new VillageRoads(this.roadRoot,(...args)=>this.box(...args));
@@ -198,6 +201,7 @@ export class VillageView{
    entry.release=entry.mask.attach(entry.fallback);
    this.buildings.set(row.id,entry);this.buildingRoot.add(entry.fallback,entry.mask.cuts);this.installDoor(entry);this.installModel(entry);
   }
+  this.interior.set(buildings);
   this.forest.set(rows.filter(r=>r.kind==='tree'));
  }
 }

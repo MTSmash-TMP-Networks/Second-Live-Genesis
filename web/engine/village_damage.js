@@ -57,16 +57,19 @@ function cutEntrance(part,row,face){
  }
  return {...part,pieces};
 }
+export function villageFurnitureParts(row){
+ return (row.interior||[]).map(p=>{const stage=row.damage?.[p.index]||0;return {...p,id:row.id+':'+p.index,building:row.id,kind:'building-part',furniture:true,stage,hp:100-25*stage};});
+}
 export function villageParts(row){
  const parts=villageFaces(row).flatMap((f,i)=>f.parts.map(p=>{const stage=row.damage?.[p.index]||0;return cutEntrance({...p,id:row.id+':'+p.index,building:row.id,kind:'building-part',stage,hp:100-25*stage},row,i);}));
- const door=villageDoorPart(row);if(door)parts.push(door);return parts;
+ const door=villageDoorPart(row);if(door)parts.push(door);return parts.concat(villageFurnitureParts(row));
 }
 export function villageColliders(row){
  const parts=villageFaces(row).flatMap((f,i)=>f.parts.some(p=>(row.damage?.[p.index]||0)>=4)?
   f.parts.filter(p=>(row.damage?.[p.index]||0)<4).map(p=>cutEntrance({...p,id:row.id+':'+p.index,kind:'building-solid',hp:100},row,i)):
   [cutEntrance({id:row.id+':solid:'+i,kind:'building-solid',hp:100,bounds:f.bounds},row,i)]);
  const door=villageDoorPart(row);if(door&&door.hp>0&&!row.door.open)parts.push(door);
- return parts;
+ return parts.concat(villageFurnitureParts(row).filter(p=>p.hp>0));
 }
 export function villagePrismOverlap(a,s,part){
  if(part.pieces)return part.pieces.some(p=>villagePrismOverlap(a,s,p));

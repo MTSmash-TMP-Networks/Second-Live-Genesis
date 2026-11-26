@@ -762,3 +762,28 @@ import {preparedDoorTriangles,VillageView} from './village.js';
  assert.ok(Math.abs(fake.rotation.y+Math.PI/2)<.001);
 }
 console.log('Village doors: physical opening, closed/destroyed leaf, asset extraction and animation verified');
+
+import {VillageInterior,makeInteriorProp,interiorMaterials} from './village_interior.js';
+{
+ const types=['sofa','coffee','media','bed','dresser','kitchen','dining','chair','bookcase','shelf','checkout','produce','crate','cafe-counter','cafe-table','lamp','plant'];
+ const materials=interiorMaterials(),root=new THREE.Group(),interior=new VillageInterior(root);
+ const row={id:'interior-test',kind:'house',bounds:[[0,0,0],[10,7.5,10]],damage:{},interior:types.map((type,i)=>({index:512+i,type,theme:'home',side:1,bounds:[[i*3,.1875,0],[1.4,1.86,2.1]]}))};
+ interior.set([row]);assert.equal(interior.entries.size,types.length);
+ for(const item of row.interior){
+  const e=interior.get(row.id+':'+item.index),box=new THREE.Box3().setFromObject(e.root);
+  assert.ok(!box.isEmpty()&&[...box.min.toArray(),...box.max.toArray()].every(Number.isFinite));
+  assert.ok(e.root.children.some(m=>m.isMesh));
+ }
+ const lamp=interior.get(row.id+':'+(512+types.indexOf('lamp'))),pos=lamp.root.position;
+ interior.setNight(0,{x:pos.x,z:pos.z});assert.ok(lamp.root.userData.interiorLight.visible);
+ const day=lamp.root.userData.interiorLight.intensity;
+ interior.setNight(1,{x:pos.x,z:pos.z});assert.ok(lamp.root.userData.interiorLight.intensity>day);
+ const furniture=villageParts(row).filter(p=>p.furniture);
+ assert.equal(furniture.length,types.length);assert.ok(villageColliders(row).some(p=>p.id===furniture[0].id));
+ row.damage[furniture[0].index]=4;interior.set([row]);
+ assert.ok(!interior.get(furniture[0].id).root.visible);
+ assert.ok(!villageColliders(row).some(p=>p.id===furniture[0].id));
+ delete row.damage[furniture[0].index];interior.set([row]);assert.ok(interior.get(furniture[0].id).root.visible);
+ interior.set([]);assert.equal(root.children.length,0);
+}
+console.log('Village furniture meshes, collision, repair and interior lighting verified');

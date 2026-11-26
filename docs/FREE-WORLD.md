@@ -1,4 +1,4 @@
-# Free World (0.15.12)
+# Free World (0.15.13)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -70,3 +70,6 @@ Each existing building has a centered street-facing entrance and a separately an
 
 ## Bundled village assets (0.15.12)
 The Docker build supports the prepared CC0 ZIP at `optional-village/Second-Live-Quaternius-Village-Models.zip`. When present in the Git checkout, the build checks the original SHA256, validates all four static GLBs, copies the license/report and writes the local asset manifest. No browser-side download or admin import is required. Existing database imports take precedence. Without the ZIP the build still supports standalone GLBs and procedural fallbacks. See `optional-village/README.md` for the exact package path and checksum.
+
+## Living interiors (0.15.13)
+The six ground floors have a server-defined layout with 80 furniture items, stable IDs starting at 512 per building and the existing four damage stages. Houses contain living, sleeping, kitchen and dining furniture; the market has stocked shelving and a register; the café has tables, chairs and a coffee counter. Procedural textured meshes are batched per material, without new asset downloads. Furniture has approximate AABB collision, damage and repair, and local impact projection where a matching mesh exists. Conflicting existing builds suppress their default furniture; repair restores it once clear. Up to four nearby warm indoor lights become brighter at night. Visitors pause for 8–12 seconds and face a nearby fixture with a reversible idle pose overlay; the existing movement and combat logic remain intact. No furnishing of upper floors, actual sitting, service transactions, or new characters in this release.

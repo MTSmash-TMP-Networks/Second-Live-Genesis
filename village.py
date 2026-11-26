@@ -100,7 +100,7 @@ class Village:
                             due=wall_now+TREE_REGROW_SECONDS
                             db.execute('UPDATE village_state SET regrow_at=? WHERE id=?',(due,key))
                         self.regrow_at[key]=due
-        self.structure=VillageStructure(path,self.rows.values())
+        self.structure=VillageStructure(path,self.rows.values(),blocks)
         self.door_revision=0;self.door_hold={}
         self.npcs=[]
         for i,(side,z) in enumerate(NPC_PATROL_SEEDS):
@@ -113,7 +113,7 @@ class Village:
             if home is None:continue
             self.npcs.append({'slot':-100-i,'nickname':f'Test-NPC {i+1}','avatar':{'model':NPC_MODELS[i],'height':1,'beard':0 if i>=4 else 1},
                 'position':home[:],'home':home,'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,
-                'target':None,'velocity':[0.,0.,0.],'moving':False,'trail':[],'route':i%2,'patrol_turn_until':0.,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None,'hit_seq':0,'hit_zone':None,'hit_at':None,'injured_legs':[],'stagger_until':0.,'visit_building':NPC_BUILDINGS[i],'visit_elapsed':0.,'visit_after':12.+i*4.,'visit_index':-1,'visit_wait':0.})
+                'target':None,'velocity':[0.,0.,0.],'moving':False,'trail':[],'route':i%2,'patrol_turn_until':0.,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None,'hit_seq':0,'hit_zone':None,'hit_at':None,'injured_legs':[],'stagger_until':0.,'visit_building':NPC_BUILDINGS[i],'visit_elapsed':0.,'visit_after':12.+i*4.,'visit_index':-1,'visit_wait':0.,'activity':None})
     def door_clear(self,row,players,solid_rows,body_box):
         b,s=row['door']['bounds'];b=[b[0]-.25,b[1],b[2]];s=[s[0]+.5,s[1],s[2]]
         if any(overlap(b,s,*body_box(p['position'])) for p in [*players.values(),*(n for n in self.npcs if n['hp']>0)]):return False
@@ -157,7 +157,7 @@ class Village:
         server_time=max(self.motion_time,self.clock())
         return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','weapon','hp','life','score','shot_seq','shot','velocity','moving')},'motionTime':self.motion_time,'serverTime':server_time,'motionTrail':list(r['trail']),
                  'hitSeq':r['hit_seq'],'hitZone':r['hit_zone'],'hitAge':max(0.,server_time-r['hit_at']) if r['hit_at'] is not None else None,
-                 'injuredLegs':list(r['injured_legs'])} for r in self.npcs if r['hp']>0]
+                 'injuredLegs':list(r['injured_legs']),'activity':r['activity']} for r in self.npcs if r['hp']>0]
     def corpses(self,now):
         return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life')},
                  'weapon':None,'dead':True,'deadAge':max(0.,now-r['dead_at']),'hitZone':r['hit_zone']}
@@ -225,10 +225,10 @@ class Village:
         for npc in self.npcs:
             if npc['hp']<=0:
                 if now>=npc['respawn'] and not blocked(npc['home']):
-                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None,patrol_turn_until=0.,trail=[],hit_seq=0,hit_zone=None,hit_at=None,injured_legs=[],stagger_until=0.,visit_elapsed=0.,visit_index=-1,visit_wait=0.)
+                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None,patrol_turn_until=0.,trail=[],hit_seq=0,hit_zone=None,hit_at=None,injured_legs=[],stagger_until=0.,visit_elapsed=0.,visit_index=-1,visit_wait=0.,activity=None)
                 else:continue
             p=npc['position'];home=npc['home'];before=p[:]
-            npc.update(velocity=[0.,0.,0.],moving=False)
+            npc.update(velocity=[0.,0.,0.],moving=False,activity=None)
             near=any(math.hypot(r['position'][0]-home[0],r['position'][2]-home[2])<38 for r in players.values())
             if not near:
                 npc.update(target=None,weapon=None,stance='walk');continue
@@ -254,7 +254,14 @@ class Village:
             # Reverse only at a reached waypoint, with a stationary turning phase.
             if visiting and dist<=.06:
                 i=npc['visit_index']
-                if i==3 and npc['visit_wait']==0.:npc['visit_wait']=now+5.
+                if i==3:
+                    if npc['visit_wait']==0.:npc['visit_wait']=now+8.+(abs(npc['slot'])%3)*2.
+                    # Face a nearby intact fixture while browsing/visiting.
+                    choices=[p for p in self.structure.by_building[building['id']] if p.get('furniture') and p['hp']>0 and p['type'] in ('sofa','bookcase','shelf','cafe-table')]
+                    if choices:
+                        item=min(choices,key=lambda q:math.hypot(q['bounds'][0][0]+q['bounds'][1][0]/2-p[0],q['bounds'][0][2]+q['bounds'][1][2]/2-p[2]))
+                        b,size=item['bounds'];npc['yaw']=math.atan2(p[0]-b[0]-size[0]/2,p[2]-b[2]-size[2]/2)
+                        npc['activity']='browse' if item['theme']=='market' else 'cafe' if item['theme']=='cafe' else 'visit'
                 if now>=npc['visit_wait']:
                     if i+1<len(path):
                         npc['visit_index']=i+1

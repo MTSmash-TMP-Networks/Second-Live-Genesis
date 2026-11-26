@@ -98,6 +98,56 @@ def cut_entrance(part,row,face):
         else:pieces.append({'bounds':[[b[0],bottom,low],[s[0],b[1]+s[1]-bottom,high-low]]})
     return {**part,'pieces':pieces}
 
+# Stable furniture indices live above the legacy wall and door IDs.
+# u = distance in from the front door, v = lateral room coordinate.
+# Layouts leave a 3.3 m central aisle and a clear area at every entrance.
+INTERIOR_LAYOUTS={
+    'home':(
+        ('sofa',2.6,3.05,.95,.91,2.1),('coffee',4.0,3.0,.62,.46,1.25),
+        ('media',5.2,3.1,.46,1.30,1.65),('bed',7.25,-2.65,2.0,.88,1.65),
+        ('dresser',8.15,2.8,.65,1.12,1.55),('kitchen',5.5,-3.15,.70,.94,1.85),
+        ('dining',7.2,.0,1.65,.82,1.65),('chair',6.0,0.,.52,.96,.52),
+        ('chair',8.35,0.,.52,.96,.52),('bookcase',3.2,-3.5,.44,1.86,1.25),
+        ('lamp',1.45,3.65,.40,1.82,.40),('lamp',8.15,-3.85,.40,1.82,.40),
+        ('plant',1.55,-3.65,.46,.90,.46)),
+    'market':(
+        ('shelf',3.0,3.15,.76,1.82,1.95),('shelf',5.35,3.15,.76,1.82,1.95),
+        ('shelf',3.0,-3.15,.76,1.82,1.95),('shelf',5.35,-3.15,.76,1.82,1.95),
+        ('shelf',7.9,-2.8,.78,2.0,2.6),('checkout',7.7,2.75,1.25,1.15,2.45),
+        ('produce',6.35,0.,1.30,1.13,1.55),('crate',8.15,.0,.72,.64,.80),
+        ('lamp',1.4,3.7,.4,1.82,.4),('lamp',6.5,3.8,.4,1.82,.4),
+        ('plant',1.4,-3.7,.46,.9,.46)),
+    'cafe':(
+        ('cafe-table',2.75,3.1,.83,.78,.83),('chair',1.85,3.1,.52,.96,.52),
+        ('chair',3.65,3.1,.52,.96,.52),('cafe-table',2.75,-3.1,.83,.78,.83),
+        ('chair',1.85,-3.1,.52,.96,.52),('chair',3.65,-3.1,.52,.96,.52),
+        ('cafe-table',5.25,3.1,.83,.78,.83),('chair',4.35,3.1,.52,.96,.52),
+        ('chair',6.15,3.1,.52,.96,.52),('cafe-table',5.25,-3.1,.83,.78,.83),
+        ('chair',4.35,-3.1,.52,.96,.52),('chair',6.15,-3.1,.52,.96,.52),
+        ('cafe-counter',7.85,0.,1.30,1.36,4.30),('bookcase',8.15,-3.3,.50,1.86,1.2),
+        ('lamp',1.4,3.8,.40,1.82,.40),('lamp',7.8,3.8,.40,1.82,.40),
+        ('plant',1.4,-3.8,.46,.90,.46)),
+}
+
+def interior_layout(row):
+    d=row['door'];side=d['side'];floor=row['bounds'][0][1]+row['bounds'][1][1]*.025
+    theme='home' if row['kind']=='house' else 'market' if row['label']=='MARKT' else 'cafe'
+    result=[]
+    for i,(kind,u,v,depth,height,width) in enumerate(INTERIOR_LAYOUTS[theme]):
+        x=d['front']-side*u;z=d['z']-side*v
+        tables=[q for q in INTERIOR_LAYOUTS[theme] if q[0] in ('dining','cafe-table')]
+        nearest=min(tables,key=lambda q:(q[1]-u)**2+(q[2]-v)**2) if kind=='chair' and tables else None
+        flip=kind=='sofa' or bool(nearest and nearest[1]>u)
+        result.append({'index':512+i,'type':kind,'theme':theme,'side':side,'flip':flip,
+                       'bounds':[[round(x-depth/2,6),round(floor,6),round(z-width/2,6)],[depth,height,width]]})
+    return result
+
+def furniture_parts(row):
+    for item in row.get('interior',[]):
+        i=item['index'];stage=row.get('damage',{}).get(str(i),0)
+        yield {**item,'id':row['id']+':'+str(i),'building':row['id'],'kind':'building-part',
+               'furniture':True,'stage':stage,'hp':100-25*stage}
+
 def parts_for(row):
     damage=row.get('damage',{})
     for face,(_,parts) in enumerate(faces_for(*map(tuple,row['bounds']))):
@@ -105,6 +155,7 @@ def parts_for(row):
             i=p['index'];stage=damage.get(str(i),0)
             yield cut_entrance({**p,'id':row['id']+':'+str(i),'building':row['id'],'kind':'building-part','stage':stage,'hp':100-25*stage},row,face)
     if row.get('door'):yield door_part(row)
+    yield from furniture_parts(row)
 
 def colliders_for(row):
     damage=row.get('damage',{})
@@ -115,6 +166,7 @@ def colliders_for(row):
             for p in parts:
                 if damage.get(str(p['index']),0)<REMOVED:
                     yield cut_entrance({**p,'id':row['id']+':'+str(p['index']),'kind':'building-solid','hp':100},row,face)
+    yield from (p for p in furniture_parts(row) if p['hp']>0)
 
 def prism_overlap(a,s,part):
     """Exact convex polygon/rectangle SAT plus the prism's thickness interval."""
@@ -160,7 +212,7 @@ def prism_ray(origin,direction,part,limit):
     return max(0.,lo) if lo<=limit else math.inf
 
 class VillageStructure:
-    def __init__(self,path,rows):
+    def __init__(self,path,rows,blocks=()):
         self.path=path;self.rows={r['id']:r for r in rows if r['kind']!='tree'}
         self.parts={};self.by_building={};self.colliders={}
         with closing(sqlite3.connect(path)) as db,db:
@@ -168,6 +220,13 @@ class VillageStructure:
             for row in self.rows.values():
                 row['damage']={str(i):s for i,s in db.execute('SELECT cell,stage FROM village_parts WHERE building=?',(row['id'],))}
                 row['door']=door_definition(row)
+                row['interior']=interior_layout(row)
+                # Preserve any earlier player-built furniture at migration. The
+                # skipped default item can be repaired after its space is clear.
+                for p in furniture_parts(row):
+                    if p['stage']<4 and any(prism_overlap(*box,p) for box in blocks):
+                        db.execute('INSERT INTO village_parts VALUES (?,?,4) ON CONFLICT(building,cell) DO UPDATE SET stage=4',(row['id'],p['index']))
+                        row['damage'][str(p['index'])]=4
                 if row['damage'].get(str(DOOR_INDEX),0)>=REMOVED:row['door']['open']=True
                 self.refresh(row)
     def refresh(self,row):
