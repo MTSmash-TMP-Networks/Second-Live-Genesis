@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.3 · Fracture & NPC Motion**
+**v0.15.4 · Compact Building HUD**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.4 – Kompakter Bauhinweis
+
+Beim Bauen und Platzieren von Modellen sitzt die kompakte Größen- und Bedienanzeige in der Free World mittig am unteren Bildschirmrand. Fadenkreuz und Blockvorschau bleiben frei.
 
 ## Neu in 0.15.3 – Realistischere Brüche und NPC-Bewegungen
 

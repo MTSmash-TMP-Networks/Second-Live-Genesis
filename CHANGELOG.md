@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.15.4 – Compact Building HUD
+- Bau- und Modellplatzierungshinweis in der Free World erscheint kompakt mittig am unteren Bildschirmrand, statt das Fadenkreuz und die Vorschau zu verdecken. Größensteuerung bleibt erreichbar. Kurzmeldungen, Minimap und Touch-Steuerung erhalten bei Bedarf Platz; im Touch-Modus entfallen redundante Tastaturhinweise. Interaktionen ohne gehaltenes Objekt und Hotel-Hinweise bleiben unverändert.
+
 ## 0.15.3 – Fracture & NPC Motion
 - Dorfwände, Dach und Boden verwenden die jittered Voronoi-Zellen aus der Hotel-Physik anstelle rechteckiger Brüche. Original-GLB-Texturen bleiben erhalten; Bruchflächen zeigen die Materialtiefe. Strahlen, Kollisions- und Wiederaufbauprüfungen verwenden die zugehörigen Polygonprismen. Die bisherigen Zell-IDs und gespeicherten Schadensstufen bleiben erhalten (die Form bereits beschädigter Bereiche kann sich ändern).
 - Feste 20-Hz-NPC-Simulationsschritte, zeitgestempelte Positionspakete und verzögerte Client-Interpolation mit etwa 340 ms Puffer. Laufanimation und Blickrichtung werden geglättet, auch bei unregelmäßigen Serverpaketen.

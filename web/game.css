@@ -155,3 +155,42 @@ body:has(#phone:not([hidden])) #free-hud{display:none!important}
 #phone .flashlight-symbol svg{width:54px;height:54px}
 #phone #flashlight-toggle{width:100%;font-size:15px;min-height:48px}
 #phone #flashlight-toggle[aria-pressed="true"]{background:#f0c66e;color:#30230d}
+
+/* Free World: compact construction/placement dock below the view, not the crosshair. */
+.free-playing #interaction-prompt:has(#held-model-size:not([hidden])){
+  top:auto;bottom:max(12px,calc(env(safe-area-inset-bottom) + 8px));
+  width:min(480px,calc(100vw - 24px));
+  max-width:min(480px,max(240px,calc(100vw - var(--mini-size) - var(--mini-size) - 56px)));
+  display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name size" "actions size";
+  align-items:center;gap:2px 12px;padding:7px 10px;text-align:left;background:#101820c9;
+}
+.free-playing #interaction-prompt:has(#held-model-size:not([hidden])) #interaction-name{grid-area:name;margin:0;font-size:12px}
+.free-playing #interaction-prompt:has(#held-model-size:not([hidden])) #interaction-actions{grid-area:actions;font-size:11px;line-height:1.35}
+.free-playing #interaction-prompt #held-model-size:not([hidden]){grid-area:size;grid-template-columns:32px minmax(58px,1fr) 32px;gap:4px;margin:0;padding:3px;max-width:none;text-align:center}
+.free-playing #interaction-prompt #held-model-size:not([hidden]) button{width:32px;height:32px;font-size:19px}
+.free-playing #interaction-prompt #held-model-size:not([hidden]) output{font-size:13px;white-space:nowrap}
+.free-playing #interaction-prompt #held-model-size #held-mount{width:100%;height:28px;font-size:10px}
+.free-playing.free-notice:not(.mobile):has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden])) footer{bottom:max(115px,calc(env(safe-area-inset-bottom) + 108px))}
+@media(max-width:620px){
+  .free-playing:not(.mobile):has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden])) #minimap{bottom:108px}
+  .free-playing:not(.mobile) #interaction-prompt:has(#held-model-size:not([hidden])){max-width:calc(100vw - 24px)}
+}
+/* Touch mode retains large controls, with keyboard instructions replaced by the touch UI. */
+.mobile.free-playing #interaction-prompt:has(#held-model-size:not([hidden])){
+  top:auto;bottom:max(6px,calc(env(safe-area-inset-bottom) + 4px));width:min(420px,calc(100vw - 16px));max-width:none;
+  grid-template-areas:"name size";gap:6px;padding:5px 8px;
+}
+.mobile.free-playing #interaction-prompt:has(#held-model-size:not([hidden])) #interaction-actions{display:none}
+.mobile.free-playing #interaction-prompt #held-model-size:not([hidden]){grid-template-columns:44px minmax(60px,1fr) 44px}
+.mobile.free-playing #interaction-prompt #held-model-size:not([hidden]) button{width:44px;height:44px;font-size:24px}
+.mobile.free-playing #interaction-prompt #held-model-size #held-mount{width:100%;height:38px;font-size:11px}
+.mobile.free-playing:has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden])) #stick{bottom:max(76px,calc(env(safe-area-inset-bottom) + 68px))}
+.mobile.free-playing:has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden])) #minimap{bottom:max(76px,calc(env(safe-area-inset-bottom) + 68px))}
+.mobile.free-playing:has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden])) #actions{bottom:calc(max(76px,env(safe-area-inset-bottom) + 68px) + var(--mini-size) + 30px)}
+.mobile.free-playing:has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden]) #held-mount:not([hidden])) #stick,
+.mobile.free-playing:has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden]) #held-mount:not([hidden])) #minimap{bottom:max(118px,calc(env(safe-area-inset-bottom) + 110px))}
+.mobile.free-playing:has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden]) #held-mount:not([hidden])) #actions{bottom:calc(max(118px,env(safe-area-inset-bottom) + 110px) + var(--mini-size) + 30px)}
+@media(max-height:560px) and (orientation:landscape){
+  .mobile.free-playing:has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden])) #actions{bottom:max(76px,calc(env(safe-area-inset-bottom) + 68px))}
+  .mobile.free-playing:has(#interaction-prompt:not([hidden]) #held-model-size:not([hidden]) #held-mount:not([hidden])) #actions{bottom:max(118px,calc(env(safe-area-inset-bottom) + 110px))}
+}

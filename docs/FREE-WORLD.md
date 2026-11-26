@@ -1,4 +1,4 @@
-# Free World (0.15.3)
+# Free World (0.15.4)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -43,3 +43,6 @@ Training NPCs transmit explicit walking state and velocity. The client smooths t
 
 ## Voronoi fractures and NPC motion (0.15.3)
 Village walls and slabs use the hotel's deterministic jittered Voronoi site/polygon algorithm. Six nonoverlapping shell surfaces retain the 268 legacy IDs per building. Existing damage remains assigned to the same IDs, although the old rectangular outlines become irregular. The original GLBs use nearest-site masking, and the hotel boundary function generates textured exposed fracture faces. Host and client use the same polygon-prism ray and overlap tests. This is game-surface destruction, not full structural collapse. NPC simulation advances in 50 ms steps; timestamped samples are interpolated behind the latest update by about 340 ms. Defeated NPCs fall over and stay visible for 10 seconds, are excluded from live targeting and collision, and respawn after 15 seconds if their home is clear. The fall is animated, not a ragdoll physics system.
+
+## Compact building HUD (0.15.4)
+While holding a block or model, the Free World interaction panel docks at the bottom center. Size buttons remain available and the map and transient notices avoid the dock. Touch mode keeps large size buttons and omits redundant keyboard instructions. Normal interactions and the hotel HUD are unchanged.
