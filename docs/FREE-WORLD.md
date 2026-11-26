@@ -1,4 +1,4 @@
-# Free World (0.15.4)
+# Free World (0.15.5)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -46,3 +46,6 @@ Village walls and slabs use the hotel's deterministic jittered Voronoi site/poly
 
 ## Compact building HUD (0.15.4)
 While holding a block or model, the Free World interaction panel docks at the bottom center. Size buttons remain available and the map and transient notices avoid the dock. Touch mode keeps large size buttons and omits redundant keyboard instructions. Normal interactions and the hotel HUD are unchanged.
+
+## Continuous NPC locomotion (0.15.5)
+The village NPC flag is supplied before animation loading, so the same in-place clip preparation already used by hotel staff removes horizontal hip/root motion from all NPC locomotion clips. The server route is the only source of world translation. The client samples a monotonic, delayed timeline (420 ms target buffer) using confirmed positions only. Old and duplicate packets are ignored; after exhausting the confirmed path during a connection stall, the NPC waits for a new sample. The server pauses blocked patrols, and reverses only at the normal waypoint after a stationary 450 ms turn. Movement pace is derived from actual displayed displacement. Corpse timing and respawn are unchanged. A blocked path does not yet invoke full pathfinding.

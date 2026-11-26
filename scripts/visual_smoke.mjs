@@ -512,3 +512,37 @@ import {villageTreeParts,VillageForest,VillageRoads} from './village_landscape.j
  const rubble=new VillageRubble(scene);rubble.spawn({bounds:[[0,1,0],[1,1,1]]});assert.equal(rubble.items.length,5);rubble.step(.1);rubble.clear();assert.equal(rubble.items.length,0);
 }
 console.log('Village shell damage, repair masks, NPC interpolation, road and forest checks passed');
+
+// Regression for forward/backward jitter in the Free World NPCs.
+
+{
+ const motion=new VillageNpcMotion();
+ let lastTime=0,lastPosition=0,lastClock=-Infinity;
+ const events=[0,.25,.50,.75,1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5,3.75,4,4.25,4.5,4.75,5].map((stamp,i)=>({stamp,arrive:stamp+[.03,.1,.01,.08][i%4]})).filter(e=>!(e.stamp>1&&e.stamp<2.25));
+ // Long dropout plus a stale packet that arrives out of order after recovery.
+ events.push({stamp:1.25,arrive:2.65},{stamp:2.25,arrive:2.70});
+ events.sort((a,b)=>a.arrive-b.arrive);
+ let j=0;
+ for(let frame=0;frame<340;frame++){
+  const time=frame/60,dt=time-lastTime;lastTime=time;
+  while(j<events.length&&events[j].arrive<=time){
+   const s=events[j++].stamp;
+   motion.push({motionTime:s,position:[Math.min(s,1.0)*1.15+Math.max(0,s-2.25)*1.15,0,0],velocity:[1.15,0,0],moving:true,yaw:-Math.PI/2},time*1000);
+  }
+  const n=motion.frame(time*1000,dt);if(!n)continue;
+  const p=n.position[0];
+  assert.ok(motion.time>=lastClock-1e-8,'display clock must never run backwards');
+  assert.ok(p>=lastPosition-1e-8,'NPC must not step backwards on packet arrival');
+  assert.ok(p<=motion.samples.at(-1).position[0]+1e-8,'no extrapolation past authoritative position');
+  assert.ok(p-lastPosition<.17,'no discontinuous step');
+  if(time>1.8&&time<2.2)assert.ok(!n.moving,'stop gait when position stops during dropout');
+  lastClock=motion.time;lastPosition=p;
+ }
+ assert.ok(lastPosition>3.8);
+}
+
+{
+ const npc=createCharacter(DEFAULT_CHARACTER,{legacyOnly:true,villageNpc:true});assert.equal(npc.userData.villageNpc,true);disposeCharacter(npc);
+ const player=createCharacter(DEFAULT_CHARACTER,{legacyOnly:true});assert.equal(player.userData.villageNpc,false);disposeCharacter(player);
+}
+console.log('Village NPC confirmed-sample interpolation and NPC-specific clip preparation verified');

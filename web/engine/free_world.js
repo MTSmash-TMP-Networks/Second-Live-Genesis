@@ -249,7 +249,7 @@ export class FreeWorldView{
   }
  }
  avatar(profile){
-  const g=createCharacter(profile.avatar);const tag=textSprite(profile.nickname,.95,.24);tag.position.y=2.12;g.add(tag);g.userData.nameTag=tag;this.scene.add(g);return g;
+  const g=createCharacter(profile.avatar,{villageNpc:profile.slot<0});const tag=textSprite(profile.nickname,.95,.24);tag.position.y=2.12;g.add(tag);g.userData.nameTag=tag;this.scene.add(g);return g;
  }
  sync(peers){
   const seen=new Set();
@@ -290,8 +290,8 @@ export class FreeWorldView{
     if(!pose)continue;
     g.position.set(...pose.position);animationDt=pose.delta;
     g.rotation.y+=Math.atan2(Math.sin(pose.yaw-g.rotation.y),Math.cos(pose.yaw-g.rotation.y))*(1-Math.exp(-animationDt*12));
-    moving=pose.moving;g.userData.villageNpc=true;
-    g.userData.villagePlayback=(g.userData.villagePlayback||1)+(pose.playback-(g.userData.villagePlayback||1))*t;
+    moving=pose.moving;
+    g.userData.villagePlayback=(g.userData.villagePlayback||1)+(pose.playback-(g.userData.villagePlayback||1))*(1-Math.exp(-animationDt*10));
    }else{
     const d=new THREE.Vector3(...p.position);moving=g.position.distanceTo(d)>.035;
     g.position.lerp(d,t);g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;

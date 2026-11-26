@@ -8,6 +8,7 @@ from village_structure import VillageStructure, prism_ray
 
 TREE_REGROW_SECONDS=24*60*60
 NPC_STEP=.05
+NPC_TURN_SECONDS=.45
 NPC_CORPSE_SECONDS=10.
 CENTER=(-65.,-30.)
 FOREST_ROADS=[
@@ -93,7 +94,7 @@ class Village:
             if home is None:continue
             self.npcs.append({'slot':-100-i,'nickname':f'Test-NPC {i+1}','avatar':{'model':i+1,'height':1},
                 'position':home[:],'home':home,'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,
-                'target':None,'velocity':[0.,0.,0.],'moving':False,'route':i%2,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None})
+                'target':None,'velocity':[0.,0.,0.],'moving':False,'route':i%2,'patrol_turn_until':0.,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None})
     def solids(self):
         yield from (row for row in self.rows.values() if row['kind']=='tree' and row['hp']>0)
         yield from self.structure.solids()
@@ -154,7 +155,7 @@ class Village:
         for npc in self.npcs:
             if npc['hp']<=0:
                 if now>=npc['respawn'] and not blocked(npc['home']):
-                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None)
+                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None,patrol_turn_until=0.)
                 else:continue
             p=npc['position'];home=npc['home'];before=p[:]
             npc.update(velocity=[0.,0.,0.],moving=False)
@@ -169,18 +170,23 @@ class Village:
             else:
                 goal=target['position'];npc['stance']='walk';npc['weapon']='pistol'
             dx,dz=goal[0]-p[0],goal[2]-p[2];dist=math.hypot(dx,dz)
-            if dist>.12:
+            # A blocked patrol pauses rather than switching direction each tick.
+            # Reverse only at a reached waypoint, with a stationary turning phase.
+            if not target and dist<=.06:
+                npc['route']=1-npc['route']
+                npc['patrol_turn_until']=now+NPC_TURN_SECONDS
+                goal=[home[0],0,home[2]+(5 if npc['route']==0 else -5)]
+                dx,dz=goal[0]-p[0],goal[2]-p[2];dist=math.hypot(dx,dz)
+            if dist>.06:
                 npc['yaw']=math.atan2(-dx,-dz)
-                if dist>(4 if target else .6):
-                    step=min(max(0.,dist-(4 if target else .15)),dt*(2.2 if target else 1.15))
+                if (target and dist>4. or not target and now>=npc['patrol_turn_until']):
+                    step=min(max(0.,dist-(4. if target else 0.)),dt*(2.2 if target else 1.15))
                     steps=max(1,math.ceil(step/.12))
                     for j in range(steps):
                         q=[p[0]+dx/dist*step/steps,0.,p[2]+dz/dist*step/steps]
                         if blocked(q) or any(math.hypot(q[0]-r['position'][0],q[2]-r['position'][2])<=.6 for r in players.values()):
-                            if not target:npc['route']=1-npc['route']
                             break
                         npc['position']=q;p=q
-                elif not target:npc['route']=1-npc['route']
             velocity=[(p[i]-before[i])/dt for i in range(3)]
             npc.update(velocity=velocity,moving=math.hypot(velocity[0],velocity[2])>.04)
             if not target or now<npc['next_action']:continue

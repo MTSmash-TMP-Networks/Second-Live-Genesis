@@ -459,6 +459,48 @@ class GameOnlyTest(unittest.TestCase):
             world.repair('builder',player,{'id':part['id'],'whole':True},now[0])
             self.assertEqual(row['damage'],{})
 
+    def test_village_npc_patrol_no_obstacle_reversal(self):
+        from village import Village, NPC_STEP
+        now=[10.]
+        with tempfile.TemporaryDirectory() as tmp:
+            village=Village(Path(tmp)/'patrol.sqlite3',[],lambda:now[0])
+            npc=village.npcs[0];x0,_,z0=npc['position']
+            players={'observer':{'position':[x0+10,0,z0]}}
+            blocked=lambda p: abs(p[0]-x0)<.2 and z0+1<=p[2]<=z0+1.2
+            def tick(dt=NPC_STEP,solid=blocked):
+                now[0]+=dt
+                village.tick(now[0],players,solid,lambda *a:math.inf,lambda:[],lambda p:([0,0,0],[1,1,1]),[0,0,0])
+            previous=z0
+            for _ in range(80):
+                tick();z=npc['position'][2]
+                self.assertGreaterEqual(z+1e-9,previous)
+                self.assertLessEqual(z,z0+1+1e-8)
+                self.assertEqual(npc['route'],0)
+                previous=z
+            self.assertFalse(npc['moving'])
+            self.assertGreater(previous,z0+.9)
+            for _ in range(100):
+                tick(solid=lambda p:False);z=npc['position'][2]
+                if npc['route']==1:break
+                self.assertGreaterEqual(z+1e-9,previous);previous=z
+            self.assertEqual(npc['route'],1)
+            self.assertAlmostEqual(z,z0+5,delta=.07)
+            self.assertFalse(npc['moving'])
+            for _ in range(7):
+                tick(solid=lambda p:False)
+                self.assertEqual(npc['position'][2],z)
+                self.assertFalse(npc['moving'])
+            for _ in range(8):tick(solid=lambda p:False)
+            self.assertTrue(npc['moving'])
+            self.assertLess(npc['position'][2],z)
+            self.assertEqual(npc['route'],1)
+            self.assertTrue(village.damage_npc(npc,'observer',100,now[0]))
+            self.assertTrue(village.corpses(now[0])[0]['dead'])
+            self.assertEqual(village.corpses(now[0]+10),[])
+            tick(16.,solid=lambda p:False)
+            self.assertEqual(npc['hp'],100)
+            self.assertIsNone(npc['dead_at'])
+
     def test_hidden_village_damage_retaliation_and_migration(self):
         from free_world import FreeWorld
         from village import Village, make_scenery

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.5 – Continuous NPC Locomotion
+- Free-World-NPCs werden vor dem Laden der Rocketbox-Animationen als NPC markiert. Wie beim Hotelservice entfernt der Loader horizontale Root-/Hips-Bewegung aus den Animationsclips. Die Weltposition wird ausschließlich durch den servergesteuerten Bewegungspfad bestimmt; Schritt- und Hüftanimation bleiben erhalten.
+- Der Darstellungszeitpunkt läuft monoton und interpoliert ausschließlich zwischen bestätigten Positionspaketen (420 ms Puffer). Keine Vorhersage über die letzte bekannte Position hinaus; verspätete und doppelte Pakete werden ignoriert. Bei einer längeren Unterbrechung bleibt der NPC stehen, statt vor- und zurückzuspringen.
+- Blockierte Patrouillen warten auf einen freien Weg, ohne ständig die Richtung zu wechseln. Erst am Ziel folgt eine 450-ms-Drehpause und der reguläre Rückweg. Laufgeschwindigkeit wird an der tatsächlich dargestellten Bewegung ausgerichtet. Todesanimation, Liegezeit und Respawn bleiben unverändert.
+
 ## 0.15.4 – Compact Building HUD
 - Bau- und Modellplatzierungshinweis in der Free World erscheint kompakt mittig am unteren Bildschirmrand, statt das Fadenkreuz und die Vorschau zu verdecken. Größensteuerung bleibt erreichbar. Kurzmeldungen, Minimap und Touch-Steuerung erhalten bei Bedarf Platz; im Touch-Modus entfallen redundante Tastaturhinweise. Interaktionen ohne gehaltenes Objekt und Hotel-Hinweise bleiben unverändert.
 

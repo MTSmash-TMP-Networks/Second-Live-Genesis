@@ -137,9 +137,10 @@ export function prepareRealistic(root,a,options,studio=false){
    const {parts,morphMeshes}=prepareMaterials(model);
    let idle=findClip(gltf.animations,'idle'),walk=findClip(gltf.animations,'walk');
    if(!idle||!walk)throw Error('Bewegungsanimationen fehlen');
-   if(u.hotelNpc){idle=stabilizePatrolClip(idle,model);walk=stabilizePatrolClip(walk,model);}
+   // A world-driven NPC must not also translate inside the native walk cycle.
+   if(u.hotelNpc||u.villageNpc){idle=stabilizePatrolClip(idle,model);walk=stabilizePatrolClip(walk,model);}
    const mixer=new THREE.AnimationMixer(model),actions={idle:mixer.clipAction(idle),walk:mixer.clipAction(walk)};
-   for(const id of ['run','crouch','crouchwalk']){const clip=findClip(gltf.animations,id);if(clip)actions[id]=mixer.clipAction(clip);}
+   for(const id of ['run','crouch','crouchwalk']){let clip=findClip(gltf.animations,id);if(clip){if(u.villageNpc)clip=stabilizePatrolClip(clip,model);actions[id]=mixer.clipAction(clip);}}
    if(u.hotelNpc){
     const wave=findClip(gltf.animations,'wave');
     if(wave){

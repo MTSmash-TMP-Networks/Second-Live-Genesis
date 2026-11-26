@@ -97,7 +97,7 @@ function faceModel(parent,a,skin,hair){
  }
  hairModel(h,a,hair);return h;
 }
-export function createCharacter(value,{legacyOnly=false,studio=false}={}){
+export function createCharacter(value,{legacyOnly=false,studio=false,villageNpc=false}={}){
  const a=normalizeCharacter(value),root=new THREE.Group(),body=new THREE.Group();root.add(body);
  const bw=[.88,1,1.16,.99][a.body],hip=[.88,1,1.14,1.12][a.body],height=[.925,1,1.075][a.height];
  const skin=material(color(a,'skin'),.84),hair=material(color(a,'hairColor'),.89);hair.side=THREE.DoubleSide;
@@ -137,7 +137,7 @@ export function createCharacter(value,{legacyOnly=false,studio=false}={}){
   ellipsoid(shoeRoot,[0,-.056,-.035],[.080,.022,.147],sole);
   for(let j=0;j<3;j++)line(shoeRoot,[[-.031,.047,-.033-j*.019],[.031,.047,-.033-j*.019]],.003,sole);
  }
- body.scale.set(1,height,1);root.userData={character:a,body,head,arms,elbows,legs,knees,phase:0,height};
+ body.scale.set(1,height,1);root.userData={character:a,body,head,arms,elbows,legs,knees,phase:0,height,villageNpc};
  // Never show the procedural fallback as the real studio preview in the browser.
  if(studio&&typeof window!=='undefined')body.visible=false;
  if(!legacyOnly)prepareRealistic(root,a,options,studio);

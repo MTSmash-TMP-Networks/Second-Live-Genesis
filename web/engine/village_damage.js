@@ -88,41 +88,40 @@ export function villagePrismTop(part,x,y,z){
 // A small rate adjustment absorbs network jitter without stopping the walk cycle.
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 export class VillageNpcMotion {
- constructor(){this.samples=[];this.time=null;this.speed=0;this.walking=false;this.still=0;}
+ constructor(){this.samples=[];this.time=null;this.speed=0;this.walking=false;this.still=0;this.position=null;this.delay=.42;}
  push(packet,received){
   const stamp=Number.isFinite(packet.motionTime)?packet.motionTime:received/1000;
   const previous=this.samples.at(-1);
-  if(previous&&stamp<previous.stamp)return;
-  const sample={...packet,position:[...packet.position],stamp,received};
-  if(previous&&stamp===previous.stamp){
-   this.samples[this.samples.length-1]=sample;return;
-  }
-  this.samples.push(sample);while(this.samples.length>12)this.samples.shift();
-  if(this.time===null)this.time=stamp-.34;
+  // Late and duplicate snapshots cannot reset the clock or refresh a stale position.
+  if(previous&&stamp<=previous.stamp)return;
+  this.samples.push({...packet,position:[...packet.position],stamp,received});
+  if(this.time===null)this.time=stamp-this.delay;
+  while(this.samples.length>32)this.samples.shift();
  }
  frame(now,dt){
   const samples=this.samples,last=samples.at(-1);if(!last)return null;
-  const age=Math.max(0,(now-last.received)/1000),desired=last.stamp+Math.min(.30,age)-.34;
+  const age=Math.max(0,(now-last.received)/1000),desired=Math.min(last.stamp,last.stamp+Math.min(this.delay,age)-this.delay);
   const step=clamp(this.lastFrame===undefined?dt:(now-this.lastFrame)/1000,0,.10);this.lastFrame=now;
-  if(desired-this.time>.85)this.time=desired;
-  else this.time+=step*clamp(1+(desired-this.time)*2.5,.72,1.28);
-  this.time=Math.min(this.time,last.stamp+.10);
+  // The display clock never runs backwards or predicts beyond a confirmed sample.
+  // With a delayed packet, finish the known path and wait instead of overshooting
+  // an obstacle/turn and jumping backwards when the next packet arrives.
+  const rate=clamp(1+(desired-this.time)*2,.65,1.35);
+  this.time=Math.min(last.stamp,this.time+step*rate);
+  while(samples.length>2&&samples[1].stamp<=this.time)samples.shift();
   let a=samples[0],b=a;
   if(this.time>=last.stamp){a=last;b=last;}
-  else if(this.time>a.stamp){for(let i=1;i<samples.length;i++){b=samples[i];if(b.stamp>=this.time)break;a=b;}}
+  else if(this.time>a.stamp){
+   for(let i=1;i<samples.length;i++){b=samples[i];if(b.stamp>=this.time)break;a=b;}
+  }
   const span=b.stamp-a.stamp,t=span>1e-7?clamp((this.time-a.stamp)/span,0,1):0;
   const position=a.position.map((p,j)=>p+(b.position[j]-p)*t);
   const heading=a.yaw+Math.atan2(Math.sin(b.yaw-a.yaw),Math.cos(b.yaw-a.yaw))*t;
-  let speed=span>1e-7?Math.hypot(b.position[0]-a.position[0],b.position[2]-a.position[2])/span:0;
-  if(a===last&&last.moving&&age<.55){
-   const v=last.velocity||[0,0,0],lead=clamp(this.time-last.stamp,0,.10);
-   for(let j=0;j<3;j++)position[j]+=v[j]*lead;
-   speed=Math.hypot(v[0],v[2]);
-  }
-  if(age>.65)speed=0;
-  this.speed+=(speed-this.speed)*(1-Math.exp(-step*7));
-  if(this.speed>.09){this.walking=true;this.still=0;}else if((this.still+=step)>.22)this.walking=false;
-  return {position,yaw:heading,moving:this.walking,speed:this.speed,playback:clamp(this.speed/1.45,.68,1.65),delta:step};
+  // Match the in-place gait to displayed displacement, not velocity predictions.
+  const speed=this.position&&step>1e-6?clamp(Math.hypot(position[0]-this.position[0],position[2]-this.position[2])/step,0,2.8):0;
+  this.position=position.slice();
+  this.speed+=(speed-this.speed)*(1-Math.exp(-step*9));
+  if(speed>.045){this.walking=true;this.still=0;}else if((this.still+=step)>.18){this.walking=false;}
+  return {position,yaw:heading,moving:this.walking,speed:this.speed,playback:clamp(this.speed/1.45,.45,1.65),delta:step};
  }
 }
 export function villageFallPose(age,side=1){
