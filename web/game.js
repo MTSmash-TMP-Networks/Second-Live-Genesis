@@ -400,7 +400,7 @@ function pickUp(id){
 }
 function updateInteractionHint(vr=false){
   if(freeState){updateFreeHint(vr);return;}$('held-mount').hidden=false;
-  document.body.classList.remove('free-notice');$('touchFire').textContent='Feuer';$('touchArsenal').textContent='Inventar';
+  document.body.classList.remove('free-notice');$('touchFire').textContent='Feuer';$('touchSecondary').disabled=false;$('touchArsenal').textContent='Inventar';
   const playing=canPlay()&&!vr,panel=$('interaction-prompt'),actionButton=$('touchInteract'),repairButton=$('touchRepair');
   $('touchRotateLeft').hidden=$('touchRotateRight').hidden=!held;
   const resize=playing&&!lobbyState&&!lobbyTransition&&!!held&&!!spec[held]?.imported&&state.objects[held]>0;
@@ -839,7 +839,13 @@ function freePoll(){
 }
 async function freeEdit(op,weapon=null,mode='place'){
  const s=freeState,h=freeHeld;if(!s||!canPlay()||s.editing||lobbyTransition)return;
- if(op==='pulse'&&(!weapon||weapon!==equipped||h)||op==='place'&&!h||op==='repair'&&h||op==='remove'&&h&&!h.id)return;
+ if(op==='pulse'&&(!weapon||weapon!==equipped||h)||op==='place'&&!h||op==='repair'&&h)return;
+ // A reusable block is a construction tool, not the object to delete.
+ // Capture the aimed block before awaiting a poll so a later mouse movement cannot delete another block.
+ const buildingRemove=op==='remove'&&h?.kind==='block'&&!h.id;
+ if(op==='remove'&&h&&!h.id&&!buildingRemove)return;
+ const aimed=buildingRemove?freeTarget(true):null;
+ if(buildingRemove&&(!freeOwn(aimed)||aimed.model)){if(aimed)$('notice').textContent='Nur eigene Baublöcke können so entfernt werden.';return;}
  s.editing=true;
  try{
   if(s.pending)await s.pending;
@@ -852,10 +858,13 @@ async function freeEdit(op,weapon=null,mode='place'){
    extra={...c,texture:h.kind==='block'?h.texture||null:null};
    if(h.id){action='relocate';extra.id=h.id;extra.version=h.version;}else if(h.kind==='model')extra.sourceModel=h.source;
   }else if(op==='remove'||op==='repair'){
-   const b=h?.id?s.blocks.find(b=>b.id===h.id):freeTarget(true);if(!freeOwn(b))return;extra={id:b.id,version:b.version};
+   const b=buildingRemove?s.blocks.find(b=>b.id===aimed.id):h?.id?s.blocks.find(b=>b.id===h.id):freeTarget(true);
+   if(!freeOwn(b))return;
+   if(buildingRemove&&(b.model||b.version!==aimed.version)){ $('notice').textContent='Block wurde verändert. Bitte erneut anvisieren.';return; }
+   extra={id:b.id,version:b.version};
   }else if(op==='pulse')extra={direction:dir(),weapon};
   const result=await freeRequest({action,lease:s.lease,revision:s.revision,life:s.life,...extra});
-  if(freeState===s&&(op==='place'||op==='remove'&&h))freeHeld=op==='place'&&h.kind==='block'&&!h.id?h:null;
+  if(freeState===s&&(op==='place'||op==='remove'&&h&&!buildingRemove))freeHeld=op==='place'&&h.kind==='block'&&!h.id?h:null;
   applyFreeSnapshot(s,result);
   if(op==='pulse'&&freeState===s){
    ammo[weapon]=Math.max(0,ammo[weapon]-1);fireCooldown=Math.max(fireCooldown,FIRE_INTERVAL[weapon]);updateAmmo();
@@ -867,7 +876,15 @@ async function freeEdit(op,weapon=null,mode='place'){
  }catch(e){$('notice').textContent=e.message;if(e.status===401)location.reload();}
  finally{s.editing=false;}
 }
-function freePrimary(){if(!freeHeld&&equipped)pressTrigger();}
+function freePrimary(){
+ if(freeHeld?.kind==='block')void freeEdit('place');
+ else if(!freeHeld&&equipped)pressTrigger();
+}
+function freeSecondary(){
+ if(freeHeld?.kind==='block'&&!freeHeld.id)void freeEdit('remove');
+ else if(freeHeld)void freeEdit('place');
+ else toggleScope();
+}
 function freeKey(code){if(code==='Digit4'){freeTakeBlock();return true;}if(code==='Delete'){void freeEdit('remove');return true;}return false;}
 let freeTextureKey='',freeLibraryKey='',freeModelUploading=false;
 async function freeRefreshModelLibrary(){
@@ -903,6 +920,7 @@ function updateFreeUI(){
 function updateFreeHint(vr=false){
  const s=freeState;if(!s)return;
  const playing=canPlay()&&!vr,h=freeHeld,exit=!h&&freeExitAt(playerEye(),dir()),gate=!h&&!exit&&freeSecretDoorAt(playerEye(),dir(),s.blocks),target=!h&&!exit&&!gate?freeTarget(true):null,own=freeOwn(target),candidate=playing&&h?freeCandidate(h):null;
+ const building=h?.kind==='block'&&!h.id,removeTarget=building?freeTarget(true):null,canRemove=building&&freeOwn(removeTarget)&&!removeTarget.model;
  const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!gate&&!own&&now>=freeHintUntil);
  const msg=$('notice').textContent;if(msg!==freeLastNotice){freeLastNotice=msg;freeNoticeUntil=now+3500;}
  document.body.classList.toggle('free-notice',playing&&!!msg&&now<freeNoticeUntil);
@@ -911,15 +929,16 @@ function updateFreeHint(vr=false){
  if(h){$('held-model-extent').textContent=freeHeldExtent().toFixed(2).replace('.',',')+' m';$('held-size-minus').disabled=s.editing||freeHeldExtent()<=(h.kind==='model'?.1:.5);$('held-size-plus').disabled=s.editing||freeHeldExtent()>=4;}
  $('touchRotateLeft').hidden=$('touchRotateRight').hidden=!h;
  $('touchZoom').hidden=equipped!=='rifle';$('touchZoom').disabled=!!reloadId;
- $('touchSecondary').hidden=!h;$('touchSecondary').textContent='Ablegen';
- $('touchFire').disabled=!playing||s.editing||!equipped||!!h||!!reloadId;$('touchFire').textContent='Feuer';
+ $('touchSecondary').hidden=!h;$('touchSecondary').textContent=building?'Entfernen':'Ablegen';
+ $('touchSecondary').disabled=!playing||s.editing||(building?!canRemove:!candidate);
+ $('touchFire').disabled=!playing||s.editing||(h?.kind==='block'?!candidate:!equipped||!!h||!!reloadId);$('touchFire').textContent=h?.kind==='block'?'Setzen':'Feuer';
  $('touchInteract').disabled=!playing||(!exit&&!gate&&!candidate&&!(own&&target.hp>0))||s.editing;$('touchInteract').textContent=exit?'Hotel':gate?'Untersuchen':h?'Abstellen':'Aufheben';
  $('touchRepair').disabled=!own||target.hp>=100||s.editing;$('touchReload').disabled=!equipped||!!reloadId;$('touchArsenal').disabled=false;$('touchArsenal').textContent='Inventar';
  $('touchJump').disabled=player.stance==='crouch';$('touchSprint').disabled=$('touchCrouch').disabled=!playing;
  $('touchSprint').setAttribute('aria-pressed',String(player.stance==='sprint'||touchSprint));$('touchCrouch').setAttribute('aria-pressed',String(player.stance==='crouch'||touchCrouch));
- $('interaction-name').textContent=exit?'HOTEL · Ausgang':gate?'Eingefrorene Tür':h?(candidate?'Objekt abstellen':'Stellplatz blockiert'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
- $('interaction-actions').textContent=exit?'E · Zum Hotel':gate?'E · Untersuchen':h?'E: abstellen · Q/F: drehen · +/−: Größe · 0: abbrechen'+(h.kind==='model'?' · B: Wand':''):own?(target.hp?'E · Aufheben · Entf · Entfernen':'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
- $('cross').classList.toggle('actionable',playing&&(exit||gate||!!candidate||own));
+ $('interaction-name').textContent=exit?'HOTEL · Ausgang':gate?'Eingefrorene Tür':h?(candidate?'Objekt abstellen':canRemove?'Eigenen Block entfernen':'Stellplatz blockiert'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
+ $('interaction-actions').textContent=exit?'E · Zum Hotel':gate?'E · Untersuchen':h?(building?'Linksklick: setzen · Rechtsklick: entfernen · +/−: Größe · Q/F: drehen · 0: abbrechen':(h.kind==='block'?'Linksklick/E: abstellen':'E: abstellen · B: Wand')+' · Q/F: drehen · +/−: Größe · 0: abbrechen'):own?(target.hp?'E · Aufheben · Entf · Entfernen':'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
+ $('cross').classList.toggle('actionable',playing&&(exit||gate||!!candidate||own||canRemove));
  $('hint').textContent='Free World · I: Inventar';updateFreeUI();
 }
 $('free-model-select').onchange=()=>{freeModelSource=$('free-model-select').value||null;freeHintUntil=performance.now()+4000;updateFreeUI();};
@@ -1214,7 +1233,7 @@ $('closephone').onclick=()=>{if(!started||studioOpen||!$('updater').hidden)retur
 canvas.onclick=()=>{if(mobile||!canPlay())return;void audio.unlock();if(document.pointerLockElement!==canvas){canvas.requestPointerLock?.()?.catch?.(()=>{});active=true;}};
 canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.pointerLockElement===canvas&&canPlay()){if(freeState)freePrimary();else pressTrigger();}});
 canvas.addEventListener('contextmenu',e=>{if(canPlay()&&!mobile)e.preventDefault();});
-window.addEventListener('mousedown',e=>{if(e.button===2&&!mobile&&document.pointerLockElement===canvas&&canPlay()){e.preventDefault();if(freeState&&freeHeld)void freeEdit('place');else toggleScope();}});
+window.addEventListener('mousedown',e=>{if(e.button===2&&!mobile&&document.pointerLockElement===canvas&&canPlay()){e.preventDefault();if(freeState)freeSecondary();else toggleScope();}});
 window.addEventListener('wheel',e=>{
  if(!canPlay()||lobbyState||freeState?.editing||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
  const slot=wheelInventorySlot(equipped,freeHeld,!!freeState,e.deltaY);if(slot===null)return;
@@ -1271,7 +1290,7 @@ function repair(ray=null){if(freeState){void freeEdit('repair');return;}
 $('mode').onclick=()=>setMode(!mobile);setMode(mobile);
 const stick=$('stick');let stickId=null;function moveStick(e){let r=stick.getBoundingClientRect(),x=(e.clientX-r.left-r.width/2)/(r.width*.36),y=(e.clientY-r.top-r.height/2)/(r.height*.36),l=Math.max(1,Math.hypot(x,y));touchMove=[x/l,-y/l];stick.style.setProperty('--jx',`${x/l*33}px`);stick.style.setProperty('--jy',`${y/l*33}px`);}stick.addEventListener('pointerdown',e=>{if(!canPlay()||stickId!==null)return;e.preventDefault();stickId=e.pointerId;stick.setPointerCapture(e.pointerId);moveStick(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId&&canPlay())moveStick(e);});for(const n of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(n,e=>{if(e.pointerId===stickId){stickId=null;touchMove=[0,0];stick.style.setProperty('--jx','0px');stick.style.setProperty('--jy','0px');}});
 canvas.addEventListener('pointerdown',e=>{if(!canPlay()||posture?.sleeping||(!mobile&&document.pointerLockElement===canvas))return;if(look)return;look={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!look||look.id!==e.pointerId||!canPlay()||posture?.sleeping)return;const sensitivity=scopeZoom ? .002 : .005;player.yaw-=(e.clientX-look.x)*sensitivity;player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch+(e.clientY-look.y)*sensitivity));look.x=e.clientX;look.y=e.clientY;});for(const n of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(n,e=>{if(look?.id===e.pointerId)look=null;});
-for(const [id,fn] of [['touchInteract',interact],['touchSecondary',secondaryInteraction],['touchZoom',toggleScope],['touchRotateLeft',()=>turnHeld(-90)],['touchRotateRight',()=>turnHeld(90)],['touchReload',startReload],['touchRepair',()=>repair()],['touchView',()=>{if(!posture){setScopeZoom(false);first=!first;}}],['touchPhone',phone],['touchArsenal',arsenal],['touchSprint',()=>{if(!posture&&!held&&!scopeZoom){touchSprint=!touchSprint;if(touchSprint)touchCrouch=false;}}],['touchCrouch',()=>{if(!posture){touchCrouch=!touchCrouch;if(touchCrouch)touchSprint=false;}}],['touchJump',()=>{if(!posture&&player.stance!=='crouch'&&!wantsCrouch()&&Math.abs(player.y-groundAt(player.x,player.z))<1e-5)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});const fireButton=$('touchFire');fireButton.addEventListener('pointerdown',e=>{e.preventDefault();if(!canPlay()||triggerPointer!==null)return;void audio.unlock();if(freeState)freePrimary();else pressTrigger();if(triggerHeld){triggerPointer=e.pointerId;fireButton.setPointerCapture?.(e.pointerId);}});
+for(const [id,fn] of [['touchInteract',interact],['touchSecondary',()=>{if(freeState&&freeHeld)freeSecondary();else secondaryInteraction();}],['touchZoom',toggleScope],['touchRotateLeft',()=>turnHeld(-90)],['touchRotateRight',()=>turnHeld(90)],['touchReload',startReload],['touchRepair',()=>repair()],['touchView',()=>{if(!posture){setScopeZoom(false);first=!first;}}],['touchPhone',phone],['touchArsenal',arsenal],['touchSprint',()=>{if(!posture&&!held&&!scopeZoom){touchSprint=!touchSprint;if(touchSprint)touchCrouch=false;}}],['touchCrouch',()=>{if(!posture){touchCrouch=!touchCrouch;if(touchCrouch)touchSprint=false;}}],['touchJump',()=>{if(!posture&&player.stance!=='crouch'&&!wantsCrouch()&&Math.abs(player.y-groundAt(player.x,player.z))<1e-5)player.vy=4.2;}]])$(id).addEventListener('pointerdown',e=>{e.preventDefault();if(canPlay())fn();});const fireButton=$('touchFire');fireButton.addEventListener('pointerdown',e=>{e.preventDefault();if(!canPlay()||triggerPointer!==null)return;void audio.unlock();if(freeState)freePrimary();else pressTrigger();if(triggerHeld){triggerPointer=e.pointerId;fireButton.setPointerCapture?.(e.pointerId);}});
 for(const event of ['pointerup','pointercancel','lostpointercapture'])fireButton.addEventListener(event,e=>{if(triggerPointer===e.pointerId)releaseTrigger();});
 window.addEventListener('blur',()=>{clearControls();audio.stopAll();});document.addEventListener('visibilitychange',()=>{if(document.hidden)clearControls();});
 

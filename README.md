@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.14.6 · Inventory Wheel & Phone Flashlight**
+**v0.14.7 · Mouse Block Building**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.14.7 – Bauen mit der Maus
+
+Baublock auswählen, mit Linksklick setzen und mit Rechtsklick eigene anvisierte Baublöcke entfernen. Die Auswahl bleibt erhalten. Touch-Geräte bekommen entsprechende Setzen-/Entfernen-Schaltflächen.
 
 ## Neu in 0.14.6 – Mausrad-Inventar und Taschenlampe
 

@@ -1,4 +1,4 @@
-# Free World (0.14.6)
+# Free World (0.14.7)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -14,7 +14,8 @@ Enter through FREE WORLD at the north end of the hotel corridor (E). The shared 
 | G | Place held object |
 | 0 | Holster weapon or cancel held preview |
 | R / Delete | Repair / remove own aimed object |
-| Left click | Use selected game weapon |
+| Left click | Place selected block or use selected game weapon |
+| Right click | Remove aimed own block with reusable block selected; otherwise retain existing placement/zoom behavior |
 | E at HOTEL door / phone | Return to corridor |
 
 All accounts in the same server share the same persisted construction space. Blocks snap to a grid and have collision; supported surfaces and stacked blocks can be used as platforms. Players can remove their own blocks only. The server protects the spawn area, bounds placement, prevents overlapping blocks and enforces 240 blocks/account and 1,200 total. The phone app accepts local PNG/JPEG/WebP up to 8 MiB, re-encodes to a JPEG with longest dimension at most 512 px and at most 256 KiB, and applies it to all faces of newly placed blocks. Images are visible to everyone in Free World. 8 images/account, 64 globally, delete unused own images. Texture and block data are stored in free_world.sqlite3 in the existing data volume. No external URL fetch. The existing game weapon models are selectable directly from the inventory with shared server-controlled game damage, health, respawn and cooldown; the private-room damage system is not used. Existing blocks keep their coordinates; the entrance and spawn move to the new outer wall. All Free World participants are vulnerable except during short spawn protection. No cross-world targets. Presence and scores are session-based; construction persists. Desktop and touch are supported; immersive XR is not enabled in this initial version. Account and admin permissions remain unchanged.
@@ -27,3 +28,6 @@ There is no build/PvP mode toggle. All controls remain available in the shared w
 
 ## Wheel inventory and flashlight (0.14.6)
 Mouse wheel cycles empty hand, three weapons and the reusable block in both directions. Rotating or resizing the new block updates the current preset. Existing objects and held GLB models still require deliberate cancellation. The smartphone flashlight app toggles a local, 28 m directional spotlight in the room, hotel corridor and Free World; it remains on when the phone is closed and across transitions. Other clients do not see the beam. Immersive VR does not use the lamp.
+
+## Mouse building (0.14.7)
+Select the reusable block with 4 or the mouse wheel. Left click places blocks; right click removes an aimed own construction block. The preset stays selected after both operations. Imported models and other players' blocks are excluded from this right-click removal; ordinary object editing remains available. Server ownership, distance and version checks are unchanged. On touch devices, the build controls show Setzen and Entfernen.

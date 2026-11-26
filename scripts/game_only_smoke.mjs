@@ -358,3 +358,30 @@ const flashlightUiTest=new Function('assert',`
  started=false;$('flashlight-toggle').onclick();assert.equal(flashlightOn,false);
  `);flashlightUiTest(assert);
 console.log('Free World wheel inventory and smartphone flashlight toggle checks passed');
+
+const buildMouseTest=new Function('assert',`
+ let freeHeld=null,equipped=null;const calls=[];
+ const freeEdit=op=>calls.push(op),pressTrigger=()=>calls.push('fire'),toggleScope=()=>calls.push('zoom');
+ `+getPart('function freePrimary(','function freeKey(')+`
+ freeHeld={kind:'block'};freePrimary();freeSecondary();assert.deepEqual(calls,['place','remove']);
+ freeHeld={kind:'block',id:2};freePrimary();freeSecondary();assert.deepEqual(calls.slice(2),['place','place']);
+ freeHeld={kind:'model'};freePrimary();freeSecondary();assert.deepEqual(calls.slice(4),['place']);
+ freeHeld=null;equipped='rifle';freePrimary();freeSecondary();assert.deepEqual(calls.slice(5),['fire','zoom']);
+ `);buildMouseTest(assert);
+const buildRemoveTest=new Function('assert',`
+ return (async()=>{
+ const own={id:3,ownerSlot:1,version:2},foreign={id:4,ownerSlot:2,version:0},model={id:5,ownerSlot:1,version:0,model:'glb'};
+ let freeState={life:1,lease:'test',revision:0,editing:false,pending:null,blocks:[own,foreign,model]},freeHeld={kind:'block',dims:[2,2,2],texture:'image'},lobbyTransition=false;
+ const preset=freeHeld,requests=[];let aimed=own,afterUpdate=null,reject=false;
+ const canPlay=()=>true,freeMove=()=>({action:'update'}),applyFreeSnapshot=()=>{},audio={play(){}},notice={textContent:''},$=()=>notice;
+ const freeOwn=b=>!!b&&b.ownerSlot===1,freeTarget=()=>aimed;
+ const freeRequest=async data=>{if(data.action==='update'){afterUpdate?.();return {};}if(reject)throw Error('denied');requests.push(data);return {};};
+ `+getPart('async function freeEdit(','function freePrimary(')+`
+ await freeEdit('remove');assert.equal(requests.length,1);assert.equal(requests[0].id,3);assert.equal(requests[0].version,2);assert.equal(freeHeld,preset);
+ aimed=foreign;await freeEdit('remove');aimed=model;await freeEdit('remove');aimed=null;await freeEdit('remove');assert.equal(requests.length,1);
+ aimed=own;afterUpdate=()=>{aimed=foreign;};await freeEdit('remove');assert.equal(requests[1].id,3);assert.equal(freeHeld,preset);
+ aimed=own;afterUpdate=()=>{freeState.blocks=[{...own,version:3},foreign,model];};await freeEdit('remove');assert.equal(requests.length,2);
+ freeState.blocks=[own,foreign,model];afterUpdate=null;reject=true;await freeEdit('remove');assert.equal(requests.length,2);assert.equal(freeHeld,preset);assert.equal(freeState.editing,false);
+ })();
+ `);await buildRemoveTest(assert);
+console.log('Mouse build/place/remove routing, ownership, revision and reusable selection checks passed');

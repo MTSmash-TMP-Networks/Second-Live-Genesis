@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.7 – Mouse Block Building
+- Baublock auswählen (4 oder Mausrad), Linksklick setzt neue Blöcke, Rechtsklick entfernt anvisierte eigene Baublöcke. Die Auswahl bleibt bei beiden Aktionen erhalten. Fremde Blöcke und GLB-Modelle sind vor dem versehentlichen Entfernen mit dem Baublock geschützt. Server prüft Besitz, Reichweite und Revision weiterhin.
+- Touch-Steuerung mit Setzen/Entfernen, aktualisierte Hinweise. Waffen, Zoom, aufgenommene Objekte und Modellplatzierung behalten die bisherige Bedienung.
+
 ## 0.14.6 – Inventory Wheel & Phone Flashlight
 - Free World: Mausrad wechselt in beide Richtungen zwischen leerer Hand, Pistole, Scharfschützengewehr, M16 und Baublock. Größe und gedrehte Form des Baublocks bleiben beim Wechsel erhalten; aufgenommene vorhandene Objekte und GLB-Modelle werden nicht versehentlich durch Scrollen abgewählt.
 - Taschenlampen-App im virtuellen Smartphone. Ein richtungsabhängiges, lokales Spotlicht mit 28 m Reichweite und Schatten leuchtet im Hotelzimmer, Hotelflur und in der Free World. Die Lampe bleibt beim Schließen des Smartphones und beim Weltwechsel an, bis sie ausgeschaltet wird. Keine Synchronisation mit anderen Spielern, kein VR-Modus. Keine neuen Asset-Downloads.
