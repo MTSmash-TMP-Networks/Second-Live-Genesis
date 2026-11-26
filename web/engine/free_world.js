@@ -291,7 +291,7 @@ export class FreeWorldView{
     g.position.set(...pose.position);animationDt=pose.delta;
     g.rotation.y+=Math.atan2(Math.sin(pose.yaw-g.rotation.y),Math.cos(pose.yaw-g.rotation.y))*(1-Math.exp(-animationDt*12));
     moving=pose.moving;
-    g.userData.villagePlayback=(g.userData.villagePlayback||1)+(pose.playback-(g.userData.villagePlayback||1))*(1-Math.exp(-animationDt*10));
+    g.userData.villagePlayback=pose.playback;
    }else{
     const d=new THREE.Vector3(...p.position);moving=g.position.distanceTo(d)>.035;
     g.position.lerp(d,t);g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;

@@ -88,40 +88,50 @@ export function villagePrismTop(part,x,y,z){
 // A small rate adjustment absorbs network jitter without stopping the walk cycle.
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 export class VillageNpcMotion {
- constructor(){this.samples=[];this.time=null;this.speed=0;this.walking=false;this.still=0;this.position=null;this.delay=.42;}
+ constructor(){this.samples=[];this.time=null;this.speed=0;this.walking=false;this.still=0;this.delay=.50;this.offset=null;this.position=null;}
  push(packet,received){
   const stamp=Number.isFinite(packet.motionTime)?packet.motionTime:received/1000;
   const previous=this.samples.at(-1);
-  // Late and duplicate snapshots cannot reset the clock or refresh a stale position.
   if(previous&&stamp<=previous.stamp)return;
-  this.samples.push({...packet,position:[...packet.position],stamp,received});
-  if(this.time===null)this.time=stamp-this.delay;
-  while(this.samples.length>32)this.samples.shift();
+  const measuredOffset=stamp-received/1000;
+  if(this.offset===null)this.offset=measuredOffset;
+  // Estimate the clock from the low-delay packets; don't follow each network jitter.
+  else this.offset+=clamp(measuredOffset-this.offset,-.008,.025);
+  const history=Array.isArray(packet.motionTrail)?packet.motionTrail:[];
+  for(const q of history){
+   if(!Array.isArray(q)||q.length!==6||!q.every(Number.isFinite)||q[0]>stamp+1e-7)continue;
+   if(this.samples.length&&q[0]<=this.samples.at(-1).stamp)continue;
+   this.samples.push({stamp:q[0],position:q.slice(1,4),yaw:q[4],pace:Math.max(0,q[5])});
+  }
+  const v=packet.velocity||[0,0,0],pace=packet.moving?Math.hypot(v[0],v[2]):0;
+  if(!this.samples.length||stamp>this.samples.at(-1).stamp)this.samples.push({stamp,position:[...packet.position],yaw:packet.yaw,pace});
+  this.received=received;
+  if(this.time===null)this.time=Math.max(this.samples[0].stamp,stamp-this.delay);
+  while(this.samples.length>96)this.samples.shift();
  }
  frame(now,dt){
   const samples=this.samples,last=samples.at(-1);if(!last)return null;
-  const age=Math.max(0,(now-last.received)/1000),desired=Math.min(last.stamp,last.stamp+Math.min(this.delay,age)-this.delay);
-  const step=clamp(this.lastFrame===undefined?dt:(now-this.lastFrame)/1000,0,.10);this.lastFrame=now;
-  // The display clock never runs backwards or predicts beyond a confirmed sample.
-  // With a delayed packet, finish the known path and wait instead of overshooting
-  // an obstacle/turn and jumping backwards when the next packet arrives.
-  const rate=clamp(1+(desired-this.time)*2,.65,1.35);
-  this.time=Math.min(last.stamp,this.time+step*rate);
+  const step=clamp(this.lastFrame===undefined?dt:(now-this.lastFrame)/1000,0,.25);this.lastFrame=now;
+  // Play at real time, independent of packet cadence. Gently recover delay.
+  const desired=now/1000+this.offset-this.delay;
+  const rate=clamp(1+(desired-this.time)*.85,.88,1.12);
+  const before=this.time;
+  this.time=Math.min(last.stamp,Math.max(before,before+step*rate));
   while(samples.length>2&&samples[1].stamp<=this.time)samples.shift();
   let a=samples[0],b=a;
   if(this.time>=last.stamp){a=last;b=last;}
-  else if(this.time>a.stamp){
-   for(let i=1;i<samples.length;i++){b=samples[i];if(b.stamp>=this.time)break;a=b;}
-  }
+  else if(this.time>a.stamp){for(let i=1;i<samples.length;i++){b=samples[i];if(b.stamp>=this.time)break;a=b;}}
   const span=b.stamp-a.stamp,t=span>1e-7?clamp((this.time-a.stamp)/span,0,1):0;
   const position=a.position.map((p,j)=>p+(b.position[j]-p)*t);
   const heading=a.yaw+Math.atan2(Math.sin(b.yaw-a.yaw),Math.cos(b.yaw-a.yaw))*t;
-  // Match the in-place gait to displayed displacement, not velocity predictions.
-  const speed=this.position&&step>1e-6?clamp(Math.hypot(position[0]-this.position[0],position[2]-this.position[2])/step,0,2.8):0;
-  this.position=position.slice();
-  this.speed+=(speed-this.speed)*(1-Math.exp(-step*9));
-  if(speed>.045){this.walking=true;this.still=0;}else if((this.still+=step)>.18){this.walking=false;}
-  return {position,yaw:heading,moving:this.walking,speed:this.speed,playback:clamp(this.speed/1.45,.45,1.65),delta:step};
+  // Use the whole confirmed segment's speed, not subpixel frame displacement.
+  // On a genuine stop or exhausted buffer, blend into idle without restarting Walk.
+  const segmentSpeed=span>1e-7?Math.hypot(b.position[0]-a.position[0],b.position[2]-a.position[2])/span:0;
+  const pace=span>1e-7?(a.pace+(b.pace-a.pace)*t):0;
+  const speed=this.time>before+1e-7&&segmentSpeed>.025?Math.min(2.6,Math.max(segmentSpeed,pace*.8))*rate:0;
+  this.speed+=(speed-this.speed)*(1-Math.exp(-step*6));
+  if(speed>.12){this.walking=true;this.still=0;}else if((this.still+=step)>.30)this.walking=false;
+  return {position,yaw:heading,moving:this.walking,speed:this.speed,playback:clamp(this.speed/1.35,.8,1.5),delta:step};
  }
 }
 export function villageFallPose(age,side=1){

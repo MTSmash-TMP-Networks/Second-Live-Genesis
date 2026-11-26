@@ -8,7 +8,10 @@ from village_structure import VillageStructure, prism_ray
 
 TREE_REGROW_SECONDS=24*60*60
 NPC_STEP=.05
-NPC_TURN_SECONDS=.45
+NPC_WALK_SPEED=1.35
+NPC_CHASE_SPEED=2.2
+NPC_TRAIL_LENGTH=32
+NPC_TURN_SECONDS=.65
 NPC_CORPSE_SECONDS=10.
 CENTER=(-65.,-30.)
 FOREST_ROADS=[
@@ -94,7 +97,7 @@ class Village:
             if home is None:continue
             self.npcs.append({'slot':-100-i,'nickname':f'Test-NPC {i+1}','avatar':{'model':i+1,'height':1},
                 'position':home[:],'home':home,'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,
-                'target':None,'velocity':[0.,0.,0.],'moving':False,'route':i%2,'patrol_turn_until':0.,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None})
+                'target':None,'velocity':[0.,0.,0.],'moving':False,'trail':[],'route':i%2,'patrol_turn_until':0.,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None})
     def solids(self):
         yield from (row for row in self.rows.values() if row['kind']=='tree' and row['hp']>0)
         yield from self.structure.solids()
@@ -102,7 +105,7 @@ class Village:
         yield from (row for row in self.rows.values() if row['kind']=='tree' and row['hp']>0)
         yield from self.structure.targets(origin,reach)
     def snapshot(self):
-        return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','weapon','hp','life','score','shot_seq','shot','velocity','moving')},'motionTime':self.motion_time} for r in self.npcs if r['hp']>0]
+        return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','weapon','hp','life','score','shot_seq','shot','velocity','moving')},'motionTime':self.motion_time,'motionTrail':list(r['trail'])} for r in self.npcs if r['hp']>0]
     def corpses(self,now):
         return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life')},
                  'weapon':None,'dead':True,'deadAge':max(0.,now-r['dead_at'])}
@@ -143,19 +146,27 @@ class Village:
         return False
     def tick(self,now,players,blocked,ray_box,solid_rows,body_box,spawn):
         # Requests may arrive in bursts; advance NPC simulation at a stable 20 Hz.
-        elapsed=max(0.,min(.5,now-self.last_tick));self.last_tick=now
-        self.motion_accumulator=min(.55,self.motion_accumulator+elapsed)
+        elapsed=max(0.,min(1.,now-self.last_tick));self.last_tick=now
+        self.motion_accumulator=min(1.05,self.motion_accumulator+elapsed)
         count=0
-        while self.motion_accumulator+1e-8>=NPC_STEP and count<11:
+        while self.motion_accumulator+1e-8>=NPC_STEP and count<21:
             self.motion_accumulator=max(0.,self.motion_accumulator-NPC_STEP)
             self.motion_time=max(self.motion_time,now-self.motion_accumulator)
             self._step(self.motion_time,NPC_STEP,players,blocked,ray_box,solid_rows,body_box,spawn)
+            # Keep the authoritative short trajectory, including turns and stops.
+            # Clients can recover missing intermediate positions from the next poll.
+            for npc in self.npcs:
+                if npc['hp']<=0:continue
+                p=npc['position'];speed=math.hypot(npc['velocity'][0],npc['velocity'][2])
+                sample=[self.motion_time,*p,npc['yaw'],speed]
+                npc['trail'].append(sample)
+                if len(npc['trail'])>NPC_TRAIL_LENGTH:del npc['trail'][:-NPC_TRAIL_LENGTH]
             count+=1
     def _step(self,now,dt,players,blocked,ray_box,solid_rows,body_box,spawn):
         for npc in self.npcs:
             if npc['hp']<=0:
                 if now>=npc['respawn'] and not blocked(npc['home']):
-                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None,patrol_turn_until=0.)
+                    npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None,patrol_turn_until=0.,trail=[])
                 else:continue
             p=npc['position'];home=npc['home'];before=p[:]
             npc.update(velocity=[0.,0.,0.],moving=False)
@@ -180,7 +191,7 @@ class Village:
             if dist>.06:
                 npc['yaw']=math.atan2(-dx,-dz)
                 if (target and dist>4. or not target and now>=npc['patrol_turn_until']):
-                    step=min(max(0.,dist-(4. if target else 0.)),dt*(2.2 if target else 1.15))
+                    step=min(max(0.,dist-(4. if target else 0.)),dt*(NPC_CHASE_SPEED if target else NPC_WALK_SPEED))
                     steps=max(1,math.ceil(step/.12))
                     for j in range(steps):
                         q=[p[0]+dx/dist*step/steps,0.,p[2]+dz/dist*step/steps]

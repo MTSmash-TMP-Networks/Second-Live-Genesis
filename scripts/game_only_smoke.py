@@ -501,6 +501,28 @@ class GameOnlyTest(unittest.TestCase):
             self.assertEqual(npc['hp'],100)
             self.assertIsNone(npc['dead_at'])
 
+    def test_village_npc_motion_history_and_pace(self):
+        from village import Village, NPC_WALK_SPEED, NPC_TRAIL_LENGTH
+        now=[10.]
+        with tempfile.TemporaryDirectory() as tmp:
+            village=Village(Path(tmp)/'patrol-history.sqlite3',[],lambda:now[0])
+            npc=village.npcs[0];x0,_,z0=npc['position']
+            players={'observer':{'position':[x0+10,0,z0]}}
+            for _ in range(10):
+                now[0]+=.2
+                village.tick(now[0],players,lambda p:False,lambda *a:math.inf,lambda:[],lambda p:([0,0,0],[1,1,1]),[0,0,0])
+            row=next(r for r in village.snapshot() if r['slot']==npc['slot'])
+            trail=row['motionTrail']
+            self.assertEqual(len(trail),NPC_TRAIL_LENGTH)
+            self.assertAlmostEqual(NPC_WALK_SPEED,1.35)
+            for a,b in zip(trail,trail[1:]):
+                self.assertAlmostEqual(b[0]-a[0],.05,places=6)
+                self.assertAlmostEqual((b[3]-a[3])/(b[0]-a[0]),NPC_WALK_SPEED,places=6)
+                self.assertAlmostEqual(b[5],NPC_WALK_SPEED,places=6)
+            self.assertEqual(trail[-1][1:4],row['position'])
+            self.assertAlmostEqual(trail[-1][0],row['motionTime'])
+            self.assertTrue(row['moving'])
+
     def test_hidden_village_damage_retaliation_and_migration(self):
         from free_world import FreeWorld
         from village import Village, make_scenery

@@ -153,6 +153,7 @@ export function prepareRealistic(root,a,options,studio=false){
     }
    }
    actions.idle.play();mixer.update(0);model.updateMatrixWorld(true);
+   if(u.villageNpc)actions.walk.setEffectiveWeight(0).setEffectiveTimeScale(0).play();
    // All shipped garments use the same body. Fit uniformly rather than distorting proportions.
    const bounds=new THREE.Box3().setFromObject(model,true),size=bounds.getSize(new THREE.Vector3());
    if(bounds.isEmpty()||!Number.isFinite(size.y)||size.y<1.1||size.y>2.5)throw Error('Ungültige Modellgröße');
@@ -169,15 +170,31 @@ export function prepareRealistic(root,a,options,studio=false){
   }
  },80);
 }
+// Keep both loops alive; a short stop does not reset the walk phase or stack fades.
+export function advanceVillageGait(r,dt,moving,playback){
+ const delta=Math.max(0,Math.min(dt,.25)),t=1-Math.exp(-delta*9);
+ r.walkWeight=(r.walkWeight||0)+((moving?1:0)-(r.walkWeight||0))*t;
+ const target=Math.max(.80,Math.min(1.5,Number.isFinite(playback)?playback:1));
+ r.walkRate=(r.walkRate||1)+(target-(r.walkRate||1))*(1-Math.exp(-delta*4));
+ const weight=r.walkWeight<.001?0:r.walkWeight>.999?1:r.walkWeight;
+ r.actions.idle.setEffectiveWeight(1-weight);
+ r.actions.walk.setEffectiveWeight(weight).setEffectiveTimeScale(weight===0?0:r.walkRate);
+ r.mixer.update(delta);r.time+=delta;
+}
 export function animateRealistic(root,dt,moving,stance){
  const u=root.userData,r=u.realistic;if(!r)return false;
  // The shipped GLBs provide native idle/walk. Use native run/crouch if present;
  // otherwise adapt walk playback speed without inventing a distorted body shape.
  const crouch=stance==='crouch',sprint=stance==='sprint'&&moving;
+ const delta=Math.max(0,Math.min(dt,.1));
+ if(u.villageNpc){
+  advanceVillageGait(r,dt,moving,u.villagePlayback||1);
+  if(u.nameTag)u.nameTag.position.y=r.height+.17;
+  return true;
+ }
  const action=crouch?(moving?(r.actions.crouchwalk||r.actions.crouch||r.actions.walk):(r.actions.crouch||r.actions.idle)):moving?(sprint?(r.actions.run||r.actions.walk):r.actions.walk):r.actions.idle;
  if(action!==r.current){action.reset().setEffectiveWeight(1).play().crossFadeFrom(r.current,.22,false);r.current=action;}
  action.setEffectiveTimeScale(action===r.actions.walk?(u.hotelNpc?(u.patrolPlayback||1):u.villageNpc?(u.villagePlayback||1):sprint?1.6:crouch?.65:1):1);
- const delta=Math.max(0,Math.min(dt,.1));
  // A separately weighted upper-body wave leaves the native walk cycle running.
  const greeting=r.actions.greeting,remaining=u.hotelGreeting||0;
  if(greeting){

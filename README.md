@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.5 · Continuous NPC Locomotion**
+**v0.15.6 · Natural NPC Gait**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.6 – Natürlicherer NPC-Gang
+
+Free-World-NPCs erhalten einen bestätigten Bewegungsverlauf mit 20 Hz und laufen im Hotelservice-Tempo von 1,35 m/s. Stand- und Laufanimation werden kontinuierlich überblendet, ohne den Schrittzyklus immer wieder neu zu beginnen. Die Darstellung bleibt auch bei niedrigen Bildraten zeitlich korrekt.
 
 ## Neu in 0.15.5 – NPCs ohne Rückwärtssprünge
 

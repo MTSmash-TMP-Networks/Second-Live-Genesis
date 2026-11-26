@@ -1,4 +1,4 @@
-# Free World (0.15.5)
+# Free World (0.15.6)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -49,3 +49,6 @@ While holding a block or model, the Free World interaction panel docks at the bo
 
 ## Continuous NPC locomotion (0.15.5)
 The village NPC flag is supplied before animation loading, so the same in-place clip preparation already used by hotel staff removes horizontal hip/root motion from all NPC locomotion clips. The server route is the only source of world translation. The client samples a monotonic, delayed timeline (420 ms target buffer) using confirmed positions only. Old and duplicate packets are ignored; after exhausting the confirmed path during a connection stall, the NPC waits for a new sample. The server pauses blocked patrols, and reverses only at the normal waypoint after a stationary 450 ms turn. Movement pace is derived from actual displayed displacement. Corpse timing and respawn are unchanged. A blocked path does not yet invoke full pathfinding.
+
+## Natural NPC gait (0.15.6)
+Village NPCs walk at 1.35 m/s and send up to 32 confirmed samples at the 20 Hz simulation rate, including heading and pace. The client interpolates a delayed trajectory with a 500 ms target buffer and gentle clock correction, derives stride playback from the whole movement segment, and keeps idle and walk clips alive with complementary weights. A brief stop does not restart the walk cycle. Frame-time handling supports rendering down to 4 FPS before the safety cap applies; tests exercise 8 to 144 FPS. The turn pause is 650 ms; hotel NPCs and death/respawn behavior are unchanged. The original GLB appearance still requires a visual game check.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.6 – Natural NPC Gait
+- Free-World-NPCs laufen mit 1,35 m/s wie der Hotelservice. Der Server überträgt zusätzlich einen kurzen Bewegungsverlauf mit 20 Hz, sodass der Client gleichmäßige Bewegungsabschnitte statt einzelner Paketpositionen interpoliert.
+- Die Darstellung nutzt einen ruhigen Zeitpuffer von 500 ms und eine begrenzte Taktkorrektur. Die Schrittgeschwindigkeit stammt aus dem Bewegungsabschnitt, nicht aus winzigen Positionsdifferenzen einzelner Bilder. Niedrige Bildraten verlangsamen den Schrittzyklus nicht künstlich.
+- Stand- und Laufanimation bleiben aktiv und werden stufenlos gewichtet. Keine wiederholten Neustarts oder übereinanderliegenden Überblendungen. Bei einer längeren Paketunterbrechung wartet die Figur ohne Rückwärtssprung; die letzte bestätigte Position wird nicht überschritten.
+- Drehpause am Patrouillenende auf 650 ms verlängert. Todesanimation, Liegezeit, Respawn und Hotel-NPCs bleiben unverändert.
+
 ## 0.15.5 – Continuous NPC Locomotion
 - Free-World-NPCs werden vor dem Laden der Rocketbox-Animationen als NPC markiert. Wie beim Hotelservice entfernt der Loader horizontale Root-/Hips-Bewegung aus den Animationsclips. Die Weltposition wird ausschließlich durch den servergesteuerten Bewegungspfad bestimmt; Schritt- und Hüftanimation bleiben erhalten.
 - Der Darstellungszeitpunkt läuft monoton und interpoliert ausschließlich zwischen bestätigten Positionspaketen (420 ms Puffer). Keine Vorhersage über die letzte bekannte Position hinaus; verspätete und doppelte Pakete werden ignoriert. Bei einer längeren Unterbrechung bleibt der NPC stehen, statt vor- und zurückzuspringen.

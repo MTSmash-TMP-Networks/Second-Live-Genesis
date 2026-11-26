@@ -317,7 +317,7 @@ console.log('Connected hotel: 24 aligned rooms, corridor rays, visibility, mirro
 console.log('Shared facade: matching bidirectional holes in all 24 rooms, immediate own repair and remote repair');
 
 import {patrolPose,advancePatrolClock,LOBBY_LAYOUT as patrolLayout} from './lobby_layout.js';
-import {stabilizePatrolClip} from './realistic_character.js';
+import {advanceVillageGait,stabilizePatrolClip} from './realistic_character.js';
 {
  let clock=0,phase=0,age=0,prev=patrolPose(0).position[2];
  for(let i=1;i<=900;i++){
@@ -546,3 +546,37 @@ console.log('Village shell damage, repair masks, NPC interpolation, road and for
  const player=createCharacter(DEFAULT_CHARACTER,{legacyOnly:true});assert.equal(player.userData.villageNpc,false);disposeCharacter(player);
 }
 console.log('Village NPC confirmed-sample interpolation and NPC-specific clip preparation verified');
+
+// Long-running NPC gait at varying render rates, with jitter and a dropped packet.
+
+for(const fps of [8,15,30,60,144]){
+ const motion=new VillageNpcMotion(),actions={};
+ for(const name of ['idle','walk'])actions[name]={weight:0,rate:1,setEffectiveWeight(v){this.weight=v;return this},setEffectiveTimeScale(v){this.rate=v;return this}};
+ const r={actions,time:0,walkWeight:0,mixer:{update(dt){this.clock=(this.clock||0)+dt}}};
+ const pace=1.35,events=Array.from({length:61},(_,i)=>({stamp:i*.2,arrive:i*.2+[.018,.055,.011,.095,.034][i%5]})).filter(e=>e.stamp!==4.4);
+ let j=0,last=0,first=null,lastTime=0,walkFrames=0;
+ for(let i=0;i<=fps*11;i++){
+  const now=i/fps;
+  while(j<events.length&&events[j].arrive<=now){
+   const s=events[j++].stamp,trail=[];
+   for(let n=31;n>=0;n--){const t=s-n*.05;if(t>=0)trail.push([t,t*pace,0,0,-Math.PI/2,pace])}
+   motion.push({motionTime:s,motionTrail:trail,position:[s*pace,0,0],velocity:[pace,0,0],moving:true,yaw:-Math.PI/2},now*1000);
+  }
+  const pose=motion.frame(now*1000,now-lastTime);lastTime=now;if(!pose)continue;
+  advanceVillageGait(r,pose.delta,pose.moving,pose.playback);
+  assert.ok(pose.position[0]>=last-1e-7,'no reverse step at '+fps+' FPS');
+  assert.ok(Math.abs(actions.idle.weight+actions.walk.weight-1)<1e-9,'normalized blend');
+  last=pose.position[0];
+  if(now>2){if(first===null)first={time:now,pos:last};assert.ok(pose.moving,'continuous gait at '+fps+' FPS');assert.ok(pose.playback>=.8&&pose.playback<=1.5,'normal stride rate');assert.ok(actions.walk.weight>.97,'walk stays blended in');walkFrames++}
+ }
+ const actual=(last-first.pos)/(11-first.time);
+ assert.ok(Math.abs(actual-pace)<.09,'steady world speed at '+fps+' FPS: '+actual);
+ assert.ok(walkFrames>fps*8);
+ // A brief stop fades rather than resetting a clip. The two actions expose no reset method.
+ for(let n=0;n<30;n++)advanceVillageGait(r,1/60,false,1);
+ assert.ok(actions.walk.weight<.02,'fade to idle');
+ for(let n=0;n<30;n++)advanceVillageGait(r,1/60,true,1);
+ assert.ok(actions.walk.weight>.98,'resume existing walk');
+}
+
+console.log('Village NPC continuous gait, animation blending and low-FPS playback verified');
