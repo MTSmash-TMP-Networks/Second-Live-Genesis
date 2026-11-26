@@ -6,6 +6,7 @@ import {createCharacter,animateCharacter,disposeCharacter,normalizeCharacter} fr
 import {resetRoomAvatarPose,applyRoomAvatarPose,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
 export const FREE_LAYOUT=layout;
 const H=layout.half,Y=layout.height,G=layout.grid;
+const ICE_GATE={x:48,width:2,height:2.65};
 export function freeBounds(block){if(block.pose){const {p,extent:e}=block.pose;return {p:[p[0],p[1]+e/2,p[2]],s:[e,e,e]};}return {p:block.cell.map((v,i)=>(v+block.dims[i]/2)*G),s:block.dims.map(v=>v*G)};}
 export function freeBox(block){const {p,s}=freeBounds(block);return [p.map((v,i)=>v-s[i]/2),s];}
 export function freeOverlap(a,s,b,t){return a.every((v,i)=>v<b[i]+t[i]&&v+s[i]>b[i]);}
@@ -65,6 +66,13 @@ export function freeExitAt(origin,direction){
  const t=(H-origin[2])/direction[2];
  return t>=0&&t<=3.2&&Math.abs(origin[0]+direction[0]*t)<1.0&&origin[1]+direction[1]*t>=0&&origin[1]+direction[1]*t<=2.6;
 }
+export function freeSecretDoorAt(origin,direction,blocks=[]){
+ if(direction[2]>=-1e-8)return false;
+ const t=(-H-origin[2])/direction[2],x=origin[0]+direction[0]*t,y=origin[1]+direction[1]*t;
+ if(t<0||t>2.8||Math.abs(x-ICE_GATE.x)>ICE_GATE.width/2||y<0||y>ICE_GATE.height)return false;
+ const hit=freeRay(origin,direction,blocks,2.8);
+ return !!hit&&hit.id===null&&hit.normal[2]===1;
+}
 export function freeBlocked(blocks,x,y,z,height=1.6){
  if(Math.abs(x)>H-.28||Math.abs(z)>H-.28||y+height>Y+.001)return true;
  return blocks.some(b=>(b.hp??100)>0&&freeOverlap([x-.25,y+.015,z-.25],[.5,height-.015,.5],...freeBox(b)));
@@ -89,10 +97,65 @@ export function freeSkyState(phase){
  const twilight=Math.max(0,1-Math.abs(elevation)/.20);
  return {direction:[Math.cos(angle),elevation,.18],day,twilight,night:1-day};
 }
+function terrainRandom(seed){
+ let s=seed>>>0;return ()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/4294967296;};
+}
+function terrainNoise(nx,ny,random){
+ const f=Float32Array.from({length:nx*ny},()=>random());
+ return (u,v)=>{const x=u*nx,y=v*ny,i=Math.floor(x),j=Math.floor(y),a=x-i,b=y-j,aa=a*a*(3-2*a),bb=b*b*(3-2*b);
+ const at=(p,q)=>f[((q%ny+ny)%ny)*nx+(p%nx+nx)%nx];
+ return (at(i,j)*(1-aa)+at(i+1,j)*aa)*(1-bb)+(at(i,j+1)*(1-aa)+at(i+1,j+1)*aa)*bb;};
+}
+function terrainTexture(grass){
+ const random=terrainRandom(grass?31557:48213),n=512,c=document.createElement('canvas');c.width=c.height=n;
+ const ctx=c.getContext('2d'),a=terrainNoise(7,grass?7:3,random),b=terrainNoise(46,grass?46:7,random),f=terrainNoise(96,96,random),img=ctx.createImageData(n,n);
+ for(let y=0;y<n;y++)for(let x=0;x<n;x++){
+ const u=x/n,v=y/n,A=a(u,v),B=b(u,v),F=f(u,v),grain=(random()-.5)*18,i=(y*n+x)*4;
+ const shade=grass?24*(A-.5)+30*(B-.5)+28*(F-.5)+grain:31*(A-.5)+20*(F-.5)+grain*.36-Math.pow(Math.max(0,1-Math.abs(B-.48)*9),3)*38;
+ img.data[i]=(grass?76:203)+shade;img.data[i+1]=(grass?112:224)+shade*(grass?1:.88);img.data[i+2]=(grass?43:237)+shade*.65;img.data[i+3]=255;
+ }
+ ctx.putImageData(img,0,0);
+ if(grass){for(const color of ['rgba(33,57,20,.36)','rgba(129,157,65,.38)','rgba(89,124,43,.48)']){ctx.strokeStyle=color;ctx.lineWidth=.75;ctx.beginPath();for(let i=0;i<4200;i++){const x=random()*n,y=random()*n;ctx.moveTo(x,y);ctx.lineTo(x+(random()-.5)*3,y-1-random()*4);}ctx.stroke();}}
+ const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.anisotropy=4;return tex;
+}
+function grassSurface(){
+ const geometry=new THREE.PlaneGeometry(2*H,2*H,36,36);geometry.rotateX(-Math.PI/2);
+ const p=geometry.attributes.position,colors=[];
+ for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i),v=.87+.08*Math.sin(x*.052+Math.cos(z*.041))+.05*Math.cos(z*.073-x*.036);colors.push(v,Math.min(1,v+.035),v*.92);}
+ geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+ const map=terrainTexture(true);map.repeat.set(2*H/5,2*H/5);
+ return new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({map,vertexColors:true,roughness:1}));
+}
+export function freeIceCliffData(side){
+ const segments=104,stride=segments+1,span=H+6,positions=[],uvs=[],colors=[],indices=[];
+ for(let row=0;row<6;row++)for(let i=0;i<=segments;i++){
+ const x=-span+2*span*i/segments,t=x*.19+side*2.71,peak=Y+7+3.2*Math.sin(t*.47)+2.4*Math.sin(t*1.43)+1.3*Math.cos(t*2.78),y=[0,3,8,15,Y,peak][row];
+ const relief=row<2?0:row<5?.06*(1+Math.sin(t*1.9+row*.85)):1.5+1.3*(1+Math.sin(t*.73));
+ positions.push(x,y,-relief);uvs.push(x/9,y/9);
+ const tint=.91+.06*Math.sin(t*.98+row*.61)+.035*Math.cos(t*2.3-row*.84);colors.push(tint*.96,Math.min(1,tint+.015),Math.min(1,tint+.055));
+ }
+ for(let row=0;row<5;row++)for(let i=0;i<segments;i++){const a=row*stride+i,b=a+1,c=a+stride,d=c+1;indices.push(a,b,c,b,d,c);}
+ return {positions,uvs,colors,indices};
+}
+function iceCliff(side,material){
+ const d=freeIceCliffData(side),geometry=new THREE.BufferGeometry();
+ for(const [k,v,n] of [['position',d.positions,3],['uv',d.uvs,2],['color',d.colors,3]])geometry.setAttribute(k,new THREE.Float32BufferAttribute(v,n));
+ geometry.setIndex(d.indices);geometry.computeVertexNormals();geometry.computeBoundingSphere();
+ const mesh=new THREE.Mesh(geometry,material),[x,z,angle]=[[0,-H,0],[H,0,-Math.PI/2],[0,H,Math.PI],[-H,0,Math.PI/2]][side];
+ mesh.position.set(x,0,z);mesh.rotation.y=angle;return mesh;
+}
+function iceGate(scene,box,map){
+ const {x,width,height}=ICE_GATE,z=-H+.028,geometry=new THREE.PlaneGeometry(width,height),uv=geometry.attributes.uv;
+ for(let i=0;i<uv.count;i++)uv.setXY(i,(x+(uv.getX(i)-.5)*width)/9,uv.getY(i)*height/9);
+ const panel=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({map,color:0xe1eaf0,roughness:.93}));panel.position.set(x,height/2,z);scene.add(panel);
+ const seam=new THREE.MeshStandardMaterial({color:0x849da9,roughness:1});
+ for(const side of [-1,1])box([x+side*width/2,height/2,z+.01],[.028,height,.022],seam);
+ box([x,height,z+.01],[width+.028,.028,.022],seam);box([x+width*.34,1.18,z+.015],[.032,.16,.024],seam);
+}
 export class FreeWorldView{
  constructor(){
   this.scene=new THREE.Scene();this.scene.background=new THREE.Color(0xf4f5f5);this.scene.fog=new THREE.Fog(0xf4f5f5,145,330);
-  this.hemi=new THREE.HemisphereLight(0xffffff,0x828b93,1.0);this.sunlight=new THREE.DirectionalLight(0xffffff,2.1);this.moonlight=new THREE.DirectionalLight(0x9bb9ec,.18);
+  this.hemi=new THREE.HemisphereLight(0xffffff,0x77876a,1.0);this.sunlight=new THREE.DirectionalLight(0xffffff,2.1);this.moonlight=new THREE.DirectionalLight(0x9bb9ec,.18);
   this.scene.add(this.hemi,this.sunlight,this.moonlight);
   this.sky=new THREE.Group();this.scene.add(this.sky);
   const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,toneMapped:false,uniforms:{top:{value:new THREE.Color(0x448cca)},horizon:{value:new THREE.Color(0xd8e9f5)}},vertexShader:'varying vec3 vDir; void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'varying vec3 vDir;uniform vec3 top;uniform vec3 horizon;void main(){float t=pow(clamp(normalize(vDir).y,0.,1.),0.45);gl_FragColor=vec4(mix(horizon,top,t),1.);}' });
@@ -102,12 +165,11 @@ export class FreeWorldView{
   this.phase=0.5;this.phaseTime=0;this.effects=new ShotEffects(this.scene);this.models=new RoomModels(this.scene);this.models.root.name='Shared Free World models';this.modelRefs=new Map();
   this.heldModels=new RoomModels(this.scene);this.heldModels.root.name='Local object placement preview';this.heldModels.root.visible=false;this.heldAsset=null;
   this.cube=new THREE.BoxGeometry(1,1,1);this.materials=new Map();this.textures=new Map();this.meshes=[];this.peers=new Map();this.local=null;this.revision=-1;this.generation=0;
-  const room=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1});
-  const box=(p,s,m=room)=>{const o=new THREE.Mesh(this.cube,m);o.position.set(...p);o.scale.set(...s);this.scene.add(o);return o;};
-  const floor=new THREE.MeshStandardMaterial({color:0x6b7075,roughness:.98,metalness:0});
-  box([0,-.15,0],[2*H,.3,2*H],floor);
-  for(const side of [-1,1]){box([side*(H+.15),Y/2,0],[.3,Y,2*H]);box([0,Y/2,side*(H+.15)],[2*H,Y,.3]);}
-  const grid=new THREE.GridHelper(2*H,2*H/G,0x8b9094,0x777c80);grid.position.y=.003;this.scene.add(grid);
+  const box=(p,s,m)=>{const o=new THREE.Mesh(this.cube,m);o.position.set(...p);o.scale.set(...s);this.scene.add(o);return o;};
+  this.scene.add(grassSurface());
+  const iceMap=terrainTexture(false),iceMaterial=new THREE.MeshStandardMaterial({map:iceMap,vertexColors:true,roughness:.84});
+  for(let side=0;side<4;side++)this.scene.add(iceCliff(side,iceMaterial));
+  iceGate(this.scene,box,iceMap);
   const dark=new THREE.MeshStandardMaterial({color:0x405a68,roughness:.8});box([0,1.25,H-.045],[2,2.5,.09],dark);
   const sign=textSprite('HOTEL',2.3,.55);sign.position.set(0,2.98,H-.18);this.scene.add(sign);
   this.preview=new THREE.Mesh(this.cube,new THREE.MeshBasicMaterial({color:0x37c4a1,transparent:true,opacity:.28,depthWrite:false}));

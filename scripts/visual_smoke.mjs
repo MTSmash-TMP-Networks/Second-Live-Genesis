@@ -340,7 +340,7 @@ import {stabilizePatrolClip} from './realistic_character.js';
 }
 console.log('Hotel patrol: steady route clock, stationary turns and horizontal root-motion removal verified');
 
-import {freeBounds,freeRay,freePlacement,freeBlocked,freeGround,freeExitAt,validFreeGrid,freeSkyState,freeModelPlacement} from './free_world.js';
+import {freeBounds,freeRay,freePlacement,freeBlocked,freeGround,freeExitAt,freeSecretDoorAt,freeIceCliffData,validFreeGrid,freeSkyState,freeModelPlacement} from './free_world.js';
 import {freeWorldDoorAt} from './lobby_layout.js';
 {
  const hit=freeRay([0,1.5,0],[0,-1,0],[]);
@@ -391,3 +391,20 @@ console.log('Free World open sky, solar cycle and destroyed-object collision che
  assert.ok(validFreeGrid([20,0,20],[3,3,3]));
 }
 console.log('Independent model metric placement, rotation and block grid sizes passed');
+
+{
+ assert.ok(freeSecretDoorAt([48,1.5,-148],[0,0,-1],[]));
+ assert.ok(!freeSecretDoorAt([48,1.5,-146],[0,0,-1],[]));
+ assert.ok(!freeSecretDoorAt([48,1.5,-148],[0,0,1],[]));
+ assert.ok(!freeSecretDoorAt([50,1.5,-148],[0,0,-1],[]));
+ assert.ok(!freeSecretDoorAt([48,1.5,-148],[0,0,-1],[{id:9,cell:[95,0,-299],dims:[2,4,1],hp:100}]));
+ assert.ok(freeBlocked([],48,0,-150));
+ for(let side=0;side<4;side++){
+  const d=freeIceCliffData(side),n=d.positions.length/3,top=[];
+  assert.ok(n>500&&d.colors.length===n*3&&d.uvs.length===n*2);
+  assert.ok(d.positions.every(Number.isFinite)&&d.indices.every(i=>i>=0&&i<n));
+  for(let i=0;i<n;i++){const y=d.positions[i*3+1],z=d.positions[i*3+2];if(y<=24)assert.ok(z<=0&&z>=-.120001);else top.push(y);}
+  assert.ok(Math.min(...top)>24&&Math.max(...top)-Math.min(...top)>3);
+ }
+}
+console.log('Ice geometry, gate range and collision checks passed');

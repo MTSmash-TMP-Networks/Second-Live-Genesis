@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.5 – Beyond the Ice
+- Inventarplatz 4 bleibt nach neuem Blockbau aktiv; Größe, Form und Bild bleiben erhalten. Verschobene Objekte und GLB-Modelle bleiben einmalig platzierbar.
+- Graslandschaft, prozedurale Gletschergrenze, versteckte verschlossene Tür. Keine zusätzlichen Downloads; Weltgrenzen, Bauhöhe und bestehende Spielstände unverändert.
+
 ## 0.14.4 – Unified Free World Inventory
 - Kein Bau-/PvP-Modus mehr: Spielwaffen, Baublock und eigene GLB-Modelle im gemeinsamen Inventar. 1–3 wie im Hotel, 4 Baublock, E aufnehmen/abstellen, Q/F drehen, B Wand, R reparieren, Entf entfernen.
 - GLB-Modelle unabhängig vom Bauraster in 10-cm-Schritten von 0,10 bis 4 m skalieren. Baublöcke in 50-cm-Schritten von 0,50 bis 4 m; Form und eigene Bildtextur bleiben wählbar.

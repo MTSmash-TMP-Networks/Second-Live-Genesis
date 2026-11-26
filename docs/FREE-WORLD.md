@@ -1,12 +1,12 @@
-# Free World (0.14.4)
+# Free World (0.14.5)
 
-Enter through FREE WORLD at the north end of the hotel corridor (E). The shared room with a matte stone-gray floor and white walls is 300 × 300 × 24 m, with a protected entrance and half-metre construction grid.
+Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
 | Control | Action |
 |---|---|
 | I | Shared inventory: weapons, building block and own 3D models |
 | 1–3 / T | Select game weapon / reload |
-| 4 | Take building block with configured size, shape and image |
+| 4 | Select reusable building block with configured size, shape and image; remains selected after new placement |
 | E | Pick up own intact object or place held object |
 | + / − | Model: 0.1 m increments (0.1–4 m); block: 0.5 m increments (0.5–4 m) |
 | Q / F | Rotate held object by 90 degrees |

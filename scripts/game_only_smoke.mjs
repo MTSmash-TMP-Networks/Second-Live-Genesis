@@ -312,3 +312,24 @@ assert.ok(game.includes("extra.sourceModel=h.source")&&game.includes("freeView.s
 assert.ok(game.includes("renderer.shot(weapon,result.shot,freeView.effects)"));
 assert.ok(game.includes("now>=freeHintUntil")&&game.includes("freeNoticeUntil=now+3500"));
 console.log('Free World private model selection, shared damage effects, clock and timed hints checks passed');
+
+const repeatBlockPlacement=new Function('assert',`
+ return (async()=>{
+ let freeState={life:1,lease:'test',revision:0,editing:false,pending:null},freeHeld=null,lobbyTransition=false;
+ const canPlay=()=>true,freeMove=()=>({action:'update'}),applyFreeSnapshot=()=>{},audio={play(){}},notice={textContent:''},$=()=>notice;
+ const requests=[];let reject=false,valid=true;
+ const freeCandidate=h=>valid?{cell:[0,0,0],dims:h.dims||[2,2,2]}:null;
+ const freeRequest=async data=>{if(data.action==='update')return {};if(reject)throw Error('placement denied');requests.push(data);return {};};
+ `+getPart('async function freeEdit(','function freePrimary(')+`
+ const preset={kind:'block',dims:[1,5,5],shape:'wall-x',texture:'image',name:'Wand'};
+ freeHeld=preset;await freeEdit('place');assert.equal(freeHeld,preset);
+ await freeEdit('place');assert.equal(freeHeld,preset);assert.equal(requests.length,2);
+ assert.deepEqual(requests[1].dims,[1,5,5]);assert.equal(requests[1].texture,'image');
+ reject=true;await freeEdit('place');assert.equal(freeHeld,preset);assert.equal(requests.length,2);
+ reject=false;valid=false;await freeEdit('place');assert.equal(freeHeld,preset);assert.equal(requests.length,2);
+ valid=true;freeHeld={...preset,id:10,version:3};await freeEdit('place');assert.equal(freeHeld,null);assert.equal(requests[2].action,'relocate');assert.equal(requests[2].id,10);
+ freeHeld={kind:'model',source:'glb'};await freeEdit('place');assert.equal(freeHeld,null);assert.equal(requests[3].sourceModel,'glb');
+ assert.equal(freeState.editing,false);
+ })();
+`);await repeatBlockPlacement(assert);
+console.log('Free World repeat placement and one-shot object handling passed');

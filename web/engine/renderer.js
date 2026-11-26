@@ -22,7 +22,7 @@ import { HOTEL_LAYOUT, hotelMaterials, applyPhotoMaterials, createHotelModel } f
 export { HOTEL_LAYOUT };
 import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
 import { HotelLobbyView } from './hotel_lobby.js';
-export { FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeBlocked, freeGround, freeExitAt, freeSkyState, freeModelPlacement, freeBox } from './free_world.js';
+export { FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeBlocked, freeGround, freeExitAt, freeSecretDoorAt, freeSkyState, freeModelPlacement, freeBox } from './free_world.js';
 import { NeighborRoomView, HallFacadeViews, hotelOpenings } from './hotel_connections.js';
 export { hotelOpenings } from './hotel_connections.js';
 import { CharacterStudio, createCharacter, animateCharacter, disposeCharacter } from './character.js';

@@ -1,4 +1,4 @@
-import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell, PORTAL_SIDES, FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeModelPlacement, freeBlocked, freeGround, freeExitAt, freeWorldDoorAt } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell, PORTAL_SIDES, FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeModelPlacement, freeBlocked, freeGround, freeExitAt, freeSecretDoorAt, freeWorldDoorAt } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
@@ -496,7 +496,7 @@ function placementPoint(id){
   if(id!=='surface_rug'&&Object.entries(bodies).some(([k,b])=>k!==id&&k!=='surface_rug'&&state.objects[k]>0&&overlap(b.p,boundsSize(spec[k].s,b.q))))return null;
   return p.map(v=>Math.round(v*10000)/10000);
 }
-async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if(freeState){if(freeHeld)await freeEdit('place');else if(freeExitAt(playerEye(),dir()))await leaveFreeWorld();else freeGrab();return;}if(lobbyState){const door=lobbyInteraction(ray);if(door?.free){await enterFreeWorld();return;}if(door?.slot===lobbyState.slot)returnToRoom();else if(door)$('notice').textContent='Dieses Gästezimmer ist privat.';return;}if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
+async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if(freeState){if(freeHeld)await freeEdit('place');else if(freeExitAt(playerEye(),dir()))await leaveFreeWorld();else if(freeSecretDoorAt(playerEye(),dir(),freeState.blocks))$('notice').textContent='Die Tür ist verschlossen.';else freeGrab();return;}if(lobbyState){const door=lobbyInteraction(ray);if(door?.free){await enterFreeWorld();return;}if(door?.slot===lobbyState.slot)returnToRoom();else if(door)$('notice').textContent='Dieses Gästezimmer ist privat.';return;}if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
   const hit=interactionTarget(ray),primary=primaryInteraction(hit,ray);
   if(primary?.op==='toggle_light'){audio.play('click');await action(primary.op,primary.id);return;}
   if(primary?.op==='toggle_curtains'){await action(primary.op,primary.id);return;}
@@ -844,7 +844,7 @@ async function freeEdit(op,weapon=null,mode='place'){
    const b=h?.id?s.blocks.find(b=>b.id===h.id):freeTarget(true);if(!freeOwn(b))return;extra={id:b.id,version:b.version};
   }else if(op==='pulse')extra={direction:dir(),weapon};
   const result=await freeRequest({action,lease:s.lease,revision:s.revision,life:s.life,...extra});
-  if(freeState===s&&(op==='place'||op==='remove'&&h))freeHeld=null;
+  if(freeState===s&&(op==='place'||op==='remove'&&h))freeHeld=op==='place'&&h.kind==='block'&&!h.id?h:null;
   applyFreeSnapshot(s,result);
   if(op==='pulse'&&freeState===s){
    ammo[weapon]=Math.max(0,ammo[weapon]-1);fireCooldown=Math.max(fireCooldown,FIRE_INTERVAL[weapon]);updateAmmo();
@@ -891,8 +891,8 @@ function updateFreeUI(){
 }
 function updateFreeHint(vr=false){
  const s=freeState;if(!s)return;
- const playing=canPlay()&&!vr,h=freeHeld,exit=!h&&freeExitAt(playerEye(),dir()),target=!h&&!exit?freeTarget(true):null,own=freeOwn(target),candidate=playing&&h?freeCandidate(h):null;
- const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!own&&now>=freeHintUntil);
+ const playing=canPlay()&&!vr,h=freeHeld,exit=!h&&freeExitAt(playerEye(),dir()),gate=!h&&!exit&&freeSecretDoorAt(playerEye(),dir(),s.blocks),target=!h&&!exit&&!gate?freeTarget(true):null,own=freeOwn(target),candidate=playing&&h?freeCandidate(h):null;
+ const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!gate&&!own&&now>=freeHintUntil);
  const msg=$('notice').textContent;if(msg!==freeLastNotice){freeLastNotice=msg;freeNoticeUntil=now+3500;}
  document.body.classList.toggle('free-notice',playing&&!!msg&&now<freeNoticeUntil);
  $('held-model-size').hidden=!playing||!h;
@@ -902,13 +902,13 @@ function updateFreeHint(vr=false){
  $('touchZoom').hidden=equipped!=='rifle';$('touchZoom').disabled=!!reloadId;
  $('touchSecondary').hidden=!h;$('touchSecondary').textContent='Ablegen';
  $('touchFire').disabled=!playing||s.editing||!equipped||!!h||!!reloadId;$('touchFire').textContent='Feuer';
- $('touchInteract').disabled=!playing||(!exit&&!candidate&&!(own&&target.hp>0))||s.editing;$('touchInteract').textContent=exit?'Hotel':h?'Abstellen':'Aufheben';
+ $('touchInteract').disabled=!playing||(!exit&&!gate&&!candidate&&!(own&&target.hp>0))||s.editing;$('touchInteract').textContent=exit?'Hotel':gate?'Untersuchen':h?'Abstellen':'Aufheben';
  $('touchRepair').disabled=!own||target.hp>=100||s.editing;$('touchReload').disabled=!equipped||!!reloadId;$('touchArsenal').disabled=false;$('touchArsenal').textContent='Inventar';
  $('touchJump').disabled=player.stance==='crouch';$('touchSprint').disabled=$('touchCrouch').disabled=!playing;
  $('touchSprint').setAttribute('aria-pressed',String(player.stance==='sprint'||touchSprint));$('touchCrouch').setAttribute('aria-pressed',String(player.stance==='crouch'||touchCrouch));
- $('interaction-name').textContent=exit?'HOTEL · Ausgang':h?(candidate?'Objekt abstellen':'Stellplatz blockiert'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
- $('interaction-actions').textContent=exit?'E · Zum Hotel':h?'E: abstellen · Q/F: drehen · +/−: Größe · 0: abbrechen'+(h.kind==='model'?' · B: Wand':''):own?(target.hp?'E · Aufheben · Entf · Entfernen':'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
- $('cross').classList.toggle('actionable',playing&&(exit||!!candidate||own));
+ $('interaction-name').textContent=exit?'HOTEL · Ausgang':gate?'Eingefrorene Tür':h?(candidate?'Objekt abstellen':'Stellplatz blockiert'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
+ $('interaction-actions').textContent=exit?'E · Zum Hotel':gate?'E · Untersuchen':h?'E: abstellen · Q/F: drehen · +/−: Größe · 0: abbrechen'+(h.kind==='model'?' · B: Wand':''):own?(target.hp?'E · Aufheben · Entf · Entfernen':'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
+ $('cross').classList.toggle('actionable',playing&&(exit||gate||!!candidate||own));
  $('hint').textContent='Free World · I: Inventar';updateFreeUI();
 }
 $('free-model-select').onchange=()=>{freeModelSource=$('free-model-select').value||null;freeHintUntil=performance.now()+4000;updateFreeUI();};
@@ -1303,7 +1303,7 @@ function updateMinimap(now,vr=false){
  const box=(p,s,color)=>{ctx.fillStyle=color;ctx.fillRect(p[0]-s[0]/2,p[2]-s[2]/2,s[0],s[2]);};
  ctx.save();ctx.translate(96,96);ctx.scale(scale,scale);ctx.rotate(player.yaw);ctx.translate(-player.x,-player.z);
  if(freeState){
-  const half=FREE_LAYOUT.half;box([0,0,0],[half*2,0,half*2],'#46535d');
+  const half=FREE_LAYOUT.half;box([0,0,0],[half*2,0,half*2],'#496340');
   for(const b of freeState.blocks){if((b.hp??100)<=0)continue;const {p,s}=freeBounds(b);box(p,s,b.model?'#e1bc85':b.texture?'#9bbeb8':'#a9b5bc');}
   for(const x of [-half,half])box([x,0,0],[.2,0,2*half],'#abb8bf');
   for(const z of [-half,half])box([0,0,z],[2*half,0,.2],'#abb8bf');box([0,0,half],[2,0,.3],'#68e3b7');
