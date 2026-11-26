@@ -1,4 +1,4 @@
-# Free World (0.15.1)
+# Free World (0.15.2)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -37,3 +37,6 @@ A concealed village in the western half has four houses, a market, a cafe, stree
 
 ## Prepared Quaternius models (0.15.1)
 Install the separately supplied prepared `Second-Live-Quaternius-Village-Models.zip` through Smartphone → System → Dorfmodelle importieren. Only the activated administrator may import. The four GLBs are validated and atomically stored in `village_assets.sqlite3` in the existing data volume; no external requests or subsequent rebuilds are required. Reload the game to activate the new art. Imported entrances face the street and shop labels remain visible. Buildings are still solid exterior-only collision boxes, and all previous scene coordinates and tree damage stay unchanged. The original Standard archive is not directly accepted; use the prepared four-model ZIP. See [asset instructions](../optional-village/README.md).
+
+## Living village (0.15.2)
+Training NPCs transmit explicit walking state and velocity. The client smooths the positions and heading and adjusts the walk cycle to movement speed. Each building has 268 damageable shell cells, using the same four damage stages as the hotel but a simplified grid, not its exact Voronoi wall geometry or full rigid-body building collapse. The original installed GLB textures stay visible on intact fragments. Destroyed cells stop colliding and their temporary debris is visual. Aim at damaged or destroyed parts and press R; Shift+R rebuilds the whole building. Shared repairs are refused when a restored cell would overlap a player, NPC or existing construction. Interior geometry remains limited to what the installed GLB contains. Damage is persisted. Street surfaces, sidewalks, curbs, crossing, lights and tree geometry were redesigned without extra downloads. Fallen trees regain 100 HP after 24 real-world hours; their due time persists across restarts. Old stumps acquire a new deadline at the first database migration. A blocked trunk volume postpones regrowth until empty. World day/night length remains unchanged. All existing original village models stay installed.

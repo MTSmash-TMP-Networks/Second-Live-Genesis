@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.2 – Living Village
+- Trainings-NPCs melden Bewegungszustand und Geschwindigkeit. Geglättete Positionen und Blickrichtungen, laufgeschwindigkeitsabhängige Animation und kurze Bewegungsfortsetzung zwischen Serverpaketen verhindern das bisherige ständige Umschalten zwischen Idle und Walk.
+- Sechs Dorfgebäude erhalten jeweils 268 einzeln zerstörbare Außenhüllenzellen. Die vier Hotel-Schadensstufen werden auch auf die Original-GLBs angewendet. R repariert anvisierte Teile, Umschalt+R baut ein beschädigtes Gebäude wieder auf, sofern keine Spieler oder Bauobjekte im wiederherzustellenden Teil stehen. Schadenszustände werden serverseitig gespeichert; zerstörte Zellen verlieren ihre Kollision. Das Raster ist eine vereinfachte Spielphysik, kein vollständiger Statik-/Rapier-Gebäudeabriss.
+- Asphalt, Pflaster, Bordsteine, Übergänge, Zebrastreifen, Markierungen und Straßenlaternen; höher aufgelöste, unregelmäßige Baumkronen, verzweigte Stämme und lokale Sonnenschatten. Prozedurale Landschaftsmodelle, keine neuen Downloads. Bestehende Baum-IDs und installierte Quaternius-GLBs bleiben erhalten.
+- Gefällte Bäume wachsen nach 24 realen Stunden an derselben Stelle wieder nach. Der Zeitstempel wird in der bestehenden Datenbank gespeichert; bei belegten Standorten wird gewartet. Bereits vor diesem Update gefällte Bäume starten ihre Frist bei der Migration.
+
 ## 0.15.1 – Quaternius Village Model Import
 - Administratoren können über System ein vorbereitetes ZIP mit vier eingebetteten GLB-Gebäudemodellen hochladen. Alle vier Dateien werden vor dem atomaren Austausch geprüft und dauerhaft in der Datenbank im bestehenden Datenvolume gespeichert. Kein neuer Docker-Build für den Modellwechsel erforderlich.
 - Explizite Asset-Routen für Dorfmodelle, lokale Modellbank mit Fallback auf gebündelte GLBs bzw. prozedurale Gebäude. Türen und Schaufenster werden zur Dorfstraße ausgerichtet; Markt- und Café-Schilder bleiben sichtbar. Die gemeinsamen Kollisionen und der Spielstand bleiben unverändert.

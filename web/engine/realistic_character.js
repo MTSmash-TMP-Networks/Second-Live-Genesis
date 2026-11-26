@@ -175,7 +175,7 @@ export function animateRealistic(root,dt,moving,stance){
  const crouch=stance==='crouch',sprint=stance==='sprint'&&moving;
  const action=crouch?(moving?(r.actions.crouchwalk||r.actions.crouch||r.actions.walk):(r.actions.crouch||r.actions.idle)):moving?(sprint?(r.actions.run||r.actions.walk):r.actions.walk):r.actions.idle;
  if(action!==r.current){action.reset().setEffectiveWeight(1).play().crossFadeFrom(r.current,.22,false);r.current=action;}
- action.setEffectiveTimeScale(action===r.actions.walk?(u.hotelNpc?(u.patrolPlayback||1):sprint?1.6:crouch?.65:1):1);
+ action.setEffectiveTimeScale(action===r.actions.walk?(u.hotelNpc?(u.patrolPlayback||1):u.villageNpc?(u.villagePlayback||1):sprint?1.6:crouch?.65:1):1);
  const delta=Math.max(0,Math.min(dt,.1));
  // A separately weighted upper-body wave leaves the native walk cycle running.
  const greeting=r.actions.greeting,remaining=u.hotelGreeting||0;

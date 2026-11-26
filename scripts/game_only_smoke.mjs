@@ -400,3 +400,26 @@ for(const id of ['village-asset-file','village-asset-upload','village-asset-stat
 assert.ok(updater.includes('/api/admin/village-assets')&&updater.includes("'Content-Type':'application/zip'"));
 assert.ok(updater.includes('villageImporting'));
 console.log('Administrator village asset upload controls present');
+
+const villageRepairRouting=new Function('assert',`
+ let picked=null,freeHeld=null,lobbyTransition=false;
+ const freeState={life:1,lease:'test',revision:0,editing:false,pending:null,blocks:[],scenery:[{id:'building-0',kind:'house',damage:{1:4}}],structureParts:[]};
+ const calls=[],canPlay=()=>true,freeMove=()=>({action:'update'}),applyFreeSnapshot=()=>{},audio={play(){}},$=()=>({textContent:''});
+ const playerEye=()=>[0,1,0],dir=()=>[1,0,0],FREE_LAYOUT={reach:8},freeOwn=b=>b?.ownerSlot===1;
+ const freeRay=()=>picked?{id:picked.id}:null,freeRequest=async data=>{if(data.action!=='update')calls.push(data);return {};};
+ `+getPart('function freeRepairTarget(','function rebuildFreeObstacles(')+getPart('async function freeEdit(','function freePrimary(')+`
+ return (async()=>{
+ const damaged={id:'building-0:1',building:'building-0',kind:'building-part',stage:4,bounds:[[1,0,0],[1,2,1]]};
+ const intact={...damaged,id:'building-0:2',stage:0};
+ freeState.structureParts=[damaged,intact];picked=damaged;
+ assert.equal(freeRepairTarget(freeState),damaged);await freeEdit('repair');assert.equal(calls[0].id,damaged.id);assert.equal(calls[0].whole,false);
+ picked=intact;assert.equal(freeRepairTarget(freeState),null);assert.equal(freeRepairTarget(freeState,true),intact);
+ await freeEdit('repair',null,'whole');assert.equal(calls[1].id,intact.id);assert.equal(calls[1].whole,true);
+ picked={id:3,ownerSlot:2,hp:0};freeState.blocks=[picked];await freeEdit('repair');assert.equal(calls.length,2);
+ picked={id:4,ownerSlot:1,hp:50,version:3};freeState.blocks=[picked];await freeEdit('repair');assert.equal(calls[2].id,4);assert.equal(calls[2].version,3);
+ assert.equal(freeState.editing,false);
+ })();
+ `);await villageRepairRouting(assert);
+assert.ok(game.includes('s.structureParts=buildings.flatMap(villageParts)'));
+assert.ok(game.includes('buildings.flatMap(villageColliders)'));
+console.log('Village repair targeting, full rebuild and own block repair routing passed');

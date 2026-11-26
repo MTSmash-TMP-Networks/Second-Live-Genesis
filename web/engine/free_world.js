@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import layout from './free_world_layout.json';
 import {RoomModels} from './room_customization.js';
 import {VillageView} from './village.js';
+import {villageNpcFrame} from './village_damage.js';
 import {ShotEffects} from './shotfx.js';
 import {createCharacter,animateCharacter,disposeCharacter,normalizeCharacter} from './character.js';
 import {resetRoomAvatarPose,applyRoomAvatarPose,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
@@ -9,7 +10,7 @@ export const FREE_LAYOUT=layout;
 const H=layout.half,Y=layout.height,G=layout.grid;
 const ICE_GATE={x:48,width:2,height:2.65};
 export function freeBounds(block){if(block.bounds){const [b,s]=block.bounds;return {p:b.map((v,i)=>v+s[i]/2),s};}if(block.pose){const {p,extent:e}=block.pose;return {p:[p[0],p[1]+e/2,p[2]],s:[e,e,e]};}return {p:block.cell.map((v,i)=>(v+block.dims[i]/2)*G),s:block.dims.map(v=>v*G)};}
-export function freeBox(block){const {p,s}=freeBounds(block);return [p.map((v,i)=>v-s[i]/2),s];}
+export function freeBox(block){if(block.bounds)return block.bounds;const {p,s}=freeBounds(block);return [p.map((v,i)=>v-s[i]/2),s];}
 export function freeOverlap(a,s,b,t){return a.every((v,i)=>v<b[i]+t[i]&&v+s[i]>b[i]);}
 export function validFreeGrid(cell,dims){
  return cell.length===3&&dims.length===3&&cell.every(Number.isInteger)&&dims.every(v=>Number.isInteger(v)&&v>=1&&v<=Math.max(...layout.sizes))&&cell.every((v,i)=>v>=[-H/G,0,-H/G][i]&&v+dims[i]<=[H/G,Y/G,H/G][i])&&!freeOverlap(cell,dims,[-6,0,H/G-12],[12,Y/G,12]);
@@ -157,7 +158,11 @@ export class FreeWorldView{
  constructor(){
   this.scene=new THREE.Scene();this.scene.background=new THREE.Color(0xf4f5f5);this.scene.fog=new THREE.Fog(0xf4f5f5,145,330);
   this.hemi=new THREE.HemisphereLight(0xffffff,0x77876a,1.0);this.sunlight=new THREE.DirectionalLight(0xffffff,2.1);this.moonlight=new THREE.DirectionalLight(0x9bb9ec,.18);
-  this.scene.add(this.hemi,this.sunlight,this.moonlight);
+  this.scene.add(this.hemi,this.sunlight,this.moonlight,this.sunlight.target);
+  // A bounded, local sun shadow map instead of shadowing all 300 x 300 m.
+  this.sunlight.shadow.mapSize.set(1024,1024);
+  Object.assign(this.sunlight.shadow.camera,{left:-38,right:38,top:38,bottom:-38,near:5,far:180});
+  this.sunlight.shadow.camera.updateProjectionMatrix();this.sunlight.shadow.normalBias=.06;this.sunlight.shadow.bias=-.0002;
   this.sky=new THREE.Group();this.scene.add(this.sky);
   const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,toneMapped:false,uniforms:{top:{value:new THREE.Color(0x448cca)},horizon:{value:new THREE.Color(0xd8e9f5)}},vertexShader:'varying vec3 vDir; void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'varying vec3 vDir;uniform vec3 top;uniform vec3 horizon;void main(){float t=pow(clamp(normalize(vDir).y,0.,1.),0.45);gl_FragColor=vec4(mix(horizon,top,t),1.);}' });
   this.sky.add(new THREE.Mesh(new THREE.SphereGeometry(420,32,20),skyMat));this.skyMat=skyMat;
@@ -185,7 +190,9 @@ export class FreeWorldView{
   this.sun.visible=d.y>-.04;this.moon.visible=d.y<.04;
   const top=new THREE.Color(0x08142f).lerp(new THREE.Color(0x4e99d5),s.day),horizon=new THREE.Color(0x15233c).lerp(new THREE.Color(0xcadfec),s.day).lerp(new THREE.Color(0xf5a06b),s.twilight*.72);
   this.skyMat.uniforms.top.value.copy(top);this.skyMat.uniforms.horizon.value.copy(horizon);this.scene.background.copy(horizon);this.scene.fog.color.copy(horizon);
-  this.sunlight.position.copy(d).multiplyScalar(150);this.sunlight.color.set(0xfff4dc).lerp(new THREE.Color(0xffa76b),s.twilight*.75);this.sunlight.intensity=2.1*Math.max(0,d.y)**.45;
+  this.sunlight.castShadow=d.y>.16;
+  this.sunlight.target.position.set(Math.round(player.x/2)*2,0,Math.round(player.z/2)*2);
+  this.sunlight.position.copy(this.sunlight.target.position).addScaledVector(d,95);this.sunlight.color.set(0xfff4dc).lerp(new THREE.Color(0xffa76b),s.twilight*.75);this.sunlight.intensity=2.1*Math.max(0,d.y)**.45;
   this.moonlight.position.copy(d).multiplyScalar(-150);this.moonlight.intensity=.22*s.night;
   this.hemi.color.set(0x99b3ec).lerp(new THREE.Color(0xffffff),s.day);this.hemi.intensity=.20+1.6*s.day;
   return phase;
@@ -251,17 +258,29 @@ export class FreeWorldView{
    seen.add(p.slot);const signature=JSON.stringify([p.nickname,normalizeCharacter(p.avatar),p.life]);let a=this.peers.get(p.slot);
    if(a&&a.signature!==signature){clearRoomAvatarProps(a.g);disposeCharacter(a.g);a=null;}
    if(!a){const g=this.avatar(p);g.position.set(...p.position);g.rotation.y=p.yaw;a={g,signature};this.peers.set(p.slot,a);}
+   const now=performance.now();
+   if(p.slot<0){a.movingUntil=p.moving?now+420:Math.min(a.movingUntil||0,now+150);a.received=now;}
    a.target=p;
   }
   for(const [slot,a] of this.peers)if(!seen.has(slot)){clearRoomAvatarProps(a.g);disposeCharacter(a.g);this.peers.delete(slot);}
  }
  step(dt,player,profile,third,models=null,weapon=null){
-  this.effects.update(dt);
+  this.effects.update(dt);this.village.rubble.step(dt);
   for(const {row,size} of this.models.physicsModels()){const a=row.rotation*Math.PI/360;this.models.drawBody(row.id,{p:[row.x,row.y+Math.max(.015,size[1]*row.extent)/2,row.z],q:[0,Math.sin(a),0,Math.cos(a)]},row.hp);}
   const t=1-Math.exp(-dt*12);
   for(const a of this.peers.values()){
-   const g=a.g,p=a.target,d=new THREE.Vector3(...p.position),moving=g.position.distanceTo(d)>.035;
-   g.position.lerp(d,t);g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;
+   const g=a.g,p=a.target;let moving;
+   if(p.slot<0){
+    const now=performance.now(),age=Math.max(0,(now-(a.received??now))/1000);
+    const pose=villageNpcFrame(g.position.toArray(),g.rotation.y,p,age,dt,Math.max(0,((a.movingUntil||0)-now)/1000));
+    g.position.set(...pose.position);g.rotation.y=pose.yaw;moving=pose.moving;
+    g.userData.villageNpc=true;
+    const desired=pose.speed>.04?pose.playback:(g.userData.villagePlayback||1);
+    g.userData.villagePlayback=(g.userData.villagePlayback||1)+(desired-(g.userData.villagePlayback||1))*t;
+   }else{
+    const d=new THREE.Vector3(...p.position);moving=g.position.distanceTo(d)>.035;
+    g.position.lerp(d,t);g.rotation.y+=Math.atan2(Math.sin(p.yaw-g.rotation.y),Math.cos(p.yaw-g.rotation.y))*t;
+   }
    resetRoomAvatarPose(g);animateCharacter(g,dt,moving,p.stance);applyRoomAvatarPose(g,null,p.weapon);updateRoomAvatarProp(g,models,p.weapon);
   }
   if(third&&profile){
@@ -272,7 +291,7 @@ export class FreeWorldView{
   }else if(this.local)this.local.visible=false;
  }
  clear(){
-  this.generation++;this.revision=-1;this.showPreview(null);this.sync([]);this.models.clear();this.modelRefs.clear();
+  this.generation++;this.revision=-1;this.village.rubble.clear();this.showPreview(null);this.sync([]);this.models.clear();this.modelRefs.clear();
   while(this.effects.items.length)this.effects.remove(0);this.effects.light.intensity=0;
   if(this.local){clearRoomAvatarProps(this.local);disposeCharacter(this.local);this.local=null;}
   for(const mesh of this.meshes){this.scene.remove(mesh);mesh.dispose?.();}this.meshes=[];

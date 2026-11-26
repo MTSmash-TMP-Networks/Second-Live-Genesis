@@ -390,6 +390,67 @@ class GameOnlyTest(unittest.TestCase):
             self.assertEqual(reopened.get('shop-a'),room_model_fixture())
             with self.assertRaises(CaptureError):reopened.get('../outside')
 
+    def test_village_tree_regrowth_persists_and_respects_builds(self):
+        from village import Village, TREE_REGROW_SECONDS
+        now=[100000.]
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'forest.sqlite3'
+            village=Village(path,[],lambda:1.,lambda:now[0])
+            tree=next(r for r in village.rows.values() if r['kind']=='tree')
+            key=tree['id']
+            village.damage_tree(tree,100)
+            self.assertEqual(tree['hp'],0)
+            self.assertEqual(village.regrow_at[key],now[0]+TREE_REGROW_SECONDS)
+            now[0]+=TREE_REGROW_SECONDS-1
+            village=Village(path,[],lambda:2.,lambda:now[0])
+            self.assertFalse(village.regrow([]))
+            self.assertEqual(village.rows[key]['hp'],0)
+            now[0]+=1
+            self.assertFalse(village.regrow([tree['bounds']]))
+            now[0]+=1
+            self.assertTrue(village.regrow([]))
+            self.assertEqual(village.rows[key]['hp'],100)
+            self.assertNotIn(key,village.regrow_at)
+            again=Village(path,[],lambda:3.,lambda:now[0])
+            self.assertEqual(again.rows[key]['hp'],100)
+            self.assertNotIn(key,again.regrow_at)
+
+    def test_village_structural_damage_repair_persistence(self):
+        from free_world import FreeWorld
+        from village_structure import parts_for, part_index
+        now=[100.]
+        profile={'slot':0,'nickname':'Builder','avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            world=FreeWorld(tmp,lambda:now[0])
+            session=world.enter('builder',profile);player=world.players['builder']
+            row=world.village.rows['building-0-0']
+            structure=world.village.structure
+            self.assertEqual(len(list(parts_for(row))),268)
+            self.assertEqual(len(structure.colliders[row['id']]),6)
+            # Street-facing wall, at the lowest two accessible wall levels.
+            part=structure.parts[row['id']+':'+str(part_index(7,1,3))]
+            b,s=part['bounds'];z=b[2]+s[2]/2
+            player.update(position=[b[0]+s[0]+2.,0.,z],weapon='pistol')
+            now[0]+=4
+            result=world.request('builder',{'action':'pulse','lease':session['lease'],'life':player['life'],'weapon':'pistol','direction':[-1,0,0]})
+            self.assertTrue(result['shot']['impact'])
+            # The eye is in the cell above the low wall cell, except in a 7.5m house.
+            damaged=[p for p in structure.by_building[row['id']] if p['stage']]
+            self.assertEqual(len(damaged),1)
+            self.assertEqual(damaged[0]['stage'],1)
+            part=damaged[0]
+            structure.damage(part,4)
+            part=structure.parts[part['id']]
+            self.assertEqual(part['hp'],0)
+            again=FreeWorld(tmp,lambda:now[0])
+            self.assertEqual(again.village.structure.parts[part['id']]['stage'],4)
+            world.repair('builder',player,{'id':part['id']},now[0])
+            self.assertEqual(structure.parts[part['id']]['stage'],0)
+            structure.damage(structure.parts[part['id']],4)
+            now[0]+=.2
+            world.repair('builder',player,{'id':part['id'],'whole':True},now[0])
+            self.assertEqual(row['damage'],{})
+
     def test_hidden_village_damage_retaliation_and_migration(self):
         from free_world import FreeWorld
         from village import Village, make_scenery

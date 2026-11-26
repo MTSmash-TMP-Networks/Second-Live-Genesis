@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.1 · Quaternius Village Model Import**
+**v0.15.2 · Living Village**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.2 – Living Village
+
+Flüssigere NPC-Bewegungen, zerstörbare Dorfgebäude mit persistenten Schadensstufen und Wiederaufbau über R bzw. Umschalt+R. Überarbeitete Straßen, detailliertere Bäume und lokale Sonnenschatten. Gefällte Bäume wachsen nach 24 realen Stunden wieder nach, sobald ihr Standort frei ist. Die vorhandenen Quaternius-Originalmodelle bleiben installiert. Details in [Free World](docs/FREE-WORLD.md).
 
 ## Neu in 0.15.1 – Quaternius-Gebäude importieren
 

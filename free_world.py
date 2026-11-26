@@ -103,7 +103,15 @@ class FreeWorld:
         for b in self.blocks.values():
             if b['hp']>0:yield block_bounds(b)
         for b in self.village.solids():yield b['bounds']
+    def regrow_village(self):
+        def occupied():
+            for b in self.blocks.values():yield block_bounds(b)
+            for r in [*self.players.values(),*self.village.snapshot()]:
+                yield self.body_box(r['position'])
+            for b in self.village.structure.solids():yield b['bounds']
+        if self.village.regrow(occupied()):self.revision+=1
     def tick_village(self,now):
+        self.regrow_village()
         self.village.tick(now,self.players,self.blocked,ray_box,self.solid_boxes,self.body_box,SPAWN)
     def prune(self,now):
         for player,row in list(self.players.items()):
@@ -124,7 +132,7 @@ class FreeWorld:
         out={'slot':row['slot'],'hp':row['hp'],'life':row['life'],'score':row['score'],'position':row['position'],'yaw':row['yaw'],'corrected':corrected,'peers':peers,'online':len(self.players),'revision':self.revision,'notice':notice,'textures':self.own_textures(player),'dayPhase':(time.time()%L['daySeconds'])/L['daySeconds']}
         out['npcs']=self.village.snapshot()
         if revision!=self.revision:
-            out['scenery']=list(self.village.rows.values())
+            out['scenery']=[{**r,**({'damage':dict(r['damage'])} if 'damage' in r else {})} for r in self.village.rows.values()]
             out['villageRoads']=ROADS
             out['blocks']=[{**{k:v for k,v in b.items() if k!='owner'},**({'modelName':self.models[b['model']]['name'],'modelBytes':self.models[b['model']]['bytes']} if b['model'] in self.models else {})} for b in self.blocks.values()]
         return out
@@ -133,6 +141,7 @@ class FreeWorld:
             now=self.clock();self.prune(now)
             row={'slot':profile['slot'],'nickname':profile['nickname'],'avatar':profile['avatar'],'lease':secrets.token_urlsafe(24),'seen':now,'move_at':now,'edit_at':-100.,'pulse_at':-100.,'position':list(SPAWN),'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,'shield':now+3}
             self.players[player]=row
+            self.regrow_village()
             return {**self.snapshot(player,row),'lease':row['lease']}
     def body_box(self,p,height=1.6):
         return [p[0]-.25,p[1]+.015,p[2]-.25],[.5,height-.015,.5]
@@ -232,7 +241,22 @@ class FreeWorld:
             return row[0]
 
     def repair(self,player,row,data,now):
-        i=data.get('id');need(type(i) is int and i in self.blocks,'Objekt nicht vorhanden',404)
+        i=data.get('id')
+        if isinstance(i,str):
+            part=self.village.structure.parts.get(i)
+            need(part is not None,'Gebaeudeteil nicht vorhanden',404)
+            whole=data.get('whole') is True
+            structure=self.village.structure
+            need(distance_to_box([row['position'][0],row['position'][1]+1.4,row['position'][2]],*part['bounds'])<=L['reach'],'Gebaeudeteil ausser Reichweite')
+            need(now-row['edit_at']>=.12,'Bitte kurz warten',429)
+            repairs=structure.by_building[part['building']] if whole else [part]
+            need(any(p['stage']>0 for p in repairs),'Gebaeudeteil bereits intakt',409)
+            occupied=[block_bounds(b) for b in self.blocks.values()]
+            occupied += [self.body_box(r['position'],1.12 if r.get('stance')=='crouch' else 1.6) for r in [*self.players.values(),*self.village.snapshot()]]
+            need(not any(overlap(*p['bounds'],*box) for p in repairs if p['stage']>=4 for box in occupied),'Wiederaufbau blockiert: Spieler oder Bauobjekt im Gebaeudeteil',409)
+            notice=structure.repair(part,whole);self.revision+=1;row['edit_at']=now
+            return notice
+        need(type(i) is int and i in self.blocks,'Objekt nicht vorhanden',404)
         b=self.blocks[i];need(b['owner']==player,'Nur eigene Objekte reparieren',403)
         p,s=block_bounds(b)
         need(distance_to_box(row['position'],p,s)<=L['reach'],'Objekt ausser Reichweite')
@@ -284,7 +308,7 @@ class FreeWorld:
             t=ray_box(origin,direction,*block_bounds(b),reach)
             if t<stop:stop=t;target_block=b
         target=None;target_scenery=None;target_npc=None
-        for b in self.village.solids():
+        for b in self.village.targets(origin,reach):
             t=ray_box(origin,direction,*b['bounds'],reach)
             if t<stop:stop=t;target_block=None;target_scenery=b
         for npc in self.village.npcs:
@@ -301,8 +325,10 @@ class FreeWorld:
         damage=self.damage_profiles[weapon][0]
         if target_block is not None:return self.damage_block(target_block,direction,damage),shot
         if target_scenery is not None:
-            notice=self.village.damage_tree(target_scenery,damage)
-            if target_scenery['kind']=='tree':self.revision+=1
+            if target_scenery['kind']=='building-part':
+                notice=self.village.structure.damage(target_scenery,self.damage_profiles[weapon][1])
+            else:notice=self.village.damage_tree(target_scenery,damage)
+            self.revision+=1
             return notice,shot
         if target_npc is not None:
             defeated=self.village.damage_npc(target_npc,player,damage,now)

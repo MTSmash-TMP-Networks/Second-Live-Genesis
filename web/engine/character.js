@@ -171,7 +171,7 @@ export function createHotelNpc(){
 export function animateCharacter(root,dt,moving=false,stance='walk'){
  if(animateRealistic(root,dt,moving,stance))return;
  const u=root.userData,crouch=stance==='crouch',sprint=stance==='sprint'&&moving;
- u.phase+=dt*(moving?(sprint?15:crouch?6.2:9.5):2.0);
+ u.phase+=dt*(moving?(sprint?15:crouch?6.2:9.5)*(u.villageNpc?(u.villagePlayback||1):1):2.0);
  const a=moving?Math.sin(u.phase)*(sprint?.82:crouch?.21:.48):Math.sin(u.phase)*.018,t=Math.min(1,dt*12);
  u.crouchBlend=(u.crouchBlend||0)+((crouch?1:0)-(u.crouchBlend||0))*t;
  const c=u.crouchBlend;

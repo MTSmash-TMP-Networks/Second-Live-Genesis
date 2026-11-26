@@ -440,3 +440,62 @@ console.log('Phone flashlight: actual Three.js spotlight, aim, scene switch, sha
  tree.hp=0;assert.ok(!freeBlocked([tree],-39.5,0,10.5));
 }
 console.log('Hidden village metric scenery collider checks passed');
+
+import {villageParts,villageColliders,villagePartIndex,villageNpcFrame,patchVillageShader,VillageDamageMask,VillageRubble} from './village_damage.js';
+import {villageTreeParts,VillageForest,VillageRoads} from './village_landscape.js';
+{
+ const row={id:'building-test',kind:'house',bounds:[[0,0,0],[10,7.5,10]],damage:{}};
+ assert.equal(villageParts(row).length,268);
+ assert.equal(villageColliders(row).length,6);
+ const cell=villageParts(row).find(p=>p.index===villagePartIndex(7,2,3));
+ assert.ok(cell);
+ assert.ok(freeBlocked(villageColliders(row),9.5,1.6,4.4,1));
+ row.damage[cell.index]=3;assert.ok(freeBlocked(villageColliders(row),9.5,1.6,4.4,1));
+ row.damage[cell.index]=4;assert.ok(!freeBlocked(villageColliders(row),9.5,1.6,4.4,1));
+ assert.equal(villageParts(row).find(p=>p.id===cell.id).hp,0);
+ const mask=new VillageDamageMask(row);
+ assert.equal(mask.data[cell.index*4],255);
+ const group=new THREE.Group(),mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());group.add(mesh);
+ const release=mask.attach(group);
+ const shader={uniforms:{},vertexShader:'void main(){vec3 transformed=position; #include <project_vertex>}',fragmentShader:'void main(){#include <clipping_planes_fragment> #include <color_fragment>}'};
+ mesh.material.onBeforeCompile(shader,null);
+ assert.ok(shader.fragmentShader.includes('if(villageStage>3.5)discard'));
+ assert.ok(shader.vertexShader.includes('modelMatrix*vec4(transformed,1.0)'));
+ assert.ok(shader.uniforms.villageDamage.value===mask.texture);
+ row.damage={};mask.update(row);assert.equal(mask.data[cell.index*4],0);
+ assert.equal(villageColliders(row).length,6);
+ release();mask.dispose();
+ // Keep the walking state between 250 ms server packets rather than repeatedly switching to idle.
+ let position=[0,0,0],yaw=0;
+ for(let i=0;i<120;i++){
+  const time=i/60,stamp=Math.floor(time*4)/4;
+  const packet={position:[stamp*1.15,0,0],velocity:[1.15,0,0],moving:true,yaw:-Math.PI/2};
+  const n=villageNpcFrame(position,yaw,packet,time-stamp,1/60);
+  assert.ok(n.moving&&n.position[0]>=position[0]-1e-8);
+  position=n.position;yaw=n.yaw;
+ }
+ assert.ok(position[0]>2.1&&position[0]<2.5);
+ assert.ok(!villageNpcFrame(position,yaw,{position,velocity:[0,0,0],moving:false,yaw},.7,1/60).moving);
+}
+{
+ const scene=new THREE.Scene(),trees=new THREE.Group();scene.add(trees);
+ const oak={id:'oak',kind:'tree',hp:100,variant:0,height:10,bounds:[[0,0,0],[1,6.5,1]]};
+ const pine={...oak,id:'pine',variant:1,bounds:[[5,0,0],[1,6.5,1]]};
+ assert.deepEqual(villageTreeParts(oak),villageTreeParts(oak));
+ assert.ok(villageTreeParts(oak).filter(p=>p.type==='branch').length>4);
+ assert.equal(villageTreeParts(pine).filter(p=>p.type==='pine').length,7);
+ const forest=new VillageForest(trees);forest.set([oak,pine]);
+ assert.ok(trees.children.length>=4&&trees.children.every(m=>m.isInstancedMesh));
+ forest.set([{...oak,hp:0}]);assert.equal(trees.children.length,1);
+ assert.equal(villageTreeParts({...oak,hp:0})[0].type,'stump');
+ forest.set([oak]);assert.ok(trees.children.length>1);
+ const roadRoot=new THREE.Group(),cube=new THREE.BoxGeometry(1,1,1);
+ const roads=new VillageRoads(roadRoot,(root,p,s,mat)=>{const o=new THREE.Mesh(cube,mat);o.position.set(...p);o.scale.set(...s);root.add(o);return o;});
+ roads.set([{x:0,z:0,w:7,d:57,kind:'street'},{x:4.57,z:0,w:2,d:57,kind:'walk'},{x:0,z:2,w:7,d:3.1,kind:'crosswalk'}]);
+ assert.ok(roadRoot.children.length>100);
+ assert.ok(roads.materials.street.map.isDataTexture&&roads.materials.walk.map.isDataTexture);
+ const count=roadRoot.children.length;
+ roads.set([{x:0,z:0,w:7,d:57,kind:'street'},{x:4.57,z:0,w:2,d:57,kind:'walk'},{x:0,z:2,w:7,d:3.1,kind:'crosswalk'}]);assert.equal(roadRoot.children.length,count);
+ const rubble=new VillageRubble(scene);rubble.spawn({bounds:[[0,1,0],[1,1,1]]});assert.equal(rubble.items.length,5);rubble.step(.1);rubble.clear();assert.equal(rubble.items.length,0);
+}
+console.log('Village shell damage, repair masks, NPC interpolation, road and forest checks passed');

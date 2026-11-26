@@ -1,4 +1,4 @@
-import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell, PORTAL_SIDES, FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeModelPlacement, freeBlocked, freeGround, freeExitAt, freeSecretDoorAt, freeWorldDoorAt } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell, PORTAL_SIDES, FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeModelPlacement, freeBlocked, freeGround, freeExitAt, freeSecretDoorAt, freeWorldDoorAt, villageParts, villageColliders } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
@@ -712,11 +712,31 @@ function freeDims(size=freeSize,shape=freeShape){
 }
 function freeShapeLabel(){return {'cube':'Würfel','wall-z':'Wandplatte Z','wall-x':'Wandplatte X','floor':'Bodenplatte'}[freeShape];}
 function freeOwn(b){return !!b&&b.ownerSlot===accountProfile?.slot;}
-function freeObstacles(s){return s.blocks.concat((s.scenery||[]).filter(b=>b.hp>0));}
+function freeObstacles(s){return s.obstacles||s.blocks.concat((s.scenery||[]).filter(b=>b.hp>0));}
 function freeTarget(includeBroken=false){
  if(!freeState)return null;
  const hit=freeRay(playerEye(),dir(),freeObstacles(freeState),FREE_LAYOUT.reach,includeBroken);
  return freeState.blocks.find(b=>b.id===hit?.id)||null;
+}
+function freeRepairTarget(s,whole=false){
+ if(!s)return null;
+ const parts=s.structureParts||[],trees=(s.scenery||[]).filter(b=>b.kind==='tree'&&b.hp>0);
+ const origin=playerEye(),reach=FREE_LAYOUT.reach;
+ const nearby=parts.filter(b=>b.bounds[0].every((v,i)=>origin[i]>=v-reach&&origin[i]<=v+b.bounds[1][i]+reach));
+ const hit=freeRay(origin,dir(),s.blocks.concat(trees,nearby),reach,true);
+ if(!hit)return null;
+ const part=parts.find(b=>b.id===hit.id);
+ if(part){
+  if(part.stage>0||whole&&(s.scenery||[]).some(b=>b.id===part.building&&Object.keys(b.damage||{}).length))return part;
+  return null;
+ }
+ const b=s.blocks.find(b=>b.id===hit.id);
+ return freeOwn(b)&&b.hp<100?b:null;
+}
+function rebuildFreeObstacles(s){
+ const scenery=s.scenery||[],buildings=scenery.filter(b=>b.kind==='house'||b.kind==='shop');
+ s.structureParts=buildings.flatMap(villageParts);
+ s.obstacles=s.blocks.concat(scenery.filter(b=>b.kind==='tree'&&b.hp>0),buildings.flatMap(villageColliders));
 }
 function freeHeldExtent(h=freeHeld){return h?.kind==='model'?h.extent:Math.max(...(h?.dims||[1]))*FREE_LAYOUT.grid;}
 function resizeFreeObject(h,delta){
@@ -793,6 +813,7 @@ function applyFreeSnapshot(s,result,initial=false){
  s.hp=result.hp;s.life=result.life;s.score=result.score;s.online=result.online;s.peers=result.peers||[];s.textures=result.textures||[];
  if(Array.isArray(result.blocks)){s.blocks=result.blocks;s.revision=result.revision;freeView.setBlocks(s.blocks,s.revision,loadFreeTexture,loadFreeModel);if(freeHeld?.id){const b=s.blocks.find(b=>b.id===freeHeld.id);if(!b||!b.hp||b.version!==freeHeld.version){freeHeld=null;$('notice').textContent='Objekt wurde verändert. Bitte erneut aufnehmen.';}}}
  if(Array.isArray(result.scenery)){s.scenery=result.scenery;s.villageRoads=result.villageRoads||[];freeView.village.set(s.scenery,s.villageRoads);}
+ if(Array.isArray(result.scenery)||Array.isArray(result.blocks)||!s.obstacles)rebuildFreeObstacles(s);
  s.npcs=result.npcs||[];
  const nextShots=new Map();
  for(const npc of s.npcs){
@@ -867,7 +888,11 @@ async function freeEdit(op,weapon=null,mode='place'){
    const c=freeCandidate(h,mode);if(!c){$('notice').textContent='Kein freier Stellplatz';return;}
    extra={...c,texture:h.kind==='block'?h.texture||null:null};
    if(h.id){action='relocate';extra.id=h.id;extra.version=h.version;}else if(h.kind==='model')extra.sourceModel=h.source;
-  }else if(op==='remove'||op==='repair'){
+  }else if(op==='repair'){
+   const b=freeRepairTarget(s,mode==='whole');if(!b)return;
+   extra={id:b.id};
+   if(b.kind==='building-part')extra.whole=mode==='whole';else extra.version=b.version;
+  }else if(op==='remove'){
    const b=buildingRemove?s.blocks.find(b=>b.id===aimed.id):h?.id?s.blocks.find(b=>b.id===h.id):freeTarget(true);
    if(!freeOwn(b))return;
    if(buildingRemove&&(b.model||b.version!==aimed.version)){ $('notice').textContent='Block wurde verändert. Bitte erneut anvisieren.';return; }
@@ -931,7 +956,9 @@ function updateFreeHint(vr=false){
  const s=freeState;if(!s)return;
  const playing=canPlay()&&!vr,h=freeHeld,exit=!h&&freeExitAt(playerEye(),dir()),gate=!h&&!exit&&freeSecretDoorAt(playerEye(),dir(),freeObstacles(s)),target=!h&&!exit&&!gate?freeTarget(true):null,own=freeOwn(target),candidate=playing&&h?freeCandidate(h):null;
  const building=h?.kind==='block'&&!h.id,removeTarget=building?freeTarget(true):null,canRemove=building&&freeOwn(removeTarget)&&!removeTarget.model;
- const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!gate&&!own&&now>=freeHintUntil);
+ const wholeFix=!h&&!exit&&!gate?freeRepairTarget(s,true):null,fix=wholeFix?.kind==='building-part'&&wholeFix.stage===0?null:wholeFix;
+ const structureFix=wholeFix?.kind==='building-part'?wholeFix:null;
+ const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!gate&&!own&&!structureFix&&now>=freeHintUntil);
  const msg=$('notice').textContent;if(msg!==freeLastNotice){freeLastNotice=msg;freeNoticeUntil=now+3500;}
  document.body.classList.toggle('free-notice',playing&&!!msg&&now<freeNoticeUntil);
  $('held-model-size').hidden=!playing||!h;
@@ -943,12 +970,12 @@ function updateFreeHint(vr=false){
  $('touchSecondary').disabled=!playing||s.editing||(building?!canRemove:!candidate);
  $('touchFire').disabled=!playing||s.editing||(h?.kind==='block'?!candidate:!equipped||!!h||!!reloadId);$('touchFire').textContent=h?.kind==='block'?'Setzen':'Feuer';
  $('touchInteract').disabled=!playing||(!exit&&!gate&&!candidate&&!(own&&target.hp>0))||s.editing;$('touchInteract').textContent=exit?'Hotel':gate?'Untersuchen':h?'Abstellen':'Aufheben';
- $('touchRepair').disabled=!own||target.hp>=100||s.editing;$('touchReload').disabled=!equipped||!!reloadId;$('touchArsenal').disabled=false;$('touchArsenal').textContent='Inventar';
+ $('touchRepair').disabled=!playing||s.editing||!fix;$('touchReload').disabled=!equipped||!!reloadId;$('touchArsenal').disabled=false;$('touchArsenal').textContent='Inventar';
  $('touchJump').disabled=player.stance==='crouch';$('touchSprint').disabled=$('touchCrouch').disabled=!playing;
  $('touchSprint').setAttribute('aria-pressed',String(player.stance==='sprint'||touchSprint));$('touchCrouch').setAttribute('aria-pressed',String(player.stance==='crouch'||touchCrouch));
- $('interaction-name').textContent=exit?'HOTEL · Ausgang':gate?'Eingefrorene Tür':h?(candidate?'Objekt abstellen':canRemove?'Eigenen Block entfernen':'Stellplatz blockiert'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
- $('interaction-actions').textContent=exit?'E · Zum Hotel':gate?'E · Untersuchen':h?(building?'Linksklick: setzen · Rechtsklick: entfernen · +/−: Größe · Q/F: drehen · 0: abbrechen':(h.kind==='block'?'Linksklick/E: abstellen':'E: abstellen · B: Wand')+' · Q/F: drehen · +/−: Größe · 0: abbrechen'):own?(target.hp?'E · Aufheben · Entf · Entfernen':'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
- $('cross').classList.toggle('actionable',playing&&(exit||gate||!!candidate||own||canRemove));
+ $('interaction-name').textContent=exit?'HOTEL · Ausgang':gate?'Eingefrorene Tür':h?(candidate?'Objekt abstellen':canRemove?'Eigenen Block entfernen':'Stellplatz blockiert'):structureFix?(structureFix.stage===4?'Gebäudeteil zerstört':structureFix.stage>0?'Gebäudeteil beschädigt':'Gebäude beschädigt'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
+ $('interaction-actions').textContent=exit?'E · Zum Hotel':gate?'E · Untersuchen':h?(building?'Linksklick: setzen · Rechtsklick: entfernen · +/−: Größe · Q/F: drehen · 0: abbrechen':(h.kind==='block'?'Linksklick/E: abstellen':'E: abstellen · B: Wand')+' · Q/F: drehen · +/−: Größe · 0: abbrechen'):structureFix?'R: Teil reparieren · Shift+R: Gebäude wiederaufbauen':own?(target.hp?'E · Aufheben · Entf · Entfernen'+(target.hp<100?' · R: Reparieren':''):'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
+ $('cross').classList.toggle('actionable',playing&&(exit||gate||!!candidate||own||canRemove||!!structureFix));
  $('hint').textContent='Free World · I: Inventar';updateFreeUI();
 }
 $('free-model-select').onchange=()=>{freeModelSource=$('free-model-select').value||null;freeHintUntil=performance.now()+4000;updateFreeUI();};
@@ -1292,7 +1319,7 @@ function repairTarget(ray=null,surface=null){
   if(surface.id&&surface.dist<3)return {id:surface.id,op:surface.id.startsWith('surface_')?'repair_surface':'repair'};
   return null;
 }
-function repair(ray=null){if(freeState){void freeEdit('repair');return;}
+function repair(ray=null){if(freeState){void freeEdit('repair',null,keys.has('ShiftLeft')||keys.has('ShiftRight')?'whole':'place');return;}
   if(!canPlay()||freeState||lobbyState||lobbyTransition||busy||held||posture)return;
   const target=repairTarget(ray);
   if(target&&damaged(target.id))action(target.op,target.id);
@@ -1394,8 +1421,20 @@ function frame(now,xrFrame){
     const canStand=player.stance!=='crouch'||!coll(player.x,player.z,1.6);
     player.stance=movementStance(!vr&&wantsCrouch(),!vr&&wantsSprint(),Math.hypot(f,s)>.03,canStand,!!held||scopeZoom);
     const m=movementSpeed(player.stance,vr)*dt/Math.max(1,Math.hypot(f,s)),dx=(-Math.sin(a)*f+Math.cos(a)*s)*m,dz=(-Math.cos(a)*f-Math.sin(a)*s)*m;
-    if(!coll(player.x+dx,player.z))player.x+=dx;
-    if(!coll(player.x,player.z+dz))player.z+=dz;
+    if(freeState){
+     // Walk over shallow floor edges without requiring a jump; never step through a wall.
+     const obstacles=freeObstacles(freeState),height=player.stance==='crouch'?1.12:1.6;
+     const move=(x,z)=>{
+      if(!freeBlocked(obstacles,x,player.y,z,height)){player.x=x;player.z=z;return;}
+      if(Math.abs(player.vy)>.1)return;
+      const top=freeGround(obstacles,x,player.y+.20,z);
+      if(top>player.y+.001&&top-player.y<=.20&&!freeBlocked(obstacles,x,top,z,height)){player.x=x;player.z=z;player.y=top;player.vy=0;}
+     };
+     if(dx)move(player.x+dx,player.z);if(dz)move(player.x,player.z+dz);
+    }else{
+     if(!coll(player.x+dx,player.z))player.x+=dx;
+     if(!coll(player.x,player.z+dz))player.z+=dz;
+    }
     const ground=groundAt(player.x,player.z);
     if(!vr&&player.stance!=='crouch'&&keys.has('Space')&&Math.abs(player.y-ground)<1e-5)player.vy=4.2;
     player.vy-=9.81*dt;const nextY=Math.max(ground,player.y+player.vy*dt);
