@@ -1,4 +1,4 @@
-# Free World (0.14.7)
+# Free World (0.15.0)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -31,3 +31,6 @@ Mouse wheel cycles empty hand, three weapons and the reusable block in both dire
 
 ## Mouse building (0.14.7)
 Select the reusable block with 4 or the mouse wheel. Left click places blocks; right click removes an aimed own construction block. The preset stays selected after both operations. Imported models and other players' blocks are excluded from this right-click removal; ordinary object editing remains available. Server ownership, distance and version checks are unchanged. On touch devices, the build controls show Setzen and Entfernen.
+
+## Hidden village (0.15.0)
+A concealed village in the western half has four houses, a market, a cafe, streets and a dense forest. Trees are instanced and their health is shared and persisted; a destroyed tree leaves a decorative stump. Buildings are exterior-only solid obstacles. Four training NPCs patrol and defend themselves when hit; they respawn after 15 seconds. Their simple obstacle avoidance is not full navigation. Existing player builds are never replaced by scenery. The optional local building bank uses static self-contained GLBs; see [optional-village](../optional-village/README.md). Quaternius Downtown City MegaKit is the selected CC0 source, but its original archive is not bundled yet. The built-in facades are temporary procedural replacements.

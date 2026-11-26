@@ -385,3 +385,13 @@ const buildRemoveTest=new Function('assert',`
  })();
  `);await buildRemoveTest(assert);
 console.log('Mouse build/place/remove routing, ownership, revision and reusable selection checks passed');
+
+const obstacles=new Function(getPart('function freeObstacles(','function freeTarget(')+'return freeObstacles;')();
+const placed={id:1,hp:100},aliveTree={id:'tree-1',hp:100},deadTree={id:'tree-2',hp:0},building={id:'building-1',hp:100};
+assert.deepEqual(obstacles({blocks:[placed],scenery:[aliveTree,deadTree,building]}),[placed,aliveTree,building]);
+assert.deepEqual(obstacles({blocks:[placed]}),[placed]);
+assert.ok(game.includes('freeView.village.set(s.scenery,s.villageRoads)'));
+assert.ok(game.includes('freeView.sync([...s.peers,...s.npcs])'));
+assert.ok(game.includes('freeBlocked(freeObstacles(freeState)'));
+assert.ok(game.includes('renderer.shot(\'pistol\',npc.shot,freeView.effects)'));
+console.log('Hidden village client scenery, dead tree collision and NPC snapshot checks passed');

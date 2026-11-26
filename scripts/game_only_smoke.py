@@ -368,6 +368,55 @@ class GameOnlyTest(unittest.TestCase):
             resized=req('a',a,'relocate',id=other['id'],version=0,cell=[-5,0,277],dims=[4,4,4])
             self.assertEqual(next(r for r in resized['blocks'] if r['id']==other['id'])['dims'],[4,4,4])
 
+    def test_hidden_village_damage_retaliation_and_migration(self):
+        from free_world import FreeWorld
+        from village import Village, make_scenery
+        now=[10.]
+        profile={'slot':0,'nickname':'Guest','avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            world=FreeWorld(tmp,lambda:now[0])
+            session=world.enter('a',profile);row=world.players['a']
+            trees=[r for r in session['scenery'] if r['kind']=='tree']
+            self.assertGreater(len(trees),150)
+            self.assertEqual(len([r for r in session['scenery'] if r['kind']!='tree']),6)
+            self.assertEqual(len(session['npcs']),4)
+            self.assertTrue(session['villageRoads'])
+            tree=min(trees,key=lambda r:math.hypot(r['bounds'][0][0]-20,r['bounds'][0][2]-110))
+            b,size=tree['bounds'];x=b[0]+size[0]/2;z=b[2]+size[2]/2
+            self.assertTrue(world.blocked([x,0,z]))
+            now[0]+=4
+            row.update(position=[x+3,0,z],weapon='rifle',move_at=now[0])
+            def pulse(direction):
+                return world.request('a',{'action':'pulse','lease':session['lease'],'life':row['life'],'weapon':'rifle','direction':direction})
+            first=pulse([-1,0,0]);self.assertTrue(first['shot']['impact'])
+            self.assertEqual(world.village.rows[tree['id']]['hp'],10)
+            now[0]+=.6;second=pulse([-1,0,0])
+            self.assertTrue(second['shot']['impact'])
+            self.assertEqual(world.village.rows[tree['id']]['hp'],0)
+            self.assertFalse(world.blocked([x,0,z]))
+            reopened=FreeWorld(tmp,lambda:now[0])
+            self.assertEqual(reopened.village.rows[tree['id']]['hp'],0)
+            npc=world.village.npcs[0];p=npc['position']
+            row.update(position=[p[0],0,p[2]+3.5],move_at=now[0])
+            self.assertTrue(all(n['target'] is None for n in world.village.npcs))
+            now[0]+=.6;hit=pulse([0,0,-1])
+            self.assertTrue(hit['shot']['impact'])
+            self.assertEqual(npc['hp'],10);self.assertEqual(npc['target'],'a')
+            self.assertTrue(all(n['target'] is None for n in world.village.npcs[1:]))
+            now[0]+=1.1;world.tick_village(now[0])
+            self.assertLess(row['hp'],100)
+            self.assertGreater(npc['shot_seq'],0)
+            self.assertTrue(world.village.damage_npc(npc,'a',100,now[0]))
+            self.assertNotIn(npc['slot'],[n['slot'] for n in world.village.snapshot()])
+            now[0]+=16;world.tick_village(now[0])
+            self.assertEqual(npc['hp'],100);self.assertIsNone(npc['target'])
+        with tempfile.TemporaryDirectory() as tmp:
+            old=make_scenery()[0]
+            village=Village(Path(tmp)/'test.sqlite3',[old['bounds']],lambda:10.)
+            self.assertNotIn(old['id'],village.rows)
+            again=Village(Path(tmp)/'test.sqlite3',[],lambda:10.)
+            self.assertNotIn(old['id'],again.rows)
+
     def test_free_world_http_auth_and_transition(self):
         with tempfile.TemporaryDirectory() as tmp:
             srv=create_server(port=0,data_dir=Path(tmp),guest_game=True,world_capture=True)

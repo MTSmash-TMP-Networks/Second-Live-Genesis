@@ -240,6 +240,12 @@ finally:
                 if art.is_file() and not art.is_symlink() and art.stat().st_size <= 16*1024*1024:
                     (dest/'optional-photos').mkdir(exist_ok=True)
                     shutil.copyfile(art,dest/'optional-photos'/name)
+            # Preserve explicitly named, locally installed village models (CC0/custom).
+            for name in ('house-a.glb','house-b.glb','shop-a.glb','shop-b.glb'):
+                art = self.root/'optional-village'/name
+                if art.is_file() and not art.is_symlink() and 0 < art.stat().st_size <= 32*1024*1024:
+                    (dest/'optional-village').mkdir(exist_ok=True)
+                    shutil.copyfile(art,dest/'optional-village'/name)
             dest.rename(folder)
         return folder
 

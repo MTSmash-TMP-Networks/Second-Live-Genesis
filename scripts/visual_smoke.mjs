@@ -428,3 +428,15 @@ import { createFlashlight, updateFlashlight } from './flashlight.js';
  updateFlashlight(light,world,{origin:[0,0,0],direction:[0,0,0]});assert.equal(light.parent,null);
 }
 console.log('Phone flashlight: actual Three.js spotlight, aim, scene switch, shadow quality and off state checks passed');
+
+{
+ const scenery={id:'building-test',kind:'house',hp:100,bounds:[[-80,0,-30],[10,6,10]]};
+ assert.deepEqual(freeBounds(scenery),{p:[-75,3,-25],s:[10,6,10]});
+ assert.ok(freeBlocked([scenery],-75,0,-25));
+ assert.ok(!freeBlocked([scenery],-69,0,-25));
+ assert.equal(freeRay([-68,1.5,-25],[-1,0,0],[scenery]).id,'building-test');
+ const tree={id:'tree-test',kind:'tree',hp:100,bounds:[[-40,0,10],[1,6,1]]};
+ assert.ok(freeBlocked([tree],-39.5,0,10.5));
+ tree.hp=0;assert.ok(!freeBlocked([tree],-39.5,0,10.5));
+}
+console.log('Hidden village metric scenery collider checks passed');

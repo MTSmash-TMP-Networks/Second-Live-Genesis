@@ -4,6 +4,7 @@ from contextlib import closing
 from pathlib import Path
 from world_capture import CaptureError
 from room_models import image_size, MAX_FILE, validate_glb
+from village import Village, ROADS
 
 L=json.loads((Path(__file__).resolve().parent/'web/engine/free_world_layout.json').read_text('utf8'))
 HALF=int(L['half']/L['grid']);HEIGHT=int(L['height']/L['grid'])
@@ -96,7 +97,14 @@ class FreeWorld:
                 self.models[i]={'owner':owner,'name':name,'bytes':n}
             for i,owner,slot,cell,dims,texture,hp,model,pose,version in db.execute('SELECT id,owner,slot,cell,dims,texture,hp,model,pose,version FROM blocks'):
                 self.blocks[i]={'id':i,'owner':owner,'ownerSlot':slot,'cell':json.loads(cell),'dims':json.loads(dims),'texture':texture,'hp':hp,'model':model,'pose':json.loads(pose) if pose else None,'version':version}
+        self.village=Village(self.path,[block_bounds(b) for b in self.blocks.values()],self.clock)
         self.revision=1
+    def solid_boxes(self):
+        for b in self.blocks.values():
+            if b['hp']>0:yield block_bounds(b)
+        for b in self.village.solids():yield b['bounds']
+    def tick_village(self,now):
+        self.village.tick(now,self.players,self.blocked,ray_box,self.solid_boxes,self.body_box,SPAWN)
     def prune(self,now):
         for player,row in list(self.players.items()):
             if now-row['seen']>=L['leaseSeconds']:self.players.pop(player,None)
@@ -114,7 +122,10 @@ class FreeWorld:
     def snapshot(self,player,row,revision=-1,corrected=False,notice=''):
         peers=[{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life','score','weapon')} for key,r in self.players.items() if key!=player]
         out={'slot':row['slot'],'hp':row['hp'],'life':row['life'],'score':row['score'],'position':row['position'],'yaw':row['yaw'],'corrected':corrected,'peers':peers,'online':len(self.players),'revision':self.revision,'notice':notice,'textures':self.own_textures(player),'dayPhase':(time.time()%L['daySeconds'])/L['daySeconds']}
+        out['npcs']=self.village.snapshot()
         if revision!=self.revision:
+            out['scenery']=list(self.village.rows.values())
+            out['villageRoads']=ROADS
             out['blocks']=[{**{k:v for k,v in b.items() if k!='owner'},**({'modelName':self.models[b['model']]['name'],'modelBytes':self.models[b['model']]['bytes']} if b['model'] in self.models else {})} for b in self.blocks.values()]
         return out
     def enter(self,player,profile):
@@ -128,7 +139,7 @@ class FreeWorld:
     def blocked(self,p,height=1.6):
         if abs(p[0])>L['half']-.28 or abs(p[2])>L['half']-.28 or p[1]<0 or p[1]+height>L['height']+.001:return True
         b,s=self.body_box(p,height)
-        return any(overlap(b,s,*block_bounds(block)) for block in self.blocks.values() if block['hp']>0)
+        return any(overlap(b,s,*box) for box in self.solid_boxes())
     def update(self,row,data,now):
         if type(data.get('life')) is not int or data['life']!=row['life']:return True
         p=vec(data.get('position'));yaw=data.get('yaw');stance=data.get('stance','walk')
@@ -148,7 +159,8 @@ class FreeWorld:
         b,s=block_bounds({'cell':cell,'dims':dims,'pose':pose})
         need(distance_to_box([row['position'][0],row['position'][1]+1.4,row['position'][2]],b,s)<=L['reach'],'Objekt ausser Reichweite')
         need(not any(x['id']!=exclude and overlap(b,s,*block_bounds(x)) for x in self.blocks.values()),'Stellplatz belegt',409)
-        for other in self.players.values():
+        need(not any(overlap(b,s,*o['bounds']) for o in self.village.solids()),'Baum oder Gebaeude im Stellplatz',409)
+        for other in [*self.players.values(),*self.village.snapshot()]:
             need(not overlap(b,s,*self.body_box(other['position'],1.6)),'Spieler im Stellplatz',409)
 
     def build(self,player,row,data,now):
@@ -251,7 +263,7 @@ class FreeWorld:
                         if o['id']==b['id'] or o['hp']<=0:continue
                         op,os=block_bounds(o)
                         if abs(op[1]+os[1]-pos[1])<.0001 and all(pos[j]<op[j]+os[j] and pos[j]+size[j]>op[j] for j in (0,2)):supported=True
-                    if not occupied and supported and not any(overlap(pos,size,*self.body_box(r['position'])) for r in self.players.values()):cell,dims,pose=tc,td,tp
+                    if not occupied and supported and not any(overlap(pos,size,*o['bounds']) for o in self.village.solids()) and not any(overlap(pos,size,*self.body_box(r['position'])) for r in [*self.players.values(),*self.village.snapshot()]):cell,dims,pose=tc,td,tp
                 except CaptureError:pass
         with closing(sqlite3.connect(self.path)) as db,db:db.execute('UPDATE blocks SET hp=?,cell=?,dims=?,pose=?,version=version+1 WHERE id=?',(hp,json.dumps(cell),json.dumps(dims),json.dumps(pose) if pose else None,b['id']))
         b.update(hp=hp,cell=cell,dims=dims,pose=pose,version=b['version']+1);self.revision+=1
@@ -271,16 +283,31 @@ class FreeWorld:
             if b['hp']<=0:continue
             t=ray_box(origin,direction,*block_bounds(b),reach)
             if t<stop:stop=t;target_block=b
-        target=None
+        target=None;target_scenery=None;target_npc=None
+        for b in self.village.solids():
+            t=ray_box(origin,direction,*b['bounds'],reach)
+            if t<stop:stop=t;target_block=None;target_scenery=b
+        for npc in self.village.npcs:
+            if npc['hp']<=0:continue
+            t=ray_box(origin,direction,*self.body_box(npc['position']),reach)
+            if t<stop:stop=t;target_block=None;target_scenery=None;target_npc=npc
         for key,other in self.players.items():
             if key==player:continue
             box,size=self.body_box(other['position'],1.12 if other['stance']=='crouch' else 1.6)
             t=ray_box(origin,direction,box,size,reach)
-            if t<stop:stop=t;target=other;target_block=None
-        shot={'origin':origin,'direction':direction,'distance':stop,'impact':target is not None or target_block is not None}
+            if t<stop:stop=t;target=other;target_block=None;target_scenery=None;target_npc=None
+        shot={'origin':origin,'direction':direction,'distance':stop,'impact':any(x is not None for x in (target,target_block,target_scenery,target_npc))}
         if now<row['shield']:return 'Spawn-Schutz aktiv',shot
         damage=self.damage_profiles[weapon][0]
         if target_block is not None:return self.damage_block(target_block,direction,damage),shot
+        if target_scenery is not None:
+            notice=self.village.damage_tree(target_scenery,damage)
+            if target_scenery['kind']=='tree':self.revision+=1
+            return notice,shot
+        if target_npc is not None:
+            defeated=self.village.damage_npc(target_npc,player,damage,now)
+            if defeated:row['score']+=1
+            return ('Trainings-NPC besiegt' if defeated else 'Trainings-NPC verteidigt sich'),shot
         if target is None:return 'Kein Spieltreffer',shot
         if now<target['shield']:return 'Spawn-Schutz aktiv',shot
         target['hp']=max(0,target['hp']-damage)
@@ -292,6 +319,7 @@ class FreeWorld:
     def request(self,player,data):
         with self.lock:
             now=self.clock();row=self.member(player,data.get('lease'));op=data.get('action')
+            self.tick_village(now)
             if op in ('leave','abandon'):
                 del self.players[player];return {'left':True}
             if op=='texture_delete':

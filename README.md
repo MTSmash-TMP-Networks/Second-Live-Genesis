@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.14.7 · Mouse Block Building**
+**v0.15.0 · Hidden Village**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.0 – Hidden Village
+
+Die Free World besitzt ein verstecktes Dorf, Straßen, einen dichten Wald und zerstörbare Bäume mit persistentem Schaden. Vier Trainings-NPCs patrouillieren und reagieren auf Spieltreffer. Das ausgewählte Quaternius Downtown City MegaKit (CC0) kann über die optionale lokale Modellbank ergänzt werden; bis die Originaldateien vorliegen, werden eigene prozedurale Gebäudefassaden dargestellt. Siehe [Free World](docs/FREE-WORLD.md) und [Modellimport](optional-village/README.md).
 
 ## Neu in 0.14.7 – Bauen mit der Maus
 

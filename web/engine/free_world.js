@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import layout from './free_world_layout.json';
 import {RoomModels} from './room_customization.js';
+import {VillageView} from './village.js';
 import {ShotEffects} from './shotfx.js';
 import {createCharacter,animateCharacter,disposeCharacter,normalizeCharacter} from './character.js';
 import {resetRoomAvatarPose,applyRoomAvatarPose,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
 export const FREE_LAYOUT=layout;
 const H=layout.half,Y=layout.height,G=layout.grid;
 const ICE_GATE={x:48,width:2,height:2.65};
-export function freeBounds(block){if(block.pose){const {p,extent:e}=block.pose;return {p:[p[0],p[1]+e/2,p[2]],s:[e,e,e]};}return {p:block.cell.map((v,i)=>(v+block.dims[i]/2)*G),s:block.dims.map(v=>v*G)};}
+export function freeBounds(block){if(block.bounds){const [b,s]=block.bounds;return {p:b.map((v,i)=>v+s[i]/2),s};}if(block.pose){const {p,extent:e}=block.pose;return {p:[p[0],p[1]+e/2,p[2]],s:[e,e,e]};}return {p:block.cell.map((v,i)=>(v+block.dims[i]/2)*G),s:block.dims.map(v=>v*G)};}
 export function freeBox(block){const {p,s}=freeBounds(block);return [p.map((v,i)=>v-s[i]/2),s];}
 export function freeOverlap(a,s,b,t){return a.every((v,i)=>v<b[i]+t[i]&&v+s[i]>b[i]);}
 export function validFreeGrid(cell,dims){
@@ -166,7 +167,7 @@ export class FreeWorldView{
   this.heldModels=new RoomModels(this.scene);this.heldModels.root.name='Local object placement preview';this.heldModels.root.visible=false;this.heldAsset=null;
   this.cube=new THREE.BoxGeometry(1,1,1);this.materials=new Map();this.textures=new Map();this.meshes=[];this.peers=new Map();this.local=null;this.revision=-1;this.generation=0;
   const box=(p,s,m)=>{const o=new THREE.Mesh(this.cube,m);o.position.set(...p);o.scale.set(...s);this.scene.add(o);return o;};
-  this.scene.add(grassSurface());
+  this.scene.add(grassSurface());this.village=new VillageView(this.scene);
   const iceMap=terrainTexture(false),iceMaterial=new THREE.MeshStandardMaterial({map:iceMap,vertexColors:true,roughness:.84});
   for(let side=0;side<4;side++)this.scene.add(iceCliff(side,iceMaterial));
   iceGate(this.scene,box,iceMap);

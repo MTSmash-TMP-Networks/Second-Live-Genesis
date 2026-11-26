@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.0 – Hidden Village
+- Verstecktes Dorf links der Weltmitte: sechs Gebäude (vier Wohnhäuser, Markt und Café), asphaltierte Dorfstraße, Gehwege und dichtes Waldgebiet mit weiteren Bäumen in der Free World. Prozedurale, instanzierte Baumdarstellung und lokale, modular inspirierte Gebäudefassaden.
+- Bäume besitzen einen serverseitigen, persistenten Schadenszustand; nach Zerstörung bleibt ein nicht kollidierender Baumstumpf. Gebäude und lebende Baumstämme blockieren Bewegung und Treffer. Bestehende Spielerbauten haben bei der Einrichtung Vorrang.
+- Vier servergesteuerte Trainings-NPCs patrouillieren, reagieren auf Spieltreffer, verfolgen ihr Spielziel begrenzt, verteidigen sich bei freier Sicht und respawnen nach 15 Sekunden. Kein Angriff auf unbeteiligte Spieler. Einfache Hindernisprüfung statt vollständiger Navigation.
+- Optionaler lokaler GLB-Modellbank-Import für Gebäude. Quaternius Downtown City MegaKit (CC0) ist als gewünschter Stil und Quelle dokumentiert; Originaldateien sind noch nicht enthalten. Die integrierten Platzhalter erlauben den Betrieb ohne zusätzliche Downloads.
+
 ## 0.14.7 – Mouse Block Building
 - Baublock auswählen (4 oder Mausrad), Linksklick setzt neue Blöcke, Rechtsklick entfernt anvisierte eigene Baublöcke. Die Auswahl bleibt bei beiden Aktionen erhalten. Fremde Blöcke und GLB-Modelle sind vor dem versehentlichen Entfernen mit dem Baublock geschützt. Server prüft Besitz, Reichweite und Revision weiterhin.
 - Touch-Steuerung mit Setzen/Entfernen, aktualisierte Hinweise. Waffen, Zoom, aufgenommene Objekte und Modellplatzierung behalten die bisherige Bedienung.
