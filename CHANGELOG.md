@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.17 – Shop Staff
+- Zwei zusätzliche, gemeinsam synchronisierte Mitarbeiter im Markt und Café. Eigene Hemden, dunkle Hosen und prozedurale Schürzen, dezente Arbeitsgesten, feste Kassenposition und Blick zur Kundenseite. Bestehende Rocketbox-Modelle; keine zusätzlichen Downloads oder Namensschilder.
+- Kassenterminals zur Mitarbeiterseite gedreht, ohne Möbelpositionen, Kollisionsvolumen oder IDs zu ändern. Arbeitsplatz wird nur bei intakter Kasse, Boden und freiem Standplatz besetzt. Personal bleibt unbewaffnet und erhält keine Patrouillen oder Vergeltungsangriffe; bestehende NPC-Schadens-/Respawn-Mechanik bleibt erhalten, keine Punkte für Personal.
+- Neue Server- und Renderer-Smoke-Tests für Arbeitsplätze, Kleidung, Animation, Wiederbesetzung und Kollision. Keine Änderung am Hotel oder Wetter.
+
 ## 0.15.16 – Dynamic Weather Hotfix
 - Audio-Hüllkurve erzeugt an stillen Grenzen kanonisches `0` statt `-0`. Behebt den strikten Donner-Smoke-Test im Docker-Build, ohne die Testprüfung abzuschwächen oder den Klang zu ändern.
 - Regressionstest für alle sieben synthetisierten Soundeffekte, vier Varianten und drei Abtastraten (16, 44,1 und 48 kHz). Wetter und übrige Spielfunktionen bleiben unverändert.

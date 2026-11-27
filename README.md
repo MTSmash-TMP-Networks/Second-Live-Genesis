@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.16 · Dynamic Weather Hotfix**
+**v0.15.17 · Shop Staff**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.17 – Kassenpersonal
+
+Markt und Café erhalten jeweils einen festen, serverseitig synchronisierten Mitarbeiter hinter der Kasse. Realistische Rocketbox-Figuren mit passendem Hemd, dunkler Hose, eigener Schürze und dezenten Arbeitsbewegungen. Keine Namensschilder, Waffen oder Patrouillen für das Kassenpersonal. Die bisherigen sechs Dorf-NPCs bleiben unverändert; Kassenpositionen folgen der vorhandenen Einrichtung und werden bei blockierten oder zerstörten Arbeitsplätzen nicht besetzt. Noch keine Kauf- oder Dialogfunktion.
 
 ## Neu in 0.15.16 – Wetter-Hotfix
 

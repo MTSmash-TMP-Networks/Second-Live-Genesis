@@ -8,7 +8,7 @@ import {FreeWorldImpactMarks} from './impact_marks.js';
 import {villageTreeParts} from './village_landscape.js';
 import {ShotEffects} from './shotfx.js';
 import {createCharacter,animateCharacter,disposeCharacter,normalizeCharacter} from './character.js';
-import {resetRoomAvatarPose,applyRoomAvatarPose,applyVillageNpcReaction,applyVillageActivity,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
+import {resetRoomAvatarPose,applyRoomAvatarPose,applyVillageNpcReaction,applyVillageActivity,applyVillageStaffUniform,updateRoomAvatarProp,clearRoomAvatarProps} from './avatar_room_pose.js';
 export const FREE_LAYOUT=layout;
 const H=layout.half,Y=layout.height,G=layout.grid;
 const ICE_GATE={x:48,width:2,height:2.65};
@@ -306,6 +306,7 @@ export class FreeWorldView{
  }
  avatar(profile){
   const g=createCharacter(profile.avatar,{villageNpc:profile.slot<0});
+  if(profile.slot<0)applyVillageStaffUniform(g,profile.staffRole);
   if(!(profile.slot<0)){const tag=textSprite(profile.nickname,.95,.24);tag.position.y=2.12;g.add(tag);g.userData.nameTag=tag;}
   this.scene.add(g);return g;
  }
@@ -313,7 +314,7 @@ export class FreeWorldView{
   const seen=new Set();
   for(const p of peers){
    if(!Number.isInteger(p.slot)||!Array.isArray(p.position)||p.position.length!==3||!p.position.every(Number.isFinite))continue;
-   seen.add(p.slot);const signature=JSON.stringify([p.nickname,normalizeCharacter(p.avatar),p.life]);let a=this.peers.get(p.slot);
+   seen.add(p.slot);const signature=JSON.stringify([p.nickname,normalizeCharacter(p.avatar),p.life,p.staffRole||null]);let a=this.peers.get(p.slot);
    if(a&&a.signature!==signature){clearRoomAvatarProps(a.g);disposeCharacter(a.g);a=null;}
    if(!a){const g=this.avatar(p);g.position.set(...p.position);g.rotation.y=p.yaw;a={g,signature};this.peers.set(p.slot,a);}
    const now=performance.now();
@@ -347,6 +348,7 @@ export class FreeWorldView{
     if(g.userData.nameTag)g.userData.nameTag.visible=false;
     // Relax the walking pose during the fall, then hold it completely still.
     if(!pose.fallen||!a.rested){resetRoomAvatarPose(g);animateCharacter(g,dt,false,'walk');a.rested=pose.fallen;}
+    applyVillageStaffUniform(g,p.staffRole);
     continue;
    }
    if(p.slot<0){
@@ -364,6 +366,7 @@ export class FreeWorldView{
    }
    resetRoomAvatarPose(g);animateCharacter(g,animationDt,moving,p.stance);applyRoomAvatarPose(g,p.seat?{kind:'sit',hip:p.seat.hip}:null,p.seat?null:p.weapon,p.seat?Math.atan2(Math.sin(p.yaw-p.seat.yaw),Math.cos(p.yaw-p.seat.yaw)):0);
    if(p.slot<0){
+    applyVillageStaffUniform(g,p.staffRole);
     const age=a.hitAt===undefined?Infinity:Math.max(0,(performance.now()-a.hitAt)/1000);
     applyVillageNpcReaction(g,{age,zone:a.hitZone,legs:p.injuredLegs||[],moving});
     if(!p.weapon&&age>=.55)applyVillageActivity(g,p.activity,moving,animationDt);

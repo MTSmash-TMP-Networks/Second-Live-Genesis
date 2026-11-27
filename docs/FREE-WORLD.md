@@ -1,4 +1,4 @@
-# Free World (0.15.16)
+# Free World (0.15.17)
 
 Enter through FREE WORLD at the north end of the hotel corridor (E). The shared grassland is 300 × 300 m with glacier cliffs, a protected entrance, a 24 m build ceiling and a half-metre construction grid (not drawn). A concealed sealed door is reserved for a future world.
 
@@ -79,3 +79,6 @@ Aim at a furnished chair within 2.5 m and use E (or the touch interaction) to si
 
 ## Dynamic weather (0.15.15)
 Snapshots include the server wall-clock `weatherTime`, aligned with `dayPhase`. All clients derive an eight-minute continuous repeating clear/cloudy/rain/thunder/clearing cycle and five deterministic distant lightning events per storm. Shader clouds drift; rain uses at most 1,400 reusable local streaks, clipped by spatially indexed existing solid collision geometry (half-metre shelter samples, exact query for indoor audio). Fog, daylight and lamps respond to weather. Thunder is delayed and rain audio is filtered/attenuated under cover; both use synthesized local audio and existing sound settings. No new downloads, damage, precipitation persistence, or extra shadow maps. Weather is visible in the Free World HUD; other areas remain unchanged.
+
+## Shop staff (0.15.17)
+The market and café have two additional stationary, server-authoritative civilian NPCs with stable slots. Their anchors are derived from the existing register geometry and the rear wall; counter controls face the employee. Existing furniture bounds and IDs are unchanged. Staff use locally available Rocketbox avatars, work shirts, dark trousers, fitted procedural aprons and reversible idle gestures. They have no floating names, patrols, weapons or retaliatory attacks. Occupied or destroyed workstations are suppressed until clear and repaired; the regular NPC damage/respawn system remains, but staff defeat awards no score. There are no shop transactions or conversations yet.

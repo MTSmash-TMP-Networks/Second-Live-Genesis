@@ -149,11 +149,76 @@ export function applyVillageNpcReaction(root,{age=Infinity,zone=null,legs=[],mov
  }
  root.updateWorldMatrix(true,true);
 }
+// Workwear is a small independent, locally generated cloth overlay. The
+// existing Rocketbox shirt and trousers provide the rest of the uniform.
+const staffApronShape=[[.72,.18,-.12],[.89,.19,-.13],[1.04,.175,-.145],[1.18,.135,-.15],[1.42,.105,-.15],[1.53,.065,-.09]];
+function staffCloth(parent,rows,material){
+ const pos=[],indices=[],columns=5;
+ for(const [y,w,z,c] of rows)for(let i=0;i<columns;i++){
+  const u=2*i/(columns-1)-1;pos.push(c+w*u,y,z+.008*u*u);
+ }
+ for(let j=0;j<rows.length-1;j++)for(let i=0;i<columns-1;i++){
+  const a=j*columns+i,b=a+columns;indices.push(a,a+1,b,a+1,b+1,b);
+ }
+ const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setIndex(indices);geo.computeVertexNormals();
+ const mesh=new THREE.Mesh(geo,material);mesh.userData.ownedGeometry=true;mesh.castShadow=true;mesh.receiveShadow=true;mesh.raycast=()=>{};parent.add(mesh);return mesh;
+}
+function staffApron(role,rows,scale){
+ const group=new THREE.Group();group.name='Village staff apron '+role;
+ const cloth=new THREE.MeshStandardMaterial({color:role==='market'?0x315c47:0x633e32,roughness:.96,side:THREE.DoubleSide});
+ const pocket=cloth.clone();pocket.color.multiplyScalar(1.13);
+ staffCloth(group,rows.slice(0,5),cloth);
+ for(const side of [-1,1]){
+  const a=rows[4],b=rows[5];
+  staffCloth(group,[[a[0],.018*scale,a[2]-.004,a[3]+side*a[1]*.82],[b[0],.017*scale,b[2]-.004,b[3]+side*b[1]*.80]],cloth);
+ }
+ const a=rows[1],b=rows[2],front=Math.min(a[2],b[2])-.012*scale;
+ staffCloth(group,[[a[0],.09*scale,front,a[3]],[b[0]-.025*scale,.09*scale,front,b[3]]],pocket);
+ return group;
+}
+// Fit the bib to the actual visible garment in root-local space; the
+// accessory then follows the torso bone and is disposed with the avatar.
+function fittedStaffRows(root,r,scale){
+ root.updateWorldMatrix(true,true);
+ const rig=roomRig(root),center=rig?.Hips?point(root,rig.Hips).x:0;
+ const rows=staffApronShape.map(([y,w,z])=>[y*scale,w*scale,z*scale,center]);
+ const depths=rows.map(()=>Infinity),inverse=root.matrixWorld.clone().invert(),v=new THREE.Vector3();
+ for(const p of r.parts||[]){
+  const m=p.mesh,attr=m.geometry?.attributes?.position;
+  if(!m.visible||!attr||!m.getVertexPosition||!/^(Outfit_|Top_|Trousers|Skin_)/.test(p.label))continue;
+  const transform=inverse.clone().multiply(m.matrixWorld),stride=Math.max(1,Math.ceil(attr.count/14000));
+  for(let i=0;i<attr.count;i+=stride){
+   m.getVertexPosition(i,v).applyMatrix4(transform);
+   for(let j=0;j<rows.length;j++){
+    const [y,w,,c]=rows[j];
+    if(Math.abs(v.y-y)<.085*scale&&Math.abs(v.x-c)<w+.025*scale&&Number.isFinite(v.z))depths[j]=Math.min(depths[j],v.z);
+   }
+  }
+ }
+ for(let j=0;j<rows.length;j++)if(Number.isFinite(depths[j]))rows[j][2]=depths[j]-.025*scale;
+ return rows;
+}
+export function applyVillageStaffUniform(root,role){
+ const u=root.userData;if(!u.villageNpc||!['market','cafe'].includes(role))return null;
+ if(!u.staffApronFallback){
+  u.staffApronFallback=staffApron(role,staffApronShape.map(([y,w,z])=>[y,w,z,0]),1);
+  u.body.add(u.staffApronFallback);
+ }
+ const r=u.realistic;if(!r)return u.staffApronFallback;
+ if(!u.staffApronRealistic){
+  const scale=r.height/1.77,rows=fittedStaffRows(root,r,scale);
+  const group=staffApron(role,rows,scale);root.add(group);
+  const rig=roomRig(root),anchor=rig?.Spine||rig?.Hips||r.model;
+  root.updateWorldMatrix(true,true);anchor.attach(group);u.staffApronRealistic=group;
+ }
+ return u.staffApronRealistic;
+}
 // Subtle idle activity overlays while a village visitor is stopped near a
 // fixture. No root translation or locomotion phase reset.
 export function applyVillageActivity(root,activity,moving,dt){
  const u=root.userData;if(!u.villageNpc)return;
- const active=!moving&&['visit','browse','cafe'].includes(activity);
+ const staff=activity==='checkout'||activity==='barista';
+ const active=!moving&&(['visit','browse','cafe'].includes(activity)||staff);
  const t=1-Math.exp(-Math.max(0,Math.min(.25,dt))*5);
  u.villageActivityWeight=(u.villageActivityWeight||0)+((active?1:0)-(u.villageActivityWeight||0))*t;
  const weight=u.villageActivityWeight;if(weight<.001)return;
@@ -164,8 +229,20 @@ export function applyVillageActivity(root,activity,moving,dt){
   avatarBoneOffset(root,rig.Head,X,pitch);
   avatarBoneOffset(root,rig.Head,Y,yaw);
   if(activity==='browse'||activity==='cafe')avatarBoneOffset(root,rig.RightForeArm,X,-(.13+.07*Math.sin(phase*1.4))*weight);
+  if(staff){
+   // Small hand movement towards the register; keep both feet at the station.
+   const gesture=(.5+.5*Math.sin(phase*1.6))**3;
+   for(const side of ['Left','Right']){
+    avatarBoneOffset(root,rig[side+'Arm'],X,(.08+.14*gesture)*weight);
+    avatarBoneOffset(root,rig[side+'ForeArm'],X,(.18+.24*gesture)*weight);
+   }
+  }
  }else if(u.head){
   remember(root,u.head);u.head.rotation.x+=pitch;u.head.rotation.y+=yaw;
+  if(staff){
+   const gesture=(.5+.5*Math.sin(phase*1.6))**3;
+   for(let i=0;i<2;i++){remember(root,u.arms[i]);remember(root,u.elbows[i]);u.arms[i].rotation.x+=(.08+.14*gesture)*weight;u.elbows[i].rotation.x+=(.18+.24*gesture)*weight;}
+  }
  }
  root.updateWorldMatrix(true,true);
 }

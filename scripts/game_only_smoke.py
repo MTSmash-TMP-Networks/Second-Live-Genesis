@@ -640,7 +640,7 @@ class GameOnlyTest(unittest.TestCase):
             world=FreeWorld(tmp,lambda:now[0])
             now[0]+=3600.
             session=world.enter('a',profile)
-            self.assertEqual(len(session['npcs']),6)
+            self.assertEqual(len(session['npcs']),8)
             for npc in session['npcs']:
                 self.assertEqual(npc['serverTime'],now[0])
                 self.assertGreaterEqual(npc['motionTime'],now[0]-.06)
@@ -695,18 +695,19 @@ class GameOnlyTest(unittest.TestCase):
         now=[100.]
         with tempfile.TemporaryDirectory() as tmp:
             village=Village(Path(tmp)/'sidewalk.sqlite3',[],lambda:now[0])
-            self.assertEqual(len(village.npcs),6)
+            patrols=[n for n in village.npcs if not n.get('staffRole')]
+            self.assertEqual(len(patrols),6)
             players={'observer':{'position':[-65.,0.,-30.]}}
             def body(p):
                 return [p[0]-.25,p[1]+.015,p[2]-.25],[.5,1.585,.5]
             def blocked(p):
                 return any(prism_overlap(*body(p),o) for o in village.solids())
-            for npc in village.npcs:npc['visit_after']=math.inf
-            extremes={n['slot']:[n['position'][2],n['position'][2]] for n in village.npcs}
+            for npc in patrols:npc['visit_after']=math.inf
+            extremes={n['slot']:[n['position'][2],n['position'][2]] for n in patrols}
             for _ in range(800):
                 now[0]+=NPC_STEP
                 village.tick(now[0],players,blocked,lambda *a:math.inf,village.solids,body,[0,0,0])
-                for j,npc in enumerate(village.npcs):
+                for j,npc in enumerate(patrols):
                     x,y,z=npc['position'];lane=NPC_SIDEWALKS[NPC_PATROL_SEEDS[j][0]]
                     self.assertAlmostEqual(x,lane['x'])
                     self.assertEqual(y,SIDEWALK_Y)
@@ -718,7 +719,7 @@ class GameOnlyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             x=NPC_SIDEWALKS[0]['x'];z=NPC_PATROL_SEEDS[0][1]
             village=Village(Path(tmp)/'blocked.sqlite3',[([x-.5,0,z-.4],[1,2,.8])],lambda:10.)
-            self.assertEqual(len(village.npcs),6)
+            self.assertEqual(len([n for n in village.npcs if not n.get('staffRole')]),6)
             self.assertEqual(village.npcs[0]['home'],[x,SIDEWALK_Y,z+1])
 
     def test_village_enterable_buildings_and_npc_visits(self):
@@ -728,9 +729,10 @@ class GameOnlyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'visits.sqlite3'
             village=Village(path,[],lambda:now[0])
-            self.assertEqual([n['avatar']['model'] for n in village.npcs],list(NPC_MODELS))
-            self.assertEqual(len(village.npcs),6)
-            self.assertEqual(sum(n['avatar']['model']>=13 for n in village.npcs),2)
+            patrols=[n for n in village.npcs if not n.get('staffRole')]
+            self.assertEqual([n['avatar']['model'] for n in patrols],list(NPC_MODELS))
+            self.assertEqual(len(patrols),6)
+            self.assertEqual(sum(n['avatar']['model']>=13 for n in patrols),2)
             players={'observer':{'position':[-65.,0.,-30.]}}
             def body(p):return [p[0]-.25,p[1]+.015,p[2]-.25],[.5,1.585,.5]
             def blocked(p):return any(prism_overlap(*body(p),o) for o in village.solids())
@@ -751,7 +753,7 @@ class GameOnlyTest(unittest.TestCase):
             for _ in range(2200):
                 now[0]+=.05
                 village.tick(now[0],players,blocked,lambda *a:math.inf,village.solids,body,[0,0,0])
-                for npc in village.npcs:
+                for npc in patrols:
                     row=village.structure.rows[npc['visit_building']];d=row['door'];x,y,z=npc['position']
                     self.assertFalse(blocked(npc['position']))
                     if (d['front']-x)*d['side']>1.2 and abs(z-d['z'])<3.:entered.add(npc['slot'])
@@ -771,6 +773,60 @@ class GameOnlyTest(unittest.TestCase):
             self.assertEqual(reopened.structure.parts[key]['stage'],4)
             reopened.structure.repair(reopened.structure.parts[key])
             self.assertEqual(reopened.structure.parts[key]['hp'],100)
+
+    def test_village_staff_stations_uniforms_and_availability(self):
+        from free_world import FreeWorld
+        from village import Village
+        now=[100.]
+        profile={'slot':0,'nickname':'Guest','avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            world=FreeWorld(tmp,lambda:now[0])
+            session=world.enter('a',profile)
+            staff=[n for n in world.village.npcs if n.get('staffRole')]
+            self.assertEqual({n['staffRole'] for n in staff},{'market','cafe'})
+            self.assertEqual(len(session['npcs']),8)
+            self.assertEqual(len({n['slot'] for n in session['npcs']}),8)
+            self.assertEqual({n['avatar']['model'] for n in staff},{5,14})
+            for n in staff:
+                self.assertEqual(n['hp'],100)
+                self.assertFalse(world.blocked(n['position']))
+                counter=world.village.structure.parts[n['staffStation']]
+                self.assertTrue(counter['flip'])
+                p,s=counter['bounds'];side=counter['side']
+                self.assertGreater(side*(p[0]+s[0]/2-n['position'][0]),s[0]/2+.25)
+                self.assertAlmostEqual(n['position'][2],p[2]+s[2]*(.5-.28*side))
+                self.assertAlmostEqual(math.sin(n['yaw']),-side)
+                self.assertEqual(n['avatar']['top'],2)
+                self.assertEqual(n['avatar']['trousersColor'],3)
+            homes={n['slot']:n['position'][:] for n in staff}
+            world.players['a']['position']=[-65.,0.,-30.]
+            for _ in range(120):
+                now[0]+=.25
+                world.tick_village(now[0])
+            for n in staff:
+                self.assertEqual(n['position'],homes[n['slot']])
+                self.assertFalse(n['moving']);self.assertIsNone(n['weapon'])
+                self.assertEqual(n['activity'],n['staffActivity'])
+                self.assertTrue(n['trail'])
+            n=staff[0]
+            self.assertFalse(world.village.damage_npc(n,'a',25,now[0]))
+            self.assertIsNone(n['target']);self.assertIsNone(n['weapon'])
+            self.assertTrue(world.village.damage_npc(n,'a',100,now[0]))
+            self.assertEqual(world.village.corpses(now[0])[0]['staffRole'],n['staffRole'])
+            now[0]+=16.;world.tick_village(now[0])
+            self.assertEqual(n['hp'],100);self.assertEqual(n['position'],homes[n['slot']])
+            station=n['staffStation'];world.village.structure.damage(world.village.structure.parts[station],4)
+            now[0]+=.25;world.tick_village(now[0])
+            self.assertNotIn(n['slot'],[r['slot'] for r in world.village.snapshot()])
+            world.village.structure.repair(world.village.structure.parts[station])
+            now[0]+=.25;world.tick_village(now[0])
+            self.assertIn(n['slot'],[r['slot'] for r in world.village.snapshot()])
+            self.assertFalse(world.blocked(n['position']))
+        with tempfile.TemporaryDirectory() as tmp:
+            x,y,z=homes[-106]
+            village=Village(Path(tmp)/'staff.sqlite3',[([x-.25,y,z-.25],[.5,1.6,.5])],lambda:100.)
+            self.assertNotIn(-106,[n['slot'] for n in village.snapshot()])
+            self.assertIn(-107,[n['slot'] for n in village.snapshot()])
 
     def test_village_furniture_layout_and_persistence(self):
         from village import Village
@@ -902,7 +958,7 @@ class GameOnlyTest(unittest.TestCase):
             trees=[r for r in session['scenery'] if r['kind']=='tree']
             self.assertGreater(len(trees),150)
             self.assertEqual(len([r for r in session['scenery'] if r['kind']!='tree']),6)
-            self.assertEqual(len(session['npcs']),6)
+            self.assertEqual(len(session['npcs']),8)
             self.assertTrue(session['villageRoads'])
             tree=min(trees,key=lambda r:math.hypot(r['bounds'][0][0]-20,r['bounds'][0][2]-110))
             b,size=tree['bounds'];x=b[0]+size[0]/2;z=b[2]+size[2]/2

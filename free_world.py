@@ -482,9 +482,11 @@ class FreeWorld:
             return notice,shot
         if target_npc is not None:
             defeated=self.village.damage_npc(target_npc,player,damage,now,target_zone)
-            if defeated:row['score']+=1
+            staff=target_npc.get('staffRole')
+            if defeated and not staff:row['score']+=1
             shot['npcHit']={'slot':target_npc['slot'],'zone':target_zone,'defeated':defeated}
-            notice='Trainings-NPC besiegt' if defeated else 'Trainings-NPC verletzt'
+            label='Mitarbeiter' if staff else 'Trainings-NPC'
+            notice=label+(' besiegt' if defeated else ' verletzt')
             return ('Kopftreffer - '+notice if target_zone=='head' else notice),shot
         if target is None:
             if boundary_hit:

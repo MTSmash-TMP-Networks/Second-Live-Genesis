@@ -647,7 +647,7 @@ console.log('Village streetlights: day/night, staggered coverage and scene rebui
 console.log('Village NPC cold start, stale simulation timestamps and initial display pose verified');
 
 
-import {villageReactionPose,applyVillageNpcReaction,resetRoomAvatarPose,applyRoomAvatarPose} from './avatar_room_pose.js';
+import {villageReactionPose,applyVillageNpcReaction,resetRoomAvatarPose,applyRoomAvatarPose,applyVillageStaffUniform,applyVillageActivity} from './avatar_room_pose.js';
 {
  
 for(let frame=0;frame<=360;frame++){
@@ -798,6 +798,25 @@ console.log('Village furniture meshes, collision, repair and interior lighting v
  disposeCharacter(avatar);
 }
 console.log('Free World chair pose and standing restoration verified');
+
+{
+ for(const [role,model,topColor] of [['market',14,3],['cafe',5,0]]){
+  const g=createCharacter({...DEFAULT_CHARACTER,model,top:2,topColor},{legacyOnly:true,villageNpc:true});
+  const apron=applyVillageStaffUniform(g,role);
+  assert.equal(apron.parent,g.userData.body);assert.equal(apron.children.length,4);
+  assert.equal(applyVillageStaffUniform(g,role),apron);
+  assert.equal(apron.children[0].material.color.getHex(),role==='market'?0x315c47:0x633e32);
+  for(const mesh of apron.children)assert.ok([...mesh.geometry.attributes.position.array].every(Number.isFinite));
+  const arm=g.userData.arms[0],before=arm.quaternion.clone(),p=g.position.clone();
+  for(let i=0;i<60;i++){resetRoomAvatarPose(g);applyVillageActivity(g,role==='market'?'checkout':'barista',false,1/60);}
+  assert.ok(arm.quaternion.angleTo(before)>.025);assert.ok(g.position.equals(p));
+  resetRoomAvatarPose(g);assert.ok(arm.quaternion.angleTo(before)<1e-6);
+  disposeCharacter(g);
+ }
+ const player=createCharacter(DEFAULT_CHARACTER,{legacyOnly:true});
+ assert.equal(applyVillageStaffUniform(player,'market'),null);disposeCharacter(player);
+}
+console.log('Free World shop staff uniforms, apron geometry and reversible work poses verified');
 
 import {WEATHER_SECONDS,freeWeatherState,WeatherClock,RainShelter,FreeWeather} from './free_weather.js';
 import {rainLoopWave,soundWave} from './audio.js';

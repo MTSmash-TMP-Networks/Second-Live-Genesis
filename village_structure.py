@@ -137,7 +137,8 @@ def interior_layout(row):
         x=d['front']-side*u;z=d['z']-side*v
         tables=[q for q in INTERIOR_LAYOUTS[theme] if q[0] in ('dining','cafe-table')]
         nearest=min(tables,key=lambda q:(q[1]-u)**2+(q[2]-v)**2) if kind=='chair' and tables else None
-        flip=kind=='sofa' or bool(nearest and nearest[1]>u)
+        # Counter controls face the employee side, not the customer aisle.
+        flip=kind in ('sofa','checkout','cafe-counter') or bool(nearest and nearest[1]>u)
         result.append({'index':512+i,'type':kind,'theme':theme,'side':side,'flip':flip,
                        'bounds':[[round(x-depth/2,6),round(floor,6),round(z-width/2,6)],[depth,height,width]]})
     return result

@@ -39,6 +39,20 @@ NPC_PATROL_SEEDS=((0,-48.),(1,-33.),(0,-18.),(1,-8.),(0,-30.),(1,-49.))
 NPC_MODELS=(1,2,3,4,13,18)
 NPC_BUILDINGS=('building-0-0','building-1-1','building-0-2','building-1-2','building-0-1','building-1-0')
 SIDEWALK_Y=.075
+# Stable staff slots are additional to the six existing training/visitor NPCs.
+STAFF_STATIONS=(
+    (-106,'market','building-0-1','checkout','checkout',{'model':14,'body':3,'hair':2,'top':2,'topColor':3,'trousers':1,'trousersColor':3,'shoes':1,'beard':0,'height':1}),
+    (-107,'cafe','building-1-1','cafe-counter','barista',{'model':5,'body':1,'hair':1,'top':2,'topColor':0,'trousers':1,'trousersColor':3,'shoes':1,'beard':0,'height':1}),
+)
+
+def staff_anchor(building,counter):
+    """Stand between the rear wall and counter, aligned with its register."""
+    b,s=building['bounds'];p,d=counter['bounds'];side=building['door']['side']
+    inner_wall=b[0]+s[0]*(.085 if side==1 else .915)
+    back_edge=p[0] if side==1 else p[0]+d[0]
+    x=(inner_wall+back_edge)/2
+    z=p[2]+d[2]*(.5-.28*side)
+    return [x,p[1],z],-side*math.pi/2
 
 def sidewalk_height(x,z):
     return SIDEWALK_Y if any(r['kind']=='walk' and abs(x-r['x'])<=r['w']/2 and abs(z-r['z'])<=r['d']/2 for r in ROADS) else 0.
@@ -114,6 +128,27 @@ class Village:
             self.npcs.append({'slot':-100-i,'nickname':f'Test-NPC {i+1}','avatar':{'model':NPC_MODELS[i],'height':1,'beard':0 if i>=4 else 1},
                 'position':home[:],'home':home,'yaw':0.,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,
                 'target':None,'velocity':[0.,0.,0.],'moving':False,'trail':[],'route':i%2,'patrol_turn_until':0.,'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None,'hit_seq':0,'hit_zone':None,'hit_at':None,'injured_legs':[],'stagger_until':0.,'visit_building':NPC_BUILDINGS[i],'visit_elapsed':0.,'visit_after':12.+i*4.,'visit_index':-1,'visit_wait':0.,'activity':None})
+        for slot,role,building_id,kind,activity,avatar in STAFF_STATIONS:
+            building=self.structure.rows.get(building_id)
+            if not building:continue
+            counter=next((p for p in self.structure.by_building[building_id] if p.get('type')==kind),None)
+            if not counter:continue
+            home,yaw=staff_anchor(building,counter)
+            box=([home[0]-.25,home[1]+.015,home[2]-.25],[.5,1.585,.5])
+            npc={'slot':slot,'nickname':'Markt-Mitarbeiterin' if role=='market' else 'Cafe-Mitarbeiter',
+                 'avatar':dict(avatar),'staffRole':role,'staffStation':counter['id'],'staffActivity':activity,
+                 'position':home[:],'home':home,'yaw':yaw,'stance':'walk','weapon':None,'hp':100,'life':1,'score':0,
+                 'target':None,'velocity':[0.,0.,0.],'moving':False,'trail':[],'route':0,'patrol_turn_until':0.,
+                 'next_action':self.last_tick,'respawn':0.,'dead_at':None,'shot_seq':0,'shot':None,
+                 'hit_seq':0,'hit_zone':None,'hit_at':None,'injured_legs':[],'stagger_until':0.,
+                 'visit_building':building_id,'visit_elapsed':0.,'visit_after':math.inf,'visit_index':-1,'visit_wait':0.,'activity':activity}
+            if not self.staff_station_open(npc) or any(overlap(*box,*p) for p in blocks) or any(prism_overlap(*box,p) for p in self.structure.solids()):
+                npc['hp']=0
+            self.npcs.append(npc)
+    def staff_station_open(self,npc):
+        counter=self.structure.parts.get(npc['staffStation'])
+        x,y,z=npc['home']
+        return bool(counter and counter['hp']>0 and self.walk_height(x,z)>=y-.005)
     def door_clear(self,row,players,solid_rows,body_box):
         b,s=row['door']['bounds'];b=[b[0]-.25,b[1],b[2]];s=[s[0]+.5,s[1],s[2]]
         if any(overlap(b,s,*body_box(p['position'])) for p in [*players.values(),*(n for n in self.npcs if n['hp']>0)]):return False
@@ -157,10 +192,10 @@ class Village:
         server_time=max(self.motion_time,self.clock())
         return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','weapon','hp','life','score','shot_seq','shot','velocity','moving')},'motionTime':self.motion_time,'serverTime':server_time,'motionTrail':list(r['trail']),
                  'hitSeq':r['hit_seq'],'hitZone':r['hit_zone'],'hitAge':max(0.,server_time-r['hit_at']) if r['hit_at'] is not None else None,
-                 'injuredLegs':list(r['injured_legs']),'activity':r['activity']} for r in self.npcs if r['hp']>0]
+                 'injuredLegs':list(r['injured_legs']),'activity':r['activity'],'staffRole':r.get('staffRole')} for r in self.npcs if r['hp']>0]
     def corpses(self,now):
         return [{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life')},
-                 'weapon':None,'dead':True,'deadAge':max(0.,now-r['dead_at']),'hitZone':r['hit_zone']}
+                 'weapon':None,'dead':True,'deadAge':max(0.,now-r['dead_at']),'hitZone':r['hit_zone'],'staffRole':r.get('staffRole')}
                 for r in self.npcs if r['hp']<=0 and r['dead_at'] is not None and now-r['dead_at']<NPC_CORPSE_SECONDS]
     def damage_tree(self,row,damage):
         if row['kind']!='tree':return 'Gebaeude'
@@ -199,6 +234,8 @@ class Village:
         if not npc['hp']:
             npc.update(target=None,weapon=None,respawn=now+15,dead_at=now,shot=None,velocity=[0.,0.,0.],moving=False)
             return True
+        # Civilian employees stay unarmed and do not become training opponents.
+        if npc.get('staffRole'):return False
         if npc['target']!=player:npc['next_action']=now+1.0
         npc.update(target=player,weapon='pistol')
         return False
@@ -223,10 +260,20 @@ class Village:
             count+=1
     def _step(self,now,dt,players,blocked,ray_box,solid_rows,body_box,spawn):
         for npc in self.npcs:
+            staff=npc.get('staffRole')
+            if staff and not self.staff_station_open(npc):
+                if npc['hp']>0:
+                    npc.update(hp=0,dead_at=None,respawn=now,trail=[],activity=None,velocity=[0.,0.,0.],moving=False)
+                continue
             if npc['hp']<=0:
+                if staff and now>=npc['respawn'] and (blocked(npc['home']) or any(overlap(*body_box(npc['home']),*body_box(p['position'])) for p in players.values())):
+                    npc['respawn']=now+.5
                 if now>=npc['respawn'] and not blocked(npc['home']):
                     npc.update(hp=100,life=npc['life']+1,position=npc['home'][:],target=None,weapon=None,shot=None,velocity=[0.,0.,0.],moving=False,dead_at=None,patrol_turn_until=0.,trail=[],hit_seq=0,hit_zone=None,hit_at=None,injured_legs=[],stagger_until=0.,visit_elapsed=0.,visit_index=-1,visit_wait=0.,activity=None)
                 else:continue
+            if staff:
+                npc.update(position=npc['home'][:],target=None,weapon=None,stance='walk',velocity=[0.,0.,0.],moving=False,activity=npc['staffActivity'])
+                continue
             p=npc['position'];home=npc['home'];before=p[:]
             npc.update(velocity=[0.,0.,0.],moving=False,activity=None)
             near=any(math.hypot(r['position'][0]-home[0],r['position'][2]-home[2])<38 for r in players.values())
