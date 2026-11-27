@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.19 · Natural Landscape**
+**v0.15.20 · Natural Landscape Hotfix**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.20 – Gelände-Hotfix
+
+Fehlende, leere oder nicht ganzzahlige Revisionswerte in Free-World-Anfragen werden vor dem Vergleich normalisiert. Alte Clients und Aktionen ohne Revisionswert erhalten einen vollständigen Snapshot inklusive Gelände; bei aktueller Revision bleibt die Übertragung kompakt. Die Landschaft und bestehende Spielstände bleiben unverändert. Ein zusätzlicher Regressionstest prüft den ersten Einstieg, fehlende und ungültige Revisionswerte sowie den normalen Polling-Pfad.
 
 ## Neu in 0.15.19 – Natürliche Landschaft
 

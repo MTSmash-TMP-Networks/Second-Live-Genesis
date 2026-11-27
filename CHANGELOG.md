@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.20 – Natural Landscape Hotfix
+- Free-World-Snapshot normalisiert fehlende, null- und nicht-ganzzahlige Revisionen auf den vollständigen Snapshot; verhindert den Python-TypeError aus 0.15.19. Gültige Revisionen behalten die bisherige inkrementelle Synchronisation.
+- Regressionstest für fehlende und fehlerhafte Revisionen, Erstbeitritt und unveränderte Revision. Temporäre SQLite-Verbindung im Gelände-Migrationstest wird explizit geschlossen.
+- Keine Änderung an Gelände, Bäumen, Seen, gespeicherten Bauwerken oder Datenbankstruktur.
+
 ## 0.15.19 – Natural Landscape
 - Persistente, gemeinsam genutzte Höhenkarte für Berge, Geländephysik, Baumstandorte und Bauobjekte; Migrationsschutz für vorhandene Bebauung.
 - Drei kurvige Wanderwege, zwei flache Seen mit animierter, wetterabhängiger Wasseroberfläche und Minimap-Darstellung; langsameres Waten.

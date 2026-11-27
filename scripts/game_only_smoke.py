@@ -37,6 +37,7 @@ def room_model_fixture(change=None):
 class GameOnlyTest(unittest.TestCase):
     def test_natural_terrain_persistence_and_migration(self):
         import sqlite3
+        from contextlib import closing
         from free_terrain import Terrain, build_terrain, load_terrain, CONFIG, N
         from village import make_scenery
         t=Terrain(build_terrain());self.assertEqual(len(t.heights),N*N)
@@ -49,7 +50,7 @@ class GameOnlyTest(unittest.TestCase):
                 b,s=row['bounds'];self.assertAlmostEqual(b[1],t.height(b[0]+s[0]/2,b[2]+s[2]/2),places=4)
         x,z,*_=CONFIG['hills'][0];b=[x-2,0,z-2];s=[4,3,4]
         lake=CONFIG['lakes'][0];protected=[(b,s),([lake['x']-1,0,lake['z']-1],[2,3,2])]
-        with sqlite3.connect(':memory:') as db:
+        with closing(sqlite3.connect(':memory:')) as db,db:
             migrated=load_terrain(db,protected);self.assertEqual(migrated.max_height(b,s),0)
             self.assertEqual(len(migrated.doc['lakes']),1)
             self.assertEqual(load_terrain(db,[]).doc,migrated.doc)
@@ -880,6 +881,31 @@ class GameOnlyTest(unittest.TestCase):
             migrated=Village(path,[part['bounds']],lambda:102.)
             self.assertEqual(migrated.structure.parts[key]['stage'],4)
             self.assertFalse(any(p['id']==key for p in migrated.solids()))
+
+    def test_free_world_optional_snapshot_revision(self):
+        from free_world import FreeWorld
+        profile={'slot':0,'nickname':'Guest','avatar':DEFAULT_AVATAR}
+        with tempfile.TemporaryDirectory() as tmp:
+            world=FreeWorld(tmp,lambda:100.)
+            session=world.enter('a',profile)
+            self.assertEqual(session['terrain'],world.terrain.doc)
+            request={'action':'update','lease':session['lease'],'life':session['life'],
+                     'position':session['position'],'yaw':0.}
+            # Old clients and action requests may omit revision entirely.
+            for extra in ({},{'revision':None},{'revision':-1},{'revision':True},
+                          {'revision':str(world.revision)},{'revision':float(world.revision)},
+                          {'revision':[]},{'revision':{}}):
+                with self.subTest(extra=extra):
+                    result=world.request('a',{**request,**extra})
+                    self.assertEqual(result['revision'],world.revision)
+                    self.assertEqual(result['terrain'],world.terrain.doc)
+                    self.assertIn('blocks',result);self.assertIn('scenery',result)
+            current=world.request('a',{**request,'revision':world.revision})
+            for key in ('terrain','blocks','scenery','impacts'):
+                self.assertNotIn(key,current)
+            stale=world.request('a',{**request,'revision':0})
+            self.assertIn('blocks',stale);self.assertIn('scenery',stale)
+            self.assertNotIn('terrain',stale)
 
     def test_free_world_shared_weather_clock(self):
         from free_world import FreeWorld,L
