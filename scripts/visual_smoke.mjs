@@ -184,7 +184,49 @@ import {CHARACTER_OPTIONS,DEFAULT_CHARACTER,normalizeCharacter,createCharacter,c
  const savedDocument=globalThis.document;
  globalThis.document={createElement(){return {width:0,height:0,getContext(){return {fillRect(){},strokeRect(){},fillText(){}};}};}};
  try{
-  const lobby=new HotelLobbyView({textured:{hotel_carpet:new THREE.MeshStandardMaterial(),hotel_wall:new THREE.MeshStandardMaterial(),hotel_ceiling:new THREE.MeshStandardMaterial()}});
+  const oak=new THREE.MeshStandardMaterial({map:new THREE.Texture(),normalMap:new THREE.Texture()});
+  oak.map.repeat.set(3,4);oak.normalMap.repeat.set(2,2);
+  const lobby=new HotelLobbyView({textured:{hotel_carpet:new THREE.MeshStandardMaterial(),hotel_wall:new THREE.MeshStandardMaterial(),hotel_ceiling:new THREE.MeshStandardMaterial(),oak_veneer_01:oak}});
+  // Every hotel entrance uses the same detailed metric geometry, but retains
+  // its own door number, card-reader marker and visibility in room projections.
+  const first=lobby.doorSections[0].getObjectByName('Hotel room door assembly');
+  assert.ok(first);assert.ok(first.children.length>=7&&first.children.length<=10);
+  const doorBox=new THREE.Box3().setFromObject(first.clone(true));
+  assert.ok(doorBox.min.x<-.65&&doorBox.max.x>.65&&doorBox.min.y>=-.002);
+  assert.ok(doorBox.max.y>2.25&&doorBox.max.y<2.31&&doorBox.max.z>.17&&doorBox.max.z<.25);
+  const veneer=first.getObjectByName('Hotel room door assembly / veneer');
+  assert.ok(veneer&&veneer.material.map!==oak.map);
+  assert.deepEqual(oak.map.repeat.toArray(),[3,4]);assert.deepEqual(oak.normalMap.repeat.toArray(),[2,2]);
+  assert.equal(lobby.doorSections.length,LOBBY_CAPACITY);
+  for(let i=0;i<LOBBY_CAPACITY;i++){
+   const d=lobbyDoor(i),g=lobby.doorSections[i],door=g.getObjectByName('Hotel room door assembly');
+   assert.deepEqual(g.position.toArray(),[d.x,0,d.z]);assert.equal(g.rotation.y,-d.side*Math.PI/2);
+   assert.ok(door&&g.getObjectByName('Hotel wall sconce'));
+   assert.equal(door.getObjectByName('Hotel room door assembly / veneer').geometry,veneer.geometry);
+   g.updateWorldMatrix(true,true);
+   const front=g.localToWorld(new THREE.Vector3(0,1,.18));
+   assert.ok(Math.abs(front.x)<Math.abs(d.x),'door hardware faces corridor');
+  }
+  const entrance=lobby.root.getObjectByName('Free World double door assembly');
+  assert.ok(entrance);assert.ok(entrance.getObjectByName('Free World double door assembly / frost'));
+  const downlights=lobby.root.children.filter(o=>o.name==='Hotel recessed downlight');
+  assert.equal(downlights.length,43);assert.equal(lobby.wallLightAnchors.length,24);
+  const templates=[first,lobby.doorSections[0].getObjectByName('Hotel wall sconce'),downlights[0],entrance];
+  for(const template of templates)for(const mesh of template.children){
+   assert.ok(mesh.isMesh&&mesh.geometry.attributes.position.count>0);
+   assert.ok(mesh.geometry.attributes.position.array.every(Number.isFinite));
+  }
+  assert.equal(lobby.lights.length,11);assert.ok(lobby.lights.every(l=>!l.castShadow&&l.intensity>0));
+  for(const z of [-65,-30,0,30,65]){
+   lobby.updateLighting(z);
+   for(const [lights,anchors] of [[lobby.ceilingLights,lobby.ceilingLightAnchors],[lobby.wallLights,lobby.wallLightAnchors]]){
+    assert.equal(new Set(lights.map(l=>l.position.toArray().join(','))).size,lights.length);
+    assert.ok(lights.every(l=>anchors.some(a=>l.position.distanceTo(new THREE.Vector3(...a))<1e-8)));
+    const selected=Math.max(...lights.map(l=>Math.abs(l.position.z-z)));
+    const all=anchors.map(a=>Math.abs(a[2]-z)).sort((a,b)=>a-b);
+    assert.ok(selected<=all[lights.length-1]+1e-8);
+   }
+  }
   assert.equal(lobby.signs.length,24);lobby.setOwn(0,{nickname:'Alpha',avatar:DEFAULT_CHARACTER});
   const oldName=lobby.nameplates[1].material.map;lobby.setRooms([{slot:0,nickname:'Alpha'},{slot:1,nickname:'Beta'}]);assert.equal(lobby.roomNames.get(1),'Beta');assert.notEqual(lobby.nameplates[1].material.map,oldName);
   // Regression: recursive room-geometry rays do not have a rendering camera.

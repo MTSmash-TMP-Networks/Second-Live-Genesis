@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.18 – Hotel Corridor
+- Alle 24 Flurtüren mit vorhandenen Eichen-Fototexturen, separaten gefasten Türblättern und Zargen, Schattenfugen, Kartenlesern, Metallhebeln, Türspionen und kleineren Zimmer- und Namensschildern. Free-World-Eingang als zweiflügelige Metalltür mit satinierten Glasflächen und Griffen.
+- Dreidimensionale Milchglas-Wandleuchten mit Metallfassung und runde versenkte Deckenstrahler. Warmes lokales Licht an echten Lampenpositionen mit einem festen Pool aus sieben Decken- und vier Wandlichtquellen; keine zusätzlichen Schattenkarten. Geometrie je Material zusammengefasst und zwischen Wiederholungen geteilt, vorhandene Fototexturen unverändert.
+- Neue Renderer-Smoke-Checks für alle Türpositionen, freigegebene Geometrie, Beschläge, Lampen, Lichtbudget und unveränderte Textur-Repeats. Bestehende Flur-, Zimmer- und Free-World-Interaktionen und Raumprojektionen bleiben erhalten. Keine zusätzlichen externen Assets.
+
 ## 0.15.17 – Shop Staff
 - Zwei zusätzliche, gemeinsam synchronisierte Mitarbeiter im Markt und Café. Eigene Hemden, dunkle Hosen und prozedurale Schürzen, dezente Arbeitsgesten, feste Kassenposition und Blick zur Kundenseite. Bestehende Rocketbox-Modelle; keine zusätzlichen Downloads oder Namensschilder.
 - Kassenterminals zur Mitarbeiterseite gedreht, ohne Möbelpositionen, Kollisionsvolumen oder IDs zu ändern. Arbeitsplatz wird nur bei intakter Kasse, Boden und freiem Standplatz besetzt. Personal bleibt unbewaffnet und erhält keine Patrouillen oder Vergeltungsangriffe; bestehende NPC-Schadens-/Respawn-Mechanik bleibt erhalten, keine Punkte für Personal.

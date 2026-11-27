@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.17 · Shop Staff**
+**v0.15.18 · Hotel Corridor**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.18 – Realistischer Hotelflur
+
+Alle 24 Zimmertüren erhalten dunkle Holzfurniere mit vorhandenen Fotomaterialien, profilierte Zargen, schmale Türfugen, elektronische Kartenleser, gebogene Metallgriffe, Türspione und dezente Zimmernummern. Der Free-World-Eingang erhält eine zweiflügelige Tür mit satinierten Glasflächen und Metallgriffen. Dreidimensionale Milchglas-Wandleuchten und versenkte Deckenstrahler ersetzen die bisherigen einfachen Lichtquader. Elf wiederverwendbare lokale Lichtquellen sorgen für warmes, differenziertes Flurlicht. Die Lampengeometrien werden je Material gebündelt und gemeinsam genutzt; keine neuen Downloads oder Schattenkarten. Zimmerzugänge, Raumprojektion, Physik und Free World bleiben unverändert.
 
 ## Neu in 0.15.17 – Kassenpersonal
 
