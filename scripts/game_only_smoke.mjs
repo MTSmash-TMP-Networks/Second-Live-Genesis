@@ -502,3 +502,8 @@ assert.ok(game.includes("hidden=!playing||!vehicleHintVisible(s,now)"));
 assert.ok(game.includes("s.vehicleHintUntil=performance.now()+4000"));
 assert.ok(game.includes("s.vehicleHintUntil=0"));
 console.log('Vehicle control introduction expires and can be recalled without resetting on polling');
+
+assert.ok(game.includes("carPose.eye||[-.43,1.23,0]"));
+assert.ok(game.includes("player.x+c*x+s*z,player.y+y,player.z-s*x+c*z"));
+assert.ok(html.includes('Vinish.dev')&&html.includes('creativecommons.org/licenses/by/4.0/'));
+console.log('Premium vehicle camera anchor and attribution checks passed');

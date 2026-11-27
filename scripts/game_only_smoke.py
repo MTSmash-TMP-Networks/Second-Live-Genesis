@@ -45,6 +45,8 @@ class GameOnlyTest(unittest.TestCase):
             b=world.enter('b',{'slot':1,'nickname':'Driver B','avatar':DEFAULT_AVATAR})
             self.assertEqual(len(a['vehicles']),11)
             self.assertEqual(sum(c['kind']=='taxi' for c in a['vehicles']),3)
+            self.assertEqual({c['assetModel'] for c in a['vehicles']},{'boxy-off-roader','grand-tourer','luxury-suv','mid-engine-supercar','muscle-coupe'})
+            self.assertTrue(all(c['assetModel']=='luxury-suv' for c in a['vehicles'] if c['kind']=='taxi'))
             self.assertEqual(len(world.traffic.routes),4)
             self.assertTrue(all(r.length>300 for r in world.traffic.routes))
             taxi=world.traffic.cars['car-11']

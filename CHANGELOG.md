@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.25 – Premium Vehicles
+- Fünf bereitgestellte Vinish.dev-Originalmodelle mit eingebetteten Texturen, vier separaten Rädern, Lenkrad und Innenraum; ergänzend fünf lokal vorbereitete, reduzierte Detailstufen. Einmaliges ZIP-Paket unter `optional-vehicles/Second-Live-Premium-Vehicles.zip`; SHA-256, Format, Szenen-Pivots und Dreiecksbudget werden beim Build geprüft.
+- Alle fünf Modelle in der NPC-Flotte; drei gelbe Luxury-SUV-Taxis mit Taxischild. Modellbezogene Fahrerpositionen und Innenkamera, animierte Lenkräder und Radrotation, passende native Lichtmaterialien. Proportionale Skalierung in die bisherige Kollisionshülle; unveränderte Fahrphysik.
+- Originalpaket hat Vorrang vor früheren Fahrzeugdownloads. Bei vorhandenem Paket keine externen Fahrzeugdownloads. Modell- und Lizenznachweis in den Einstellungen und im Repository.
+- Neue Smoke-Checks für Modellverteilung, Ausrichtung, Maßstab, Lackierung und Kamera. Bestehende Fahrzeugübernahme und Steuerung bleiben unverändert.
+
 ## 0.15.24 – Realistic Vehicles
 - Erlaubt Meshopt/Basis-GLBs von Tevy; Offline-Konvertierung eingebetteter KTX2-Texturen nach PNG mit Integritätsprüfung, ohne Browser-Worker oder Änderung der CSP. LOD0/1/2, alternative verfügbare Detailstufe, Diagnose bei Importfehlern.
 - Neue geschwungene lokale Karosserien mit Radöffnungen, Alufelgen, Glas, Lackreflexionen und Details; importierte Modelle verdecken die bisherigen Ersatz-Lichtquader. Benannte Lichtmaterialien werden animiert.

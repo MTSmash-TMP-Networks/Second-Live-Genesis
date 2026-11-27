@@ -10,11 +10,34 @@ import {applyRoomAvatarPose,resetRoomAvatarPose} from './avatar_room_pose.js';
 const WIDTH=1.95,LENGTH=4.8,HALF_W=WIDTH/2,HALF_L=LENGTH/2;
 const KINDS=new Set(['sedan','hatchback','suv','taxi']);
 const wheelNames=['wheel_FL','wheel_FR','wheel_RL','wheel_RR'];
+// Bounds and seat coordinates are measured from the five uploaded LOD0
+// originals, in metres. Both LODs share the same transform, so the vehicle
+// does not jump when changing distance. +Z is the front in the source files.
+const PREMIUM=Object.freeze({
+ 'boxy-off-roader':{size:[2.294525,2.205375,4.859007],centerZ:.033146,minY:-.000375,hip:[.42,.96,-.33],scale:.86,paint:'Paint_Sand'},
+ 'grand-tourer':{size:[2.075167,1.326799,4.782776],centerZ:.035763,minY:0,hip:[.36,.49,-.42],scale:.78,paint:'Paint_Maroon'},
+ 'luxury-suv':{size:[2.354037,1.848110,4.964593],centerZ:.046174,minY:0,hip:[.41,.84,-.35],scale:.86,paint:'Paint_Pearl'},
+ 'mid-engine-supercar':{size:[2.145167,1.160000,4.455526],centerZ:.006737,minY:0,hip:[.35,.37,-.22],scale:.74,paint:'Paint_Yellow'},
+ 'muscle-coupe':{size:[2.109875,1.368325,4.869930],centerZ:.024535,minY:0,hip:[.37,.52,-.45],scale:.80,paint:'Paint_Orange'}
+});
+const isPremium=model=>Object.hasOwn(PREMIUM,model);
+let premiumManifestPromise;
+function premiumFiles(){
+ premiumManifestPromise??=fetch('/assets/polyhaven/premium-vehicles/manifest.json',{cache:'no-store'}).then(r=>{
+  if(!r.ok)return new Set();return r.json().then(m=>{
+   if(m.format!=='second-live-premium-vehicles-v1')return new Set();
+   const files=new Set((m.files||[]).filter(f=>isPremium(f.model)&&[0,1].includes(f.lod)&&f.file===f.model+'-lod'+f.lod+'.glb').map(f=>f.file));
+   console.info('Premium vehicles:',files.size,'/ 10 local assets');return files;
+  });
+ }).catch(e=>{console.warn('Premium vehicle manifest:',e.message||e);return new Set();});
+ return premiumManifestPromise;
+}
+export function premiumModelSpec(model){return isPremium(model)?PREMIUM[model]:null;}
 const templates=new Map();
 let manifestPromise;
 function availableModels(){
  manifestPromise??=fetch('/assets/polyhaven/vehicles/manifest.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('vehicle manifest unavailable');return r.json();}).then(m=>{
-  const files=new Set((m.files||[]).filter(f=>/^(sedan|hatchback|suv|taxi)-lod[012]-png\\.glb$/.test(f.file||'')).map(f=>f.file));
+  const files=new Set((m.files||[]).filter(f=>/^(sedan|hatchback|suv|taxi)-lod[012]-png\.glb$/.test(f.file||'')).map(f=>f.file));
   console.info('Traffic source models ready:',files.size,'/ 12');return files;
  }).catch(e=>{console.warn('Traffic manifest:',e.message||e);return null;});
  return manifestPromise;
@@ -210,31 +233,75 @@ function fallback(row){
  return {root,wheels,steering};
 }
 function findWheel(root,name){let result=null;root.traverse(o=>{if(o.name.toLowerCase()===name.toLowerCase())result=o;});return result;}
-async function template(kind,lod){
- const key=kind+':'+lod;if(!templates.has(key)){
+export function normalizeVehicleTemplate(raw,model=null){
+ raw.updateMatrixWorld(true);
+ const wheels=wheelNames.map(n=>findWheel(raw,n));if(wheels.some(w=>!w))throw Error('missing wheel pivots');
+ const front=wheels[0].getWorldPosition(new THREE.Vector3()).add(wheels[1].getWorldPosition(new THREE.Vector3())).multiplyScalar(.5);
+ const rear=wheels[2].getWorldPosition(new THREE.Vector3()).add(wheels[3].getWorldPosition(new THREE.Vector3())).multiplyScalar(.5);
+ const delta=front.sub(rear);if(Math.hypot(delta.x,delta.z)<.5)throw Error('invalid wheel anchors');
+ const aligned=new THREE.Group();raw.rotation.y+=Math.PI-Math.atan2(delta.x,delta.z);aligned.add(raw);aligned.updateMatrixWorld(true);
+ const b=new THREE.Box3().setFromObject(aligned),s=b.getSize(new THREE.Vector3()),center=b.getCenter(new THREE.Vector3());
+ if(![s.x,s.y,s.z].every(v=>Number.isFinite(v)&&v>.25)||s.z<s.x*1.25)throw Error('invalid vehicle bounds');
+ const root=new THREE.Group();root.add(aligned);const spec=premiumModelSpec(model);
+ if(spec){
+  // Use the original metric dimensions, not the slightly reduced LOD bounds.
+  // One uniform scale preserves the proportions and fits the arcade collision envelope.
+  const scale=Math.min(WIDTH/spec.size[0],LENGTH/spec.size[2],1.74/spec.size[1]);
+  aligned.position.set(0,-spec.minY,-spec.centerZ);root.scale.setScalar(scale);
+  root.updateMatrixWorld(true);
+  const hip=raw.localToWorld(new THREE.Vector3(...spec.hip)),avatarScale=spec.scale*scale;
+  root.userData.premium=model;
+  root.userData.driver={position:[hip.x,hip.y-.49*avatarScale,hip.z],scale:avatarScale,
+   eye:[hip.x,hip.y+.66*avatarScale,hip.z-.045],roof:spec.size[1]*scale};
+ }else{
+  aligned.position.set(-center.x,-b.min.y,-center.z);
+  root.scale.set(WIDTH/s.x,Math.min(1.84,s.y*LENGTH/s.z)/s.y,LENGTH/s.z);
+ }
+ root.updateMatrixWorld(true);
+ root.userData.wheelRadius=Math.max(.23,Math.min(.48,new THREE.Box3().setFromObject(wheels[0]).getSize(new THREE.Vector3()).y/2));
+ return root;
+}
+async function template(kind,lod,premium=false){
+ const key=(premium?'premium:':'legacy:')+kind+':'+lod;
+ if(!templates.has(key)){
   templates.set(key,(async()=>{
-   const name=kind+'-lod'+lod+'-png.glb',available=await availableModels();
+   const name=premium?kind+'-lod'+lod+'.glb':kind+'-lod'+lod+'-png.glb';
+   const available=await (premium?premiumFiles():availableModels());
    if(available&&!available.has(name))return null;
-   const r=await fetch('/assets/polyhaven/vehicles/'+name);
+   const r=await fetch('/assets/polyhaven/'+(premium?'premium-vehicles/':'vehicles/')+name);
    if(!r.ok)throw Error('vehicle unavailable');
    const gltf=await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(await r.arrayBuffer(),'');
-   const raw=gltf.scene;raw.updateMatrixWorld(true);
-   const wheels=wheelNames.map(n=>findWheel(raw,n));if(wheels.some(w=>!w))throw Error('missing wheel pivots');
-   const front=wheels[0].getWorldPosition(new THREE.Vector3()).add(wheels[1].getWorldPosition(new THREE.Vector3())).multiplyScalar(.5);
-   const rear=wheels[2].getWorldPosition(new THREE.Vector3()).add(wheels[3].getWorldPosition(new THREE.Vector3())).multiplyScalar(.5);
-   const delta=front.sub(rear);if(Math.hypot(delta.x,delta.z)<.5)throw Error('invalid wheel anchors');
-   const aligned=new THREE.Group();raw.rotation.y+=Math.PI-Math.atan2(delta.x,delta.z);aligned.add(raw);aligned.updateMatrixWorld(true);
-   // Rotate the front into -Z. Measure after the rotation; never trust file units.
-   let b=new THREE.Box3().setFromObject(aligned),s=b.getSize(new THREE.Vector3()),center=b.getCenter(new THREE.Vector3());
-   if(![s.x,s.y,s.z].every(v=>Number.isFinite(v)&&v>.25)||s.z<s.x*1.25)throw Error('invalid vehicle bounds');
-   aligned.position.set(-center.x,-b.min.y,-center.z);
-   const root=new THREE.Group();root.add(aligned);root.scale.set(WIDTH/s.x,Math.min(1.84,s.y*LENGTH/s.z)/s.y,LENGTH/s.z);
-   return root;
+   const result=normalizeVehicleTemplate(gltf.scene,premium?kind:null);
+   console.info('Traffic model loaded:',name);return result;
   })().catch(error=>{console.warn('Traffic model',key,error.message||error);return null;}));
  }return templates.get(key);
 }
-function imported(templateRoot,row){
- const root=templateRoot.clone(true),wheels=[],owned=new Set(),nativeLights={head:new Set(),rear:new Set(),blink:new Set()};root.updateMatrixWorld(true);
+// Readable taxi lightbox, without a canvas or an external texture.
+let taxiLabel;
+function taxiLabelMaterial(){
+ if(taxiLabel)return taxiLabel;
+ const chars=['11111/00100/00100/00100/00100/00100/00100','01110/10001/10001/11111/10001/10001/10001','10001/10001/01010/00100/01010/10001/10001','11111/00100/00100/00100/00100/00100/11111'].map(c=>c.split('/'));
+ const w=64,h=24,pixels=new Uint8Array(w*h*4);
+ for(let i=0;i<w*h;i++)pixels.set([255,211,59,255],i*4);
+ for(let c=0;c<4;c++)for(let y=0;y<7;y++)for(let x=0;x<5;x++)if(chars[c][y][x]==='1')for(let dy=0;dy<2;dy++)for(let dx=0;dx<2;dx++){
+  const xx=9+c*12+x*2+dx,yy=h-1-(5+y*2+dy);pixels.set([31,29,24,255],(yy*w+xx)*4);
+ }
+ const tex=new THREE.DataTexture(pixels,w,h);tex.colorSpace=THREE.SRGBColorSpace;tex.magFilter=THREE.LinearFilter;tex.minFilter=THREE.LinearFilter;tex.needsUpdate=true;
+ taxiLabel=new THREE.MeshStandardMaterial({map:tex,color:0xffffff,emissive:0xffdf72,emissiveIntensity:.14,roughness:.62});
+ return taxiLabel;
+}
+function premiumTaxiSign(root,y){
+ const sign=new THREE.Group();sign.name='Premium taxi roof sign';root.add(sign);sign.position.set(0,y+.04,.06);
+ solid(sign,colors.black,[0,-.025,0],[.49,.025,.19]);
+ solid(sign,colors.taxi,[0,.044,0],[.46,.123,.18]);
+ solid(sign,taxiLabelMaterial(),[0,.043,-.091],[.409,.101,.004]);
+ solid(sign,taxiLabelMaterial(),[0,.043,.091],[.409,.101,.004]);
+}
+export function createImportedVehicle(templateRoot,row){
+ const model=templateRoot.clone(true),root=new THREE.Group(),wheels=[],owned=new Set(),nativeLights={head:new Set(),rear:new Set(),blink:new Set()};
+ root.add(model);root.updateMatrixWorld(true);
+ const spec=premiumModelSpec(model.userData.premium),driver=model.userData.driver||null;
+ root.name=spec?'Premium '+model.userData.premium:'Imported '+row.kind;
  const materials=new Map();
  root.traverse(o=>{
   if(!o.isMesh)return;
@@ -242,14 +309,18 @@ function imported(templateRoot,row){
    const label=(m.name||'')+' '+o.name;
    // A shared atlas material may cover both a lamp mesh and bodywork.
    // Separate clones by role so only the named lens can become emissive.
-   const role=/head.?light|head.?lamp|front.?light/i.test(label)?'head':
-    /tail.?light|rear.?light|brake.?light|stop.?lamp/i.test(label)?'rear':
-    /indicator|turn.?signal|blinker/i.test(label)?'blink':'body';
+   const matName=m.name||'';
+   const role=/^LED$/i.test(matName)||/head.?light|head.?lamp|front.?light/i.test(label)?'head':
+    /^LED_Red$/i.test(matName)||/tail.?light|rear.?light|brake.?light|stop.?lamp/i.test(label)?'rear':
+    /^Lamp_Amber$/i.test(matName)||/indicator|turn.?signal|blinker/i.test(label)?'blink':'body';
    if(!materials.has(m))materials.set(m,new Map());
    const roles=materials.get(m);
    if(!roles.has(role)){
     const n=m.clone();
-    if(role==='body'&&row.kind!=='taxi'&&/(paint|body.?color|bodywork|car.?body|exterior.?body)/i.test(m.name||'')&&n.color)n.color.set(row.color);
+    if(role==='body'&&n.color){
+     if(spec&&matName===spec.paint)n.color.set(row.kind==='taxi'?'#efbd28':row.color);
+     else if(!spec&&row.kind!=='taxi'&&/(paint|body.?color|bodywork|car.?body|exterior.?body)/i.test(matName))n.color.set(row.color);
+    }
     if(n.isMeshStandardMaterial){n.envMap=carEnvironment;n.envMapIntensity=.65;}
     roles.set(role,n);owned.add(n);
    }
@@ -264,7 +335,10 @@ function imported(templateRoot,row){
   const q=node.quaternion.clone(),world=node.getWorldQuaternion(new THREE.Quaternion()).invert();
   wheels.push({node,base:q,axis:new THREE.Vector3(1,0,0).applyQuaternion(world).normalize(),front:name.includes('_F'),parentUp:new THREE.Vector3(0,1,0).applyQuaternion(node.parent.getWorldQuaternion(new THREE.Quaternion()).invert()).normalize()});
  }
- root.userData.ownedMaterials=owned;return {root,wheels,steering:findWheel(root,'steering_wheel'),nativeLights};
+ const steering=findWheel(root,'steering_wheel');
+ if(spec&&row.kind==='taxi')premiumTaxiSign(root,driver.roof);
+ root.userData.ownedMaterials=owned;
+ return {root,wheels,steering,steeringBase:steering?.quaternion.clone(),nativeLights,driver,wheelRadius:model.userData.wheelRadius,premium:!!spec};
 }
 function releaseModel(model){
  if(!model)return;model.root.removeFromParent();
@@ -321,7 +395,7 @@ export class TrafficView{
    if(!a){
     const root=new THREE.Group();root.name='Traffic '+r.id;root.position.set(...r.position);root.rotation.y=r.yaw;this.scene.add(root);
     const model=fallback(r);root.add(model.root);
-    a={root,model,row:r,phase:0,lights:lamps(root),lod:-1,wanted:-1,pending:false,driver:null,signature:''};this.cars.set(r.id,a);
+    a={root,model,row:r,phase:0,lights:lamps(root),lod:-1,assetKey:null,wanted:null,pending:false,driver:null,signature:''};this.cars.set(r.id,a);
    }
    a.row=r;
   }
@@ -336,16 +410,20 @@ export class TrafficView{
  }
  remove(a){if(a.driver)disposeCharacter(a.driver);releaseModel(a.model);a.root.removeFromParent();a.lights.head.dispose();a.lights.rear.dispose();for(const m of a.lights.blink)m.dispose();}
  load(a,lod){
-  if(a.pending||a.wanted===lod||typeof document==='undefined')return;
-  a.wanted=lod;a.pending=true;
+  const model=a.row.assetModel,wanted=(model||a.row.kind)+':'+lod;
+  if(a.pending||a.wanted===wanted||typeof document==='undefined')return;
+  a.wanted=wanted;a.pending=true;
   (async()=>{
    const order=lod===0?[0,1,2]:lod===1?[1,0,2]:[2,1,0];
-   for(const level of order){
-    if(a.lod===level)return;
-    const t=await template(a.row.kind,level);
+   const premiumOrder=lod===0?[0,1]:[1,0];
+   const candidates=[...(isPremium(model)?premiumOrder.map(level=>[model,level,true]):[]),...order.map(level=>[a.row.kind,level,false])];
+   for(const [kind,level,premium] of candidates){
+    const key=(premium?'premium:':'legacy:')+kind+':'+level;
+    if(a.assetKey===key)return;
+    const t=await template(kind,level,premium);
     if(this.cars.get(a.row.id)!==a)return;
     if(!t)continue;
-    const m=imported(t,a.row);releaseModel(a.model);a.model=m;a.root.add(m.root);a.lod=level;
+    const m=createImportedVehicle(t,a.row);releaseModel(a.model);a.model=m;a.root.add(m.root);a.lod=level;a.assetKey=key;a.shadow=null;
     a.lights.root.visible=false;return;
    }
   })().catch(error=>console.warn('Vehicle import',a.row.kind,error.message||error)).finally(()=>{a.pending=false;});
@@ -358,8 +436,8 @@ export class TrafficView{
    if(a.root.position.distanceTo(target)>12)a.root.position.copy(target);else a.root.position.lerp(target,t);
    a.root.rotation.y+=Math.atan2(Math.sin(r.yaw-a.root.rotation.y),Math.cos(r.yaw-a.root.rotation.y))*t;
    a.root.visible=dist<190||r.id===own;
-   if(a.root.visible)this.load(a,dist<24||r.id===own?0:dist<70?1:2);
-   a.phase=(a.phase+(Number(r.speed)||0)*dt/.34)%(2*Math.PI);
+   if(a.root.visible)this.load(a,dist<38||r.id===own?0:dist<90?1:2);
+   a.phase=(a.phase+(Number(r.speed)||0)*dt/(a.model.wheelRadius||.34))%(2*Math.PI);
    const steer=-(r.steer||0)*.40;
    for(const w of a.model.wheels){
     if(w.pivot){w.pivot.rotation.y=w.front?steer:0;w.spin.rotation.x=-a.phase;}
@@ -370,6 +448,8 @@ export class TrafficView{
      w.node.quaternion.copy(q);
     }
    }
+   if(a.model.steering&&a.model.steeringBase)a.model.steering.quaternion.copy(a.model.steeringBase).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),-steer*2.2));
+   const shadow=dist<42||r.id===own;if(a.shadow!==shadow){a.shadow=shadow;a.model.root.traverse(o=>{if(o.isMesh)o.castShadow=shadow&&!(Array.isArray(o.material)?o.material.some(m=>m.transparent):o.material?.transparent);});}
    a.lights.head.emissiveIntensity=.08+night*2.5;a.lights.rear.emissiveIntensity=r.brake?2.6:.12+night*.6;
    for(let i=0;i<2;i++)a.lights.blink[i].emissiveIntensity=r.indicator===(i===0?-1:1)&&Math.sin(this.time*8)>0?2.3:.04;
    if(a.model.nativeLights){
@@ -382,13 +462,15 @@ export class TrafficView{
    const signature=r.avatar&&dist<70?JSON.stringify(r.avatar):'';
    if(signature!==a.signature){
     if(a.driver)disposeCharacter(a.driver);a.driver=null;a.signature=signature;
-    if(signature){a.driver=createCharacter(r.avatar);a.driver.scale.setScalar(.82);a.driver.position.set(-.43,.24,.10);a.root.add(a.driver);}
+    if(signature){a.driver=createCharacter(r.avatar);a.root.add(a.driver);}
    }
    if(a.driver){
+    const seat=a.model.driver;
+    a.driver.scale.setScalar(seat?.scale||.82);a.driver.position.set(...(seat?.position||[-.43,.24,.10]));
     a.driver.visible=!(r.id===own&&first);
     if(a.driver.visible){resetRoomAvatarPose(a.driver);animateCharacter(a.driver,dt,false,'walk');applyRoomAvatarPose(a.driver,{kind:'sit',hip:.49},null);}
    }
-   if(r.id===own)ownPose={x:a.root.position.x,y:a.root.position.y,z:a.root.position.z,yaw:a.root.rotation.y,speed:r.speed};
+   if(r.id===own)ownPose={x:a.root.position.x,y:a.root.position.y,z:a.root.position.z,yaw:a.root.rotation.y,speed:r.speed,eye:a.model.driver?.eye||[-.43,1.23,0]};
   }
   for(const e of this.departed.values()){
    e.root.position.lerp(new THREE.Vector3(...e.row.position),t);e.root.rotation.y=e.row.yaw;

@@ -1563,7 +1563,7 @@ function frame(now,xrFrame){
   const torch=started&&flashlightOn&&!vr&&!posture?.sleeping?{origin:eye,direction:d}:null;
   if(carPose){
    const a=carPose.yaw,c=Math.cos(a),s=Math.sin(a);
-   if(first){eye=[player.x-.43*c,player.y+1.23,player.z+.43*s];target=[eye[0]-s*10,eye[1]-.22,eye[2]-c*10];}
+   if(first){const [x,y,z]=carPose.eye||[-.43,1.23,0];eye=[player.x+c*x+s*z,player.y+y,player.z-s*x+c*z];target=[eye[0]-s*10,eye[1]-.22,eye[2]-c*10];}
    else{eye=[player.x+s*6.6,player.y+2.8,player.z+c*6.6];target=[player.x-s*2.5,player.y+1.05,player.z-c*2.5];
     const ray=eye.map((v,i)=>v-target[i]),len=Math.hypot(...ray);const hit=freeRay(target,ray.map(v=>v/len),freeObstacles(freeState),len,false,freeState.terrain);
     if(hit&&hit.dist<len-.15){const t=Math.max(.35,hit.dist-.2)/len;eye=target.map((v,i)=>v+ray[i]*t);}

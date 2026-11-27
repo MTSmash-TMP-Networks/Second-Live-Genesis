@@ -1,8 +1,14 @@
 # Second Live – World Genesis
 
-**v0.15.24 · Realistic Vehicles**
+**v0.15.25 · Premium Vehicles**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.25 – Premium-Fahrzeuge
+
+Fünf Originalmodelle der [Realistic Cars Collection von Vinish.dev](https://vinish.dev/free-3d-models/realistic-cars) (CC BY 4.0): Muscle Coupe, Boxy Off-Roader, Luxury SUV, Grand Tourer und Mid-Engine Supercar. Alle fünf sind in der Flotte vertreten; die drei Taxis basieren auf dem Luxury SUV mit gelber Lackierung und Taxischild. Nahansicht und eigenes Fahrzeug nutzen die unveränderten Original-GLBs, weiter entfernte Fahrzeuge nutzen eine reduzierte Detailstufe mit denselben Materialien und Rad-Pivots. Die Innenkamera und NPC-Sitzposition folgen dem jeweiligen Modell; Räder und Lenkrad werden animiert. Die bisherigen Fahrfunktionen und Kollisionsregeln bleiben erhalten.
+
+**Einmaliger Asset-Upload:** `Second-Live-Premium-Vehicles.zip` unverändert in `optional-vehicles/` ablegen bzw. auf GitHub hochladen. Der Docker-Build prüft alle zehn GLBs per SHA-256 und installiert sie ohne externe Fahrzeugdownloads. Ohne ZIP bleiben die bisherigen Fahrzeuge aktiv; eine beschädigte ZIP wird abgelehnt. Lizenz und Quellen stehen im Paket sowie im Smartphone unter Einstellungen. Die Fahrzeugmodelle werden für die vorhandene Arcade-Kollision proportional skaliert, nicht als neue Fahrzeugphysik simuliert.
 
 ## Neu in 0.15.24 – Realistischere Fahrzeuge
 

@@ -1003,3 +1003,38 @@ import {TrafficView,vehicleBlocked,nearestVehicle} from './free_traffic.js';
  traffic.clear();assert.equal(traffic.cars.size,0);assert.equal(scene.children.length,0);
 }
 console.log('Traffic fallback models, rotating wheels, vehicle targeting and cleanup verified');
+
+import {normalizeVehicleTemplate,premiumModelSpec,createImportedVehicle} from './free_traffic.js';
+{
+ const names=['boxy-off-roader','grand-tourer','luxury-suv','mid-engine-supercar','muscle-coupe'];
+ assert.equal(premiumModelSpec('__proto__'),null);
+ for(const name of names){
+  const spec=premiumModelSpec(name),raw=new THREE.Group();
+  const paint=new THREE.MeshPhysicalMaterial({color:0x992222,clearcoat:.8});paint.name=spec.paint;
+  const body=new THREE.Mesh(new THREE.BoxGeometry(...spec.size),paint);body.name='Body';
+  body.position.set(0,spec.minY+spec.size[1]/2,-spec.centerZ);raw.add(body);
+  for(const [i,key] of ['Wheel_FL','Wheel_FR','Wheel_RL','Wheel_RR'].entries()){
+   const wheel=new THREE.Mesh(new THREE.BoxGeometry(.2,.6,.6),new THREE.MeshStandardMaterial());wheel.name=key;
+   wheel.position.set(i%2===0?.7:-.7,.31,i<2?1.3:-1.3);raw.add(wheel);
+  }
+  const steering=new THREE.Group();steering.name='Steering_Wheel';raw.add(steering);
+  steering.position.set(spec.hip[0],spec.hip[1]+.25,spec.hip[2]+.5);
+  const model=normalizeVehicleTemplate(raw,name),d=model.userData.driver;
+  assert.ok(Math.abs(model.scale.x-model.scale.y)<1e-9&&Math.abs(model.scale.y-model.scale.z)<1e-9);
+  const size=new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+  assert.ok(size.x<=1.951&&size.z<=4.801&&size.y<=1.741);
+  assert.ok(d.eye[0]<0&&d.eye[1]>.65&&d.eye[1]<d.roof);
+  assert.ok(d.position.every(Number.isFinite)&&d.scale>0);
+  const front=model.getObjectByName('Wheel_FL').getWorldPosition(new THREE.Vector3());
+  const rear=model.getObjectByName('Wheel_RL').getWorldPosition(new THREE.Vector3());assert.ok(front.z<rear.z);
+  const taxi=name==='luxury-suv';
+  const instance=createImportedVehicle(model,{kind:taxi?'taxi':'sedan',color:'#336699'});
+  assert.equal(instance.wheels.length,4);assert.ok(instance.steering&&instance.steeringBase&&instance.premium);
+  assert.equal(instance.root.getObjectByName('Body').material.color.getHex(),taxi?0xefbd28:0x336699);
+  assert.equal(paint.color.getHex(),0x992222);
+  assert.equal(!!instance.root.getObjectByName('Premium taxi roof sign'),taxi);
+  for(const m of instance.root.userData.ownedMaterials)m.dispose();
+  raw.traverse(o=>{if(o.isMesh){o.geometry.dispose();o.material.dispose();}});
+ }
+}
+console.log('Premium vehicle orientation, proportional scaling, driver seats, steering pivots and taxi repaint verified');

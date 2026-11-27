@@ -66,8 +66,13 @@ RUN python -u download_nature.py /build/polyhaven
 
 # Transcode optional Basis/KTX2 textures outside the browser, preserving meshopt geometry.
 FROM nature AS traffic-assets
-COPY scripts/download_traffic.py ./download_traffic.py
-RUN python -u download_traffic.py /build/polyhaven/vehicles
+COPY scripts/download_traffic.py scripts/bundle_premium_vehicles.py ./
+COPY optional-vehicles/ /build/optional-vehicles/
+RUN python -u bundle_premium_vehicles.py /build/optional-vehicles /build/polyhaven/premium-vehicles \
+    && if [ -f /build/optional-vehicles/Second-Live-Premium-Vehicles.zip ]; then \
+         mkdir -p /build/polyhaven/vehicles && printf '%s\n' '{"provider":"Tevy","files":[]}' > /build/polyhaven/vehicles/manifest.json; \
+       else python -u download_traffic.py /build/polyhaven/vehicles; fi \
+    && rm -rf /build/optional-vehicles
 
 FROM renderer AS door-converted
 COPY --from=traffic-assets /build/polyhaven /build/polyhaven

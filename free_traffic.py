@@ -104,14 +104,16 @@ class Traffic:
         self.terrain=terrain;self.routes=routes(terrain.doc);self.last=clock();self.accumulator=0.;self.cars={};self.departed={}
         if not self.routes:return
         kinds=['sedan','hatchback','suv','sedan','hatchback','suv','sedan','hatchback','taxi','taxi','taxi']
-        colors=['#667785','#a03236','#3e454a','#c6c8c9','#31574d','#4a5e80','#b49c7b','#535764','#efbd28','#efbd28','#efbd28']
+        colors=['#667785','#a03236','#3e454a','#d78c25','#31574d','#4a5e80','#b49c7b','#535764','#efbd28','#efbd28','#efbd28']
+        # All five supplied models are used; the three taxis use the four-door SUV.
+        models=['grand-tourer','muscle-coupe','luxury-suv','mid-engine-supercar','boxy-off-roader','luxury-suv','grand-tourer','muscle-coupe','luxury-suv','luxury-suv','luxury-suv']
         for i,(kind,color) in enumerate(zip(kinds,colors)):
             route=self.routes[i%4];d=(.19+.29*(i//4))*route.length
             x,z,yaw=route.sample(d)
             parked=i==10
             if parked:x,z,yaw=5.8,133.,0.
             driver={**DEFAULT_AVATAR,'model':[1,14,5,18,3,13,4,16,2,15,6][i]}
-            c={'id':'car-'+str(i+1),'kind':kind,'color':color,'position':[x,terrain.height(x,z)+.085,z],'yaw':yaw,
+            c={'id':'car-'+str(i+1),'kind':kind,'assetModel':models[i],'color':color,'position':[x,terrain.height(x,z)+.085,z],'yaw':yaw,
                'speed':0.,'steer':0.,'brake':True,'indicator':0,'route':i%4,'d':d,'cruise':5.6+(i%3)*.65,
                'owner':None,'ownerLife':None,'npc':True,'avatar':driver,'parked':parked,'input':[0.,0.],
                'inputAt':self.last,'abandoned':None,'seatSlot':None}
@@ -130,7 +132,7 @@ class Traffic:
         rows=[]
         for c in self.cars.values():
             owner=players.get(c['owner'])
-            rows.append({**{k:c[k] for k in ('id','kind','color','position','yaw','speed','steer','brake','indicator','npc')},
+            rows.append({**{k:c[k] for k in ('id','kind','assetModel','color','position','yaw','speed','steer','brake','indicator','npc')},
                          'driverSlot':owner['slot'] if owner else None,'avatar':owner['avatar'] if owner else c['avatar'] if c['npc'] else None})
         return rows
     def get(self,row):
