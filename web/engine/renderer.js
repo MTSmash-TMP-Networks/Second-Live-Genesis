@@ -24,6 +24,7 @@ export { HOTEL_LAYOUT };
 import { buildPortalDoor, PORTAL_SIDES } from './portal_door.js';
 import { HotelLobbyView } from './hotel_lobby.js';
 export { villageParts, villageColliders } from './village_damage.js';
+export {terrainHeight,terrainWater} from './free_terrain.js';
 export { FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeBlocked, freeGround, freeExitAt, freeSecretDoorAt, freeSkyState, freeModelPlacement, freeBox } from './free_world.js';
 import { NeighborRoomView, HallFacadeViews, hotelOpenings } from './hotel_connections.js';
 export { hotelOpenings } from './hotel_connections.js';

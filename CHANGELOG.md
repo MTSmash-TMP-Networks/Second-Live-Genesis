@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.19 – Natural Landscape
+- Persistente, gemeinsam genutzte Höhenkarte für Berge, Geländephysik, Baumstandorte und Bauobjekte; Migrationsschutz für vorhandene Bebauung.
+- Drei kurvige Wanderwege, zwei flache Seen mit animierter, wetterabhängiger Wasseroberfläche und Minimap-Darstellung; langsameres Waten.
+- Zusätzliche Wälder und feinere, instanzierte Blatt- und Nadelgruppen; optionale CC0-Fototexturen von Poly Haven mit Prüfsummen und lokalem Fallback, ohne schwere Originalbaum-Geometrien.
+- Neue Gelände- und Geometrie-Regressionstests; Wetter und Dorfbestand bleiben erhalten.
+
 ## 0.15.18 – Hotel Corridor
 - Alle 24 Flurtüren mit vorhandenen Eichen-Fototexturen, separaten gefasten Türblättern und Zargen, Schattenfugen, Kartenlesern, Metallhebeln, Türspionen und kleineren Zimmer- und Namensschildern. Free-World-Eingang als zweiflügelige Metalltür mit satinierten Glasflächen und Griffen.
 - Dreidimensionale Milchglas-Wandleuchten mit Metallfassung und runde versenkte Deckenstrahler. Warmes lokales Licht an echten Lampenpositionen mit einem festen Pool aus sieben Decken- und vier Wandlichtquellen; keine zusätzlichen Schattenkarten. Geometrie je Material zusammengefasst und zwischen Wiederholungen geteilt, vorhandene Fototexturen unverändert.

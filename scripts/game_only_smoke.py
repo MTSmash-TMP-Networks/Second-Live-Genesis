@@ -35,6 +35,26 @@ def room_model_fixture(change=None):
     return struct.pack('<IIIII',0x46546c67,2,28+len(js)+len(vertices),len(js),0x4e4f534a)+js+struct.pack('<II',len(vertices),0x004e4942)+vertices
 
 class GameOnlyTest(unittest.TestCase):
+    def test_natural_terrain_persistence_and_migration(self):
+        import sqlite3
+        from free_terrain import Terrain, build_terrain, load_terrain, CONFIG, N
+        from village import make_scenery
+        t=Terrain(build_terrain());self.assertEqual(len(t.heights),N*N)
+        self.assertGreater(max(t.heights),1000);self.assertEqual(len(t.doc['lakes']),2)
+        for lake in t.doc['lakes']:self.assertGreater(t.water(lake['x'],lake['z']),0)
+        old=make_scenery();new=make_scenery(t)
+        self.assertGreater(len(new),len(old));self.assertEqual([r['id'] for r in new[:len(old)]],[r['id'] for r in old])
+        for row in new:
+            if row['kind']=='tree':
+                b,s=row['bounds'];self.assertAlmostEqual(b[1],t.height(b[0]+s[0]/2,b[2]+s[2]/2),places=4)
+        x,z,*_=CONFIG['hills'][0];b=[x-2,0,z-2];s=[4,3,4]
+        lake=CONFIG['lakes'][0];protected=[(b,s),([lake['x']-1,0,lake['z']-1],[2,3,2])]
+        with sqlite3.connect(':memory:') as db:
+            migrated=load_terrain(db,protected);self.assertEqual(migrated.max_height(b,s),0)
+            self.assertEqual(len(migrated.doc['lakes']),1)
+            self.assertEqual(load_terrain(db,[]).doc,migrated.doc)
+
+
     def test_account_cookie_survives_restart_and_reauth_preserves_room(self):
         import sqlite3
         from world_capture import digest

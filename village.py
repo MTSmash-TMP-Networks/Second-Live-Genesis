@@ -60,7 +60,7 @@ def sidewalk_height(x,z):
 def overlap(a,s,b,t):
     return all(x<y+v and x+u>y for x,u,y,v in zip(a,s,b,t))
 
-def make_scenery():
+def make_scenery(terrain=None):
     rows=[]
     for side,x in enumerate((-80,-50)):
         for i,z in enumerate((-49,-30,-11)):
@@ -83,10 +83,32 @@ def make_scenery():
             tree(x,z)
     for x,z in [(20,110),(-28,116),(-57,91),(72,100),(105,60),(126,18),(88,-20),(55,-72),(93,-105),(10,-115),(-35,-126),(-105,-119),(-132,-40),(-122,53),(-88,75),(32,53),(112,125),(-120,119),(125,-125),(23,-32)]:
         tree(x,z)
+    if terrain is not None:
+        from free_terrain import CONFIG, trail_distance, lake_radius
+        # Preserve all old tree IDs and XZ coordinates. Additional trees are
+        # on a separate deterministic grid around the new natural features.
+        existing=[(r['bounds'][0][0]+r['bounds'][1][0]/2,r['bounds'][0][2]+r['bounds'][1][2]/2) for r in rows if r['kind']=='tree']
+        extra=random.Random(987311)
+        for ix in range(-138,141,7):
+            for iz in range(-138,141,7):
+                x=ix+extra.uniform(-2.,2.);z=iz+extra.uniform(-2.,2.)
+                if not any(math.hypot((x-cx)/rx,(z-cz)/rz)<1.12 for cx,cz,rx,rz,peak in CONFIG['hills']) and not any(lake_radius(x,z,l)<1.8 for l in terrain.doc['lakes']):continue
+                if abs(x)>142 or abs(z)>142 or trail_distance(x,z)<2.4:continue
+                if any(lake_radius(x,z,l)<1.10 for l in terrain.doc['lakes']):continue
+                if any((x-a)**2+(z-b)**2<4.0**2 for a,b in existing):continue
+                if extra.random()<.15:continue
+                h=round(extra.uniform(7.5,15.),2);w=round(extra.uniform(.48,.93),2)
+                rows.append({'id':f'nature-tree-{ix+150}-{iz+150}','kind':'tree','variant':extra.randrange(3),'height':h,
+                             'bounds':[[round(x-w/2,2),0,round(z-w/2,2)],[w,round(h*.65,2),w]],'hp':100})
+                existing.append((x,z))
+        for row in rows:
+            if row['kind']!='tree':continue
+            b,s=row['bounds'];b[1]=round(terrain.height(b[0]+s[0]/2,b[2]+s[2]/2),4)
     return rows
 
 class Village:
-    def __init__(self,path,blocks,clock,wall_clock=time.time):
+    def __init__(self,path,blocks,clock,wall_clock=time.time,terrain=None):
+        self.terrain=terrain
         self.path=path
         self.rows={}
         self.clock=clock
@@ -99,7 +121,7 @@ class Village:
                 db.execute('ALTER TABLE village_state ADD COLUMN regrow_at REAL')
             saved={i:(hp,due) for i,hp,due in db.execute('SELECT id,hp,regrow_at FROM village_state')}
             wall_now=self.wall_clock()
-            for row in make_scenery():
+            for row in make_scenery(terrain):
                 key=row['id'];b,s=row['bounds']
                 # Never overwrite existing player builds during migration.
                 if key not in saved:
@@ -169,7 +191,7 @@ class Village:
             if now>=due:
                 if not self.set_door(row,False,now,players,solid_rows,body_box):self.door_hold[key]=now+1.
     def walk_height(self,x,z):
-        height=sidewalk_height(x,z)
+        height=max(sidewalk_height(x,z),self.terrain.height(x,z) if self.terrain is not None else 0.)
         for row in self.structure.rows.values():
             b,s=row['bounds'];top=b[1]+s[1]*.025
             if not b[0]-.25<=x<=b[0]+s[0]+.25 or not b[2]-.25<=z<=b[2]+s[2]+.25:continue

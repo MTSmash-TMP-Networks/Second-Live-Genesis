@@ -3,6 +3,8 @@ import layout from './free_world_layout.json';
 import {RoomModels} from './room_customization.js';
 import {VillageView} from './village.js';
 import {FreeWeather} from './free_weather.js';
+import {terrainHeight,terrainMaxHeight,terrainRay,terrainWater,terrainGeometry,trailGeometry,lakeGeometry,validTerrain} from './free_terrain.js';
+import {NatureSurface} from './free_nature.js';
 import {VillageNpcMotion,villageFallPose,villagePrismOverlap,villagePrismRay,villagePrismTop,villageSurfaceIntact,patchVillageShader} from './village_damage.js';
 import {FreeWorldImpactMarks} from './impact_marks.js';
 import {villageTreeParts} from './village_landscape.js';
@@ -29,13 +31,15 @@ export function freeRayBox(origin,direction,min,size,limit=layout.reach){
  }
  return normal&&lo<=limit?{dist:lo,normal,point:origin.map((o,i)=>o+direction[i]*lo)}:null;
 }
-export function freeRay(origin,direction,blocks,limit=layout.reach,includeDestroyed=false){
+export function freeRay(origin,direction,blocks,limit=layout.reach,includeDestroyed=false,terrain=blocks.terrain){
  let best=null;
  const consider=(hit,id=null)=>{if(hit&&hit.dist>=0&&(!best||hit.dist<best.dist))best={...hit,id};};
  for(const block of blocks){if(!includeDestroyed&&(block.hp??100)<=0)continue;consider((block.poly||block.pieces)?villagePrismRay(origin,direction,block,limit):freeRayBox(origin,direction,...freeBox(block),limit),block.id);}
+ const groundHit=terrainRay(terrain,origin,direction,Math.min(limit,best?.dist??limit));
+ consider(groundHit);
  // The six interior faces accept blocks (not an invisible room shell).
  for(let i=0;i<3;i++)for(const side of [-1,1]){
-  if(i===1&&side>0)continue; // Open sky, not a placeable invisible ceiling.
+  if(i===1&&(side>0||terrain))continue; // The heightfield replaces the old flat ground.
   const plane=i===1?0:side*H,d=direction[i];
   if(Math.abs(d)<1e-9||side*d<=0)continue;
   const t=(plane-origin[i])/d;if(t<0||t>limit)continue;
@@ -50,8 +54,10 @@ export function freePlacement(hit,dims,blocks,players=[]){
  const axis=hit.normal.reduce((best,v,i)=>Math.abs(v)>Math.abs(hit.normal[best])?i:best,0);
  if(axis<0)return null;
  const cell=hit.point.map((v,i)=>i===axis?Math.round(v/G)-(hit.normal[i]<0?dims[i]:0):Math.floor(v/G-dims[i]/2+.5));
+ if(hit.terrain&&blocks.terrain){const p=cell.map(v=>v*G),s=dims.map(v=>v*G);cell[1]=Math.ceil((terrainMaxHeight(blocks.terrain,p,s)-1e-6)/G);}
  if(!validFreeGrid(cell,dims))return null;
  const min=cell.map(x=>x*G),size=dims.map(x=>x*G);
+ if(min[1]+.002<terrainMaxHeight(blocks.terrain,min,size))return null;
  if(blocks.some(b=>(b.poly||b.pieces)?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))))return null;
  if(players.some(p=>freeOverlap(min,size,[p[0]-.28,p[1]+.015,p[2]-.28],[.56,1.6,.56])))return null;
  return {cell,dims:[...dims]};
@@ -62,6 +68,7 @@ export function freeModelPlacement(p,extent,rotation,blocks,players=[]){
  const pose={p:p.map(v=>Math.round(v*10000)/10000),extent:Math.round(extent*100)/100,rotation};
  const [min,size]=freeBox({pose});
  if(min.some((v,i)=>v<[-H,0,-H][i]-.000001||v+size[i]>[H,Y,H][i]+.000001)||freeOverlap(min,size,[-3,0,H-6],[6,Y,6]))return null;
+ if(min[1]+.002<terrainMaxHeight(blocks.terrain,min,size))return null;
  if(blocks.some(b=>(b.poly||b.pieces)?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))))return null;
  if(players.some(p=>freeOverlap(min,size,[p[0]-.28,p[1]+.015,p[2]-.28],[.56,1.6,.56])))return null;
  return {pose};
@@ -79,11 +86,11 @@ export function freeSecretDoorAt(origin,direction,blocks=[]){
  return !!hit&&hit.id===null&&hit.normal[2]===1;
 }
 export function freeBlocked(blocks,x,y,z,height=1.6){
- if(Math.abs(x)>H-.28||Math.abs(z)>H-.28||y+height>Y+.001)return true;
+ if(Math.abs(x)>H-.28||Math.abs(z)>H-.28||y+height>Y+.001||y<terrainHeight(blocks.terrain,x,z)-.025)return true;
  const min=[x-.25,y+.015,z-.25],size=[.5,height-.015,.5];return blocks.some(b=>(b.hp??100)>0&&((b.poly||b.pieces)?villagePrismOverlap(min,size,b):freeOverlap(min,size,...freeBox(b))));
 }
 export function freeGround(blocks,x,y,z){
- let ground=0;
+ let ground=terrainHeight(blocks.terrain,x,z);
  for(const b of blocks){if((b.hp??100)<=0)continue;if(b.poly||b.pieces){ground=Math.max(ground,villagePrismTop(b,x,y,z));continue;}const [min,s]=freeBox(b),top=min[1]+s[1];
   if(top<=y+.025&&x>min[0]-.25&&x<min[0]+s[0]+.25&&z>min[2]-.25&&z<min[2]+s[2]+.25)ground=Math.max(ground,top);
  }
@@ -177,7 +184,7 @@ export class FreeWorldView{
   this.cube=new THREE.BoxGeometry(1,1,1);this.materials=new Map();this.textures=new Map();this.meshes=[];this.peers=new Map();this.local=null;this.revision=-1;this.generation=0;
   const box=(p,s,m)=>{const o=new THREE.Mesh(this.cube,m);o.position.set(...p);o.scale.set(...s);this.scene.add(o);return o;};
   this.impactMarks=new FreeWorldImpactMarks();this.impactProxies=new Map();this.impactProxyMaterial=new THREE.MeshBasicMaterial({visible:false});
-  this.terrainRoot=new THREE.Group();this.scene.add(this.terrainRoot);this.terrainRoot.add(grassSurface());this.village=new VillageView(this.scene);
+  this.terrainRoot=new THREE.Group();this.scene.add(this.terrainRoot);this.ground=grassSurface();this.terrainRoot.add(this.ground);this.village=new VillageView(this.scene);this.nature=new NatureSurface(this.terrainRoot,this.ground,this.village.forest);this.terrain=null;
   const iceMap=terrainTexture(false),iceMaterial=new THREE.MeshStandardMaterial({map:iceMap,vertexColors:true,roughness:.84});
   for(let side=0;side<4;side++)this.terrainRoot.add(iceCliff(side,iceMaterial));
   iceGate(this.scene,box,iceMap);
@@ -189,6 +196,7 @@ export class FreeWorldView{
   this.hitFlash=0;
  }
  syncClock(phase,now,weatherTime){if(Number.isFinite(phase)){this.phase=phase;this.phaseTime=now;}this.weather.sync(weatherTime,now);}
+ setTerrain(doc){if(!validTerrain(doc))return;this.terrain=doc;this.nature.set(doc);this.weather.terrain=doc;}
  setWeatherObstacles(rows){this.weather.setObstacles(rows);}
  updateSky(now,player){
   const phase=(this.phase+Math.max(0,now-this.phaseTime)/1000/layout.daySeconds)%1,s=freeSkyState(phase),d=new THREE.Vector3(...s.direction).normalize();
@@ -202,11 +210,12 @@ export class FreeWorldView{
   this.scene.fog.near=145-105*weather.rain;this.scene.fog.far=330-205*weather.rain;
   this.skyMat.uniforms.top.value.copy(top);this.skyMat.uniforms.horizon.value.copy(horizon);this.scene.background.copy(horizon);this.scene.fog.color.copy(horizon);
   this.sunlight.castShadow=d.y>.16&&weather.cloud<.86;
-  this.sunlight.target.position.set(Math.round(player.x/2)*2,0,Math.round(player.z/2)*2);
+  this.sunlight.target.position.set(Math.round(player.x/2)*2,terrainHeight(this.terrain,player.x,player.z),Math.round(player.z/2)*2);
   this.sunlight.position.copy(this.sunlight.target.position).addScaledVector(d,95);this.sunlight.color.set(0xfff4dc).lerp(new THREE.Color(0xffa76b),s.twilight*.75);this.sunlight.intensity=2.1*Math.max(0,d.y)**.45*(1-.78*weather.cloud)*(1-.25*weather.storm);
   this.moonlight.position.copy(d).multiplyScalar(-150);this.moonlight.intensity=.22*s.night*(1-.7*weather.cloud);
   this.hemi.color.set(0x99b3ec).lerp(new THREE.Color(0xffffff),s.day);this.hemi.intensity=(.20+1.6*s.day)*(1-.38*weather.cloud-.20*weather.storm)+weather.flash*.9;
   const darkness=Math.max(s.night,weather.storm*.72);
+  this.nature.update(now,s.day,weather,horizon,d);
   this.village.roads.setNight(darkness);
   this.village.interior.setNight(darkness,player);
   return phase;
@@ -381,7 +390,7 @@ export class FreeWorldView{
   }else if(this.local)this.local.visible=false;
  }
  clear(){
-  this.weather.clear();
+  this.weather.clear();this.weather.terrain=null;this.terrain=null;this.nature.clear();
   this.impactMarks.clearWorld();for(const root of this.impactProxies.values())root.removeFromParent();this.impactProxies.clear();
   this.generation++;this.revision=-1;this.village.rubble.clear();this.showPreview(null);this.sync([]);this.models.clear();this.modelRefs.clear();
   while(this.effects.items.length)this.effects.remove(0);this.effects.light.intensity=0;

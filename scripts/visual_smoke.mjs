@@ -927,3 +927,18 @@ import {rainLoopWave,soundWave} from './audio.js';
 }
 
 console.log('Free World weather cycle, lightning, shelters and audio checks passed');
+
+import {terrainHeight,terrainRay,terrainGeometry,terrainMaxHeight,trailGeometry,lakeGeometry} from './free_terrain.js';
+import {foliageCardTexture,foliageCluster} from './free_nature.js';
+{
+ const heights=new Array(151*151).fill(0),k=75*151+75;heights[k]=1000;heights[k+1]=1200;heights[k+151]=1400;heights[k+152]=1600;
+ const doc={version:1,half:150,step:2,heights,lakes:[],paths:[]};
+ assert.equal(terrainHeight(doc,.5,.5),11.5);assert.equal(terrainHeight(doc,1.5,1.5),14.5);
+ assert.equal(terrainMaxHeight(doc,[0,0,0],[2,1,2]),16);
+ assert.ok(Math.abs(terrainRay(doc,[.5,20,.5],[0,-1,0],20).dist-8.5)<.001);
+ const mesh=terrainGeometry(doc);assert.equal(mesh.attributes.position.count,151*151);assert.equal(mesh.attributes.position.getY(k),10);mesh.dispose();
+ const trail=trailGeometry(doc,[[-5,-5],[0,0],[5,5]]);assert.ok(trail.attributes.position.array.every(Number.isFinite));trail.dispose();
+ const lake=lakeGeometry(doc,{x:20,z:30,rx:6,rz:5,level:.72});assert.ok(lake.attributes.position.count>0);assert.ok(Math.abs(lake.attributes.position.getY(0)-.726)<.001);lake.dispose();
+ for(const pine of [false,true]){const map=foliageCardTexture(pine),g=foliageCluster(pine);assert.ok(map.image.data.some((v,i)=>i%4===3&&v===0));assert.ok(map.image.data.some((v,i)=>i%4===3&&v===255));assert.ok(g.attributes.position.count>32);map.dispose();g.dispose();}
+}
+console.log('Natural terrain, lake geometry and foliage checks passed');

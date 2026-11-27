@@ -6,6 +6,7 @@ from world_capture import CaptureError
 from room_models import image_size, MAX_FILE, validate_glb
 from village import Village, ROADS
 from village_structure import prism_overlap, prism_ray
+from free_terrain import load_terrain
 
 L=json.loads((Path(__file__).resolve().parent/'web/engine/free_world_layout.json').read_text('utf8'))
 HALF=int(L['half']/L['grid']);HEIGHT=int(L['height']/L['grid'])
@@ -135,7 +136,11 @@ class FreeWorld:
                 self.blocks[i]={'id':i,'owner':owner,'ownerSlot':slot,'cell':json.loads(cell),'dims':json.loads(dims),'texture':texture,'hp':hp,'model':model,'pose':json.loads(pose) if pose else None,'version':version}
             db.execute('CREATE TABLE IF NOT EXISTS free_impacts(id INTEGER PRIMARY KEY AUTOINCREMENT,target TEXT NOT NULL,mark TEXT NOT NULL)')
             db.execute('CREATE INDEX IF NOT EXISTS free_impacts_target ON free_impacts(target,id)')
-        self.village=Village(self.path,[block_bounds(b) for b in self.blocks.values()],self.clock)
+            # Persist the migrated terrain once; subsequent player builds do
+            # not move hills, lakes or trees on a server restart.
+            legacy_boxes=[block_bounds(b) for b in self.blocks.values()]
+            self.terrain=load_terrain(db,legacy_boxes)
+        self.village=Village(self.path,legacy_boxes,self.clock,terrain=self.terrain)
         self.revision=1
     def clear_impacts(self,targets):
         with closing(sqlite3.connect(self.path)) as db,db:
@@ -189,6 +194,7 @@ class FreeWorld:
         wall_time=time.time()
         peers=[{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life','score','weapon')},'seat':r.get('seat')} for key,r in self.players.items() if key!=player]
         out={'slot':row['slot'],'hp':row['hp'],'life':row['life'],'score':row['score'],'position':row['position'],'yaw':row['yaw'],'corrected':corrected,'peers':peers,'online':len(self.players),'revision':self.revision,'notice':notice,'seat':row.get('seat'),'textures':self.own_textures(player),'dayPhase':(wall_time%L['daySeconds'])/L['daySeconds'],'weatherTime':wall_time}
+        if revision<0:out['terrain']=self.terrain.doc
         out['npcs']=self.village.snapshot()
         out['corpses']=self.village.corpses(self.clock())
         if revision!=self.revision:
@@ -262,7 +268,7 @@ class FreeWorld:
             if not p or p['hp']<=0 or self.village.walk_height(x,z)<y-.005:
                 self.stand(row,now,True)
     def blocked(self,p,height=1.6):
-        if abs(p[0])>L['half']-.28 or abs(p[2])>L['half']-.28 or p[1]<0 or p[1]+height>L['height']+.001:return True
+        if abs(p[0])>L['half']-.28 or abs(p[2])>L['half']-.28 or p[1]<self.terrain.height(p[0],p[2])-.025 or p[1]+height>L['height']+.001:return True
         b,s=self.body_box(p,height)
         return any(prism_overlap(b,s,o) for o in self.solid_rows())
     def update(self,row,data,now):
@@ -281,13 +287,20 @@ class FreeWorld:
         if math.hypot(p[0]-old[0],p[2]-old[2])>elapsed*6.4+.48 or abs(p[1]-old[1])>elapsed*9+.5 or self.blocked(p,height):return True
         # Client locomotion, bounded on the host; sample the swept path as well.
         steps=max(1,min(48,math.ceil(math.dist(old,p)/.20)))
-        if abs(old[1]-p[1])<.025 and any(self.blocked([a+(b-a)*i/steps for a,b in zip(old,p)],height) for i in range(1,steps)):return True
+        if abs(old[1]-p[1])<.025:
+            for i in range(1,steps):
+                q=[a+(b-a)*i/steps for a,b in zip(old,p)]
+                ground=self.terrain.height(q[0],q[2])
+                if ground-q[1]>.20:return True
+                q[1]=max(q[1],ground)
+                if self.blocked(q,height):return True
         row.update(position=[round(x,4) for x in p],yaw=math.remainder(yaw,2*math.pi),stance=stance,move_at=now)
         return False
     def validate_placement(self,row,cell,dims,pose,exclude=None):
         b,s=block_bounds({'cell':cell,'dims':dims,'pose':pose})
         need(distance_to_box([row['position'][0],row['position'][1]+1.4,row['position'][2]],b,s)<=L['reach'],'Objekt ausser Reichweite')
         need(not any(x['id']!=exclude and overlap(b,s,*block_bounds(x)) for x in self.blocks.values()),'Stellplatz belegt',409)
+        need(b[1]+.002>=self.terrain.max_height(b,s),'Bauobjekt ragt in das Gelaende',409)
         need(not any(prism_overlap(b,s,o) for o in self.village.solids()),'Baum oder Gebaeude im Stellplatz',409)
         for other in [*self.players.values(),*self.village.snapshot()]:
             need(not overlap(b,s,*self.body_box(other['position'],1.6)),'Spieler im Stellplatz',409)
@@ -419,12 +432,13 @@ class FreeWorld:
                         grid_box(tc,td)
                     pos,size=block_bounds({'cell':tc,'dims':td,'pose':tp})
                     occupied=any(o['id']!=b['id'] and overlap(pos,size,*block_bounds(o)) for o in self.blocks.values())
-                    supported=pos[1]<=.0001
+                    terrain_top=self.terrain.max_height(pos,size)
+                    supported=abs(pos[1]-terrain_top)<.025
                     for o in self.blocks.values():
                         if o['id']==b['id'] or o['hp']<=0:continue
                         op,os=block_bounds(o)
                         if abs(op[1]+os[1]-pos[1])<.0001 and all(pos[j]<op[j]+os[j] and pos[j]+size[j]>op[j] for j in (0,2)):supported=True
-                    if not occupied and supported and not any(prism_overlap(pos,size,o) for o in self.village.solids()) and not any(overlap(pos,size,*self.body_box(r['position'])) for r in [*self.players.values(),*self.village.snapshot()]):cell,dims,pose=tc,td,tp
+                    if not occupied and supported and pos[1]+.002>=terrain_top and not any(prism_overlap(pos,size,o) for o in self.village.solids()) and not any(overlap(pos,size,*self.body_box(r['position'])) for r in [*self.players.values(),*self.village.snapshot()]):cell,dims,pose=tc,td,tp
                 except CaptureError:pass
         with closing(sqlite3.connect(self.path)) as db,db:db.execute('UPDATE blocks SET hp=?,cell=?,dims=?,pose=?,version=version+1 WHERE id=?',(hp,json.dumps(cell),json.dumps(dims),json.dumps(pose) if pose else None,b['id']))
         b.update(hp=hp,cell=cell,dims=dims,pose=pose,version=b['version']+1);self.revision+=1
@@ -439,7 +453,8 @@ class FreeWorld:
         need(.99<=norm<=1.01,'Ungueltige Blickrichtung')
         direction=[x/norm for x in direction];row['pulse_at']=now
         p=row['position'];origin=[p[0],p[1]+(1.02 if row['stance']=='crouch' else 1.58),p[2]]
-        reach=L['weaponReach'][weapon];stop=shot_boundary(origin,direction,reach);boundary_hit=stop<reach
+        reach=L['weaponReach'][weapon];stop=shot_boundary(origin,direction,reach)
+        stop=min(stop,self.terrain.ray(origin,direction,stop));boundary_hit=stop<reach
         target_block=None
         for b in self.blocks.values():
             if b['hp']<=0:continue

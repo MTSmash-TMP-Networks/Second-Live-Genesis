@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {terrainHeight,terrainWater} from './free_terrain.js';
 
 export const WEATHER_SECONDS=480;
 const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
@@ -139,7 +140,7 @@ export class FreeWeather{
     const [a,b,c,d]=this.drops[i],speed=11+6*d;
     const x=player.x+mod(a*range+travel-player.x,range)-range/2,z=player.z+mod(b*range-time*.55-player.z,range)-range/2;
     if(Math.abs(x)>150||Math.abs(z)>150)continue;
-    const y=base+mod(c*high-time*speed,high),roof=this.shelter.height(x,z);
+    const y=base+mod(c*high-time*speed,high),roof=Math.max(this.shelter.height(x,z),terrainHeight(this.terrain,x,z),terrainWater(this.terrain,x,z));
     if(y<roof+.035)continue;
     const length=.23+.32*d;
     this.positions.set([x,y,z,x-wind/speed*length,y+length,z+.55/speed*length],n*6);n++;

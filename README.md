@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.18 · Hotel Corridor**
+**v0.15.19 · Natural Landscape**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.19 – Natürliche Landschaft
+
+Vier begehbare Bergregionen, verzweigte Wanderwege, zwei flache Seen mit bewegter Wasseroberfläche und zusätzliche Wälder. Server und Browser verwenden dieselbe dauerhaft gespeicherte Höhenkarte. Alte Gebäude und Bauobjekte bleiben unverändert; bei der Migration werden betroffene Geländeabschnitte abgeflacht und überlappende Seen ausgelassen. Verzweigte Bäume mit transparenten Blatt- und Nadelgruppen ersetzen die massiven Kugelkronen. Optionale CC0-Texturen von Poly Haven werden beim Docker-Build geprüft und lokal abgelegt; bei Ausfällen bleiben prozedurale Ersatzmaterialien aktiv. Keine externen Browser-Anfragen.
 
 ## Neu in 0.15.18 – Realistischer Hotelflur
 

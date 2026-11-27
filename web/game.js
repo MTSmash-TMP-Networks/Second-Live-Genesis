@@ -1,4 +1,4 @@
-import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell, PORTAL_SIDES, FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeModelPlacement, freeBlocked, freeGround, freeExitAt, freeSecretDoorAt, freeWorldDoorAt, villageParts, villageColliders } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell, PORTAL_SIDES, FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeModelPlacement, freeBlocked, freeGround, freeExitAt, freeSecretDoorAt, freeWorldDoorAt, villageParts, villageColliders, terrainHeight, terrainWater } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
@@ -722,7 +722,7 @@ function freeDoorTarget(s){
  if(!s)return null;
  const rows=(s.scenery||[]).filter(r=>r.door&&(r.damage?.[448]||0)<4);
  const triggers=rows.map(r=>({id:r.id+':448',bounds:r.door.bounds,hp:100}));
- const hit=freeRay(playerEye(),dir(),freeObstacles(s).concat(triggers),3.2);
+ const hit=freeRay(playerEye(),dir(),freeObstacles(s).concat(triggers),3.2,false,s.terrain);
  return hit?rows.find(r=>r.id+':448'===hit.id)||null:null;
 }
 function freeChairTarget(s){
@@ -735,7 +735,7 @@ function freeRepairTarget(s,whole=false){
  const parts=s.structureParts||[],trees=(s.scenery||[]).filter(b=>b.kind==='tree'&&b.hp>0);
  const origin=playerEye(),reach=FREE_LAYOUT.reach;
  const nearby=parts.filter(b=>b.bounds[0].every((v,i)=>origin[i]>=v-reach&&origin[i]<=v+b.bounds[1][i]+reach));
- const hit=freeRay(origin,dir(),s.blocks.concat(trees,nearby),reach,true);
+ const hit=freeRay(origin,dir(),s.blocks.concat(trees,nearby),reach,true,s.terrain);
  if(!hit)return null;
  const part=parts.find(b=>b.id===hit.id);
  if(part){
@@ -748,7 +748,7 @@ function freeRepairTarget(s,whole=false){
 function rebuildFreeObstacles(s){
  const scenery=s.scenery||[],buildings=scenery.filter(b=>b.kind==='house'||b.kind==='shop');
  s.structureParts=buildings.flatMap(villageParts).filter(p=>!p.doorLeaf||p.stage>0||!buildings.find(b=>b.id===p.building)?.door?.open);
- s.obstacles=s.blocks.concat(scenery.filter(b=>b.kind==='tree'&&b.hp>0),buildings.flatMap(villageColliders));
+ s.obstacles=s.blocks.concat(scenery.filter(b=>b.kind==='tree'&&b.hp>0),buildings.flatMap(villageColliders));s.obstacles.terrain=s.terrain;
 }
 function freeHeldExtent(h=freeHeld){return h?.kind==='model'?h.extent:Math.max(...(h?.dims||[1]))*FREE_LAYOUT.grid;}
 function resizeFreeObject(h,delta){
@@ -757,7 +757,7 @@ function resizeFreeObject(h,delta){
 }
 function freeCandidate(h=freeHeld,mode='place'){
  const s=freeState;if(!s||!h)return null;
- const blocks=freeObstacles(s).filter(b=>b.id!==h.id),players=[[player.x,player.y,player.z],...s.peers.map(p=>p.position),...(s.npcs||[]).map(p=>p.position)],d=dir(),eye=playerEye();
+ const blocks=freeObstacles(s).filter(b=>b.id!==h.id);blocks.terrain=s.terrain;const players=[[player.x,player.y,player.z],...s.peers.map(p=>p.position),...(s.npcs||[]).map(p=>p.position)],d=dir(),eye=playerEye();
  if(h.kind==='block')return freePlacement(freeRay(eye,d,blocks),h.dims,blocks,players);
  const e=h.extent,half=e/2,flat=Math.hypot(d[0],d[2]),fx=flat>.0001?d[0]/flat:Math.sin(player.yaw),fz=flat>.0001?d[2]/flat:Math.cos(player.yaw);
  let x=player.x+fx*(1+e*.74),z=player.z+fz*(1+e*.74),y=0,rotation=h.rotation;
@@ -831,6 +831,7 @@ function applyFreeSnapshot(s,result,initial=false){
    $('weaponstatus').textContent='Unbewaffnet';first=true;player.pitch=-.12;
   }else if(!result.notice&&!initial)$('notice').textContent='Aufgestanden';
  }
+ if(result.terrain){s.terrain=result.terrain;freeView.setTerrain(s.terrain);}
  s.hp=result.hp;s.life=result.life;s.score=result.score;s.online=result.online;s.peers=result.peers||[];s.textures=result.textures||[];
  if(Array.isArray(result.blocks)){s.blocks=result.blocks;s.revision=result.revision;freeView.setBlocks(s.blocks,s.revision,loadFreeTexture,loadFreeModel);if(freeHeld?.id){const b=s.blocks.find(b=>b.id===freeHeld.id);if(!b||!b.hp||b.version!==freeHeld.version){freeHeld=null;$('notice').textContent='Objekt wurde verändert. Bitte erneut aufnehmen.';}}}
  if(Array.isArray(result.scenery)){s.scenery=result.scenery;s.villageRoads=result.villageRoads||[];freeView.village.set(s.scenery,s.villageRoads);}
@@ -1410,6 +1411,7 @@ function updateMinimap(now,vr=false){
  ctx.save();ctx.translate(96,96);ctx.scale(scale,scale);ctx.rotate(player.yaw);ctx.translate(-player.x,-player.z);
  if(freeState){
   const half=FREE_LAYOUT.half;box([0,0,0],[half*2,0,half*2],'#496340');
+  const terrain=freeState.terrain;if(terrain){for(const lake of terrain.lakes){ctx.beginPath();ctx.ellipse(lake.x,lake.z,lake.rx*.83,lake.rz*.83,0,0,Math.PI*2);ctx.fillStyle='#477e90';ctx.fill();}ctx.strokeStyle='#c2af87';ctx.lineWidth=1.65;for(const path of terrain.paths){ctx.beginPath();path.forEach(([x,z],i)=>i?ctx.lineTo(x,z):ctx.moveTo(x,z));ctx.stroke();}}
   for(const b of freeState.blocks){if((b.hp??100)<=0)continue;const {p,s}=freeBounds(b);box(p,s,b.model?'#e1bc85':b.texture?'#9bbeb8':'#a9b5bc');}
   for(const x of [-half,half])box([x,0,0],[.2,0,2*half],'#abb8bf');
   for(const z of [-half,half])box([0,0,z],[2*half,0,.2],'#abb8bf');box([0,0,half],[2,0,.3],'#68e3b7');
@@ -1458,11 +1460,14 @@ function frame(now,xrFrame){
     let f=vr?xrInput.move[1]:Number(keys.has('KeyW'))-Number(keys.has('KeyS'))+touchMove[1],s=vr?xrInput.move[0]:Number(keys.has('KeyD'))-Number(keys.has('KeyA'))+touchMove[0],a=player.yaw+(vr?xrInput.headYaw:0);
     const canStand=player.stance!=='crouch'||!coll(player.x,player.z,1.6);
     player.stance=movementStance(!vr&&wantsCrouch(),!vr&&wantsSprint(),Math.hypot(f,s)>.03,canStand,!!held||scopeZoom);
-    const m=movementSpeed(player.stance,vr)*dt/Math.max(1,Math.hypot(f,s)),dx=(-Math.sin(a)*f+Math.cos(a)*s)*m,dz=(-Math.cos(a)*f-Math.sin(a)*s)*m;
+    const inWater=freeState&&terrainWater(freeState.terrain,player.x,player.z)>player.y+.12;
+    const m=movementSpeed(player.stance,vr)*(inWater?.55:1)*dt/Math.max(1,Math.hypot(f,s)),dx=(-Math.sin(a)*f+Math.cos(a)*s)*m,dz=(-Math.cos(a)*f-Math.sin(a)*s)*m;
     if(freeState){
-     // Walk over shallow floor edges without requiring a jump; never step through a wall.
+     // Walk over continuous terrain and shallow floor edges without a jump.
      const obstacles=freeObstacles(freeState),height=player.stance==='crouch'?1.12:1.6;
      const move=(x,z)=>{
+      const from=terrainHeight(freeState.terrain,player.x,player.z),to=terrainHeight(freeState.terrain,x,z),onGround=player.y<=from+.07&&Math.abs(player.vy)<.2;
+      if(onGround&&Math.abs(to-from)<=.22&&!freeBlocked(obstacles,x,to,z,height)){player.x=x;player.z=z;player.y=to;player.vy=0;return;}
       if(!freeBlocked(obstacles,x,player.y,z,height)){player.x=x;player.z=z;return;}
       if(Math.abs(player.vy)>.1)return;
       const top=freeGround(obstacles,x,player.y+.20,z);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {foliageCardTexture,foliageCluster} from './free_nature.js';
 
 function seeded(seed){let s=seed>>>0;return ()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};}
 function hash(s){let n=2166136261;for(const c of s)n=Math.imul(n^c.charCodeAt(0),16777619);return n>>>0;}
@@ -135,7 +136,7 @@ function pineSkirt(){
 }
 export function villageTreeParts(row){
  const [b,s]=row.bounds,x=b[0]+s[0]/2,z=b[2]+s[2]/2,h=row.height,rad=s[0]/2,r=seeded(hash(row.id)),parts=[];
- const add=(type,p,size,angle=0,tint=1,axis=null)=>parts.push({type,p,s:size,a:angle,tint,axis});
+ const add=(type,p,size,angle=0,tint=1,axis=null)=>parts.push({type,p:[p[0],p[1]+b[1],p[2]],s:size,a:angle,tint,axis});
  if(row.hp<=0){add('stump',[x,.21,z],[rad,.42,rad]);return parts;}
  const tint=.77+.22*r(),leafTint=tint*(.76+.24*row.hp/100),lean=(r()-.5)*.38;
  add('trunk',[x,h*.355,z],[rad,h*.71,rad],r()*6.28,.86+.14*r());
@@ -165,13 +166,21 @@ export function villageTreeParts(row){
 export class VillageForest{
  constructor(root){
   this.root=root;this.key='';
-  const trunk=new THREE.CylinderGeometry(.44,1,1,10,3),branch=new THREE.CylinderGeometry(.16,1,1,7,1);
-  this.geometry={trunk,branch,leafA:variedGeometry(new THREE.IcosahedronGeometry(1,2),.17),leafB:variedGeometry(new THREE.IcosahedronGeometry(1,2),.22),pine:pineSkirt(),stump:new THREE.CylinderGeometry(.83,1,1,10)};
+  const trunk=new THREE.CylinderGeometry(.44,1,1,12,4),branch=new THREE.CylinderGeometry(.16,1,1,7,1);
+  this.geometry={trunk,branch,leafA:foliageCluster(false,0),leafB:foliageCluster(false,1),pine:foliageCluster(true),stump:new THREE.CylinderGeometry(.83,1,1,12)};
   const bark=new THREE.MeshStandardMaterial({map:surfaceTexture('bark'),roughness:1});
-  this.material={trunk:bark,branch:bark,leafA:new THREE.MeshStandardMaterial({color:0x436b34,vertexColors:true,roughness:1}),leafB:new THREE.MeshStandardMaterial({color:0x55733c,vertexColors:true,roughness:1}),pine:new THREE.MeshStandardMaterial({color:0x365c3b,vertexColors:true,roughness:1,side:THREE.DoubleSide}),stump:[bark,new THREE.MeshStandardMaterial({color:0xbda178,roughness:1}),bark]};
+  const leaves=foliageCardTexture(false),needles=foliageCardTexture(true);
+  const foliage=(map,color)=>new THREE.MeshStandardMaterial({map,color,vertexColors:true,alphaTest:.36,roughness:.95,side:THREE.DoubleSide});
+  this.material={trunk:bark,branch:bark,leafA:foliage(leaves,0xffffff),leafB:foliage(leaves,0xe4edce),pine:foliage(needles,0xdbe6d4),stump:[bark,new THREE.MeshStandardMaterial({color:0xbda178,roughness:1}),bark]};
+ }
+ setNatureTextures({bark,barkNormal,leaf,pine}){
+  if(bark){this.material.trunk.map?.dispose();this.material.trunk.map=bark;this.material.trunk.needsUpdate=true;}
+  if(barkNormal){this.material.trunk.normalMap=barkNormal;this.material.trunk.normalScale.set(.7,.7);this.material.trunk.needsUpdate=true;}
+  if(leaf){this.material.leafA.map?.dispose();for(const key of ['leafA','leafB']){this.material[key].map=leaf;this.material[key].needsUpdate=true;}}
+  if(pine){this.material.pine.map?.dispose();this.material.pine.map=pine;this.material.pine.needsUpdate=true;}
  }
  set(rows){
-  const key=rows.map(r=>r.id+':'+r.hp).join('|');if(key===this.key)return;this.key=key;
+  const key=rows.map(r=>r.id+':'+r.hp+':'+r.variant+':'+r.height+':'+r.bounds.flat().join(',')).join('|');if(key===this.key)return;this.key=key;
   for(const m of [...this.root.children]){m.removeFromParent();m.dispose?.();}
   const groups={};for(const row of rows)for(const part of villageTreeParts(row))(groups[part.type]??=[]).push(part);
   const dummy=new THREE.Object3D(),up=new THREE.Vector3(0,1,0),axis=new THREE.Vector3();
