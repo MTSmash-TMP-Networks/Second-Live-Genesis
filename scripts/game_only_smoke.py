@@ -35,6 +35,67 @@ def room_model_fixture(change=None):
     return struct.pack('<IIIII',0x46546c67,2,28+len(js)+len(vertices),len(js),0x4e4f534a)+js+struct.pack('<II',len(vertices),0x004e4942)+vertices
 
 class GameOnlyTest(unittest.TestCase):
+    def test_country_road_layout_and_terrain_migration(self):
+        import sqlite3
+        from contextlib import closing
+        from free_terrain import Terrain, build_terrain, load_terrain, clear_road_tree, road_layout, lake_radius
+        from village import make_scenery, Village
+        original=build_terrain()
+        # Reproduce a database written by 0.15.19/0.15.20.
+        old={k:v for k,v in original.items() if k not in ('roads','roadVersion','roadJunctions')}
+        with closing(sqlite3.connect(':memory:')) as db,db:
+            db.execute('CREATE TABLE free_terrain (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL)')
+            db.execute('INSERT INTO free_terrain VALUES(1,?)',(json.dumps(old),))
+            terrain=load_terrain(db,[])
+            self.assertEqual({k:terrain.doc[k] for k in old},old)
+            self.assertEqual(terrain.doc['roads'],road_layout())
+            self.assertEqual(load_terrain(db,[]).doc,terrain.doc)
+        roads=terrain.doc['roads']
+        self.assertEqual(len(roads),6)
+        nodes={}
+        for r in roads:
+            a,b=tuple(r['points'][0]),tuple(r['points'][-1])
+            nodes.setdefault(a,set()).add(b);nodes.setdefault(b,set()).add(a)
+        # The existing main village street completes the loop.
+        a,b=(-65,-58.5),(-65,-1.5)
+        nodes[a].add(b);nodes[b].add(a)
+        pending=[(0,150)];seen=set()
+        while pending:
+            n=pending.pop()
+            if n in seen:continue
+            seen.add(n);pending.extend(nodes[n]-seen)
+        self.assertEqual(seen,set(nodes))
+        total=0.
+        for r in roads:
+            self.assertGreaterEqual(r['width'],6)
+            for a,b in zip(r['points'],r['points'][1:]):
+                length=math.dist(a,b);total+=length
+                steps=max(1,math.ceil(length))
+                for i in range(steps+1):
+                    t=i/steps;x=a[0]+(b[0]-a[0])*t;z=a[1]+(b[1]-a[1])*t
+                    self.assertLessEqual(max(abs(x),abs(z)),150)
+                    for lake in terrain.doc['lakes']:
+                        self.assertGreater(lake_radius(x,z,lake),1+(r['width']/2+.65)/min(lake['rx'],lake['rz']))
+                    for hx in (-80,-50):
+                        for hz in (-49,-30,-11):
+                            self.assertGreater(math.hypot(max(0,abs(x-hx)-5),max(0,abs(z-hz)-5)),r['width']/2+.65)
+        self.assertGreater(total,750);self.assertLess(total,850)
+        trees=[r for r in make_scenery(terrain) if r['kind']=='tree']
+        suppressed=[r for r in trees if clear_road_tree(terrain.doc,r)]
+        self.assertTrue(suppressed);self.assertGreater(len(trees)-len(suppressed),150)
+        tree=suppressed[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'roads.sqlite3'
+            legacy=Village(path,[],lambda:10.,terrain=Terrain(old))
+            self.assertIn(tree['id'],legacy.rows)
+            with closing(sqlite3.connect(path)) as db,db:
+                db.execute('UPDATE village_state SET hp=10 WHERE id=?',(tree['id'],))
+            migrated=Village(path,[],lambda:11.,terrain=terrain)
+            self.assertNotIn(tree['id'],migrated.rows)
+            self.assertEqual(len([r for r in migrated.rows.values() if r['kind']!='tree']),6)
+            with closing(sqlite3.connect(path)) as db:
+                self.assertEqual(db.execute('SELECT hp FROM village_state WHERE id=?',(tree['id'],)).fetchone()[0],10)
+
     def test_natural_terrain_persistence_and_migration(self):
         import sqlite3
         from contextlib import closing

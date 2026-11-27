@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.21 – Country Roads
+- Rund 800 Meter neue Landstraßen, Hotelzufahrt und verbundene Rundstrecke mit beiden Dorfanschlüssen. Drei Verzweigungen, Kiesrandstreifen, weiße Randlinien und gestrichelte Mittellinien. Drei gebündelte, geländefolgende Meshes mit wetterabhängiger Asphaltoberfläche; Minimap zeigt die tatsächlichen Trassen.
+- Straßen-Metadaten werden einmalig in bestehende Gelände-Datensätze migriert, ohne Höhenwerte, Seen, Wege oder Spielerbauten zu ändern. Deterministische Freihaltung der Trassen von Baumstämmen; gespeicherte Baumzustände bleiben erhalten.
+- Regressionstests für Migration, zusammenhängende Trassen, Abstand zu Seen und Gebäuden, Baumzustand, Geometrie, Markierungen und Wetterdarstellung. Keine neuen Downloads oder Änderungen am Hotel.
+
 ## 0.15.20 – Natural Landscape Hotfix
 - Free-World-Snapshot normalisiert fehlende, null- und nicht-ganzzahlige Revisionen auf den vollständigen Snapshot; verhindert den Python-TypeError aus 0.15.19. Gültige Revisionen behalten die bisherige inkrementelle Synchronisation.
 - Regressionstest für fehlende und fehlerhafte Revisionen, Erstbeitritt und unveränderte Revision. Temporäre SQLite-Verbindung im Gelände-Migrationstest wird explizit geschlossen.

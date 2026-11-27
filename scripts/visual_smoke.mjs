@@ -942,3 +942,40 @@ import {foliageCardTexture,foliageCluster} from './free_nature.js';
  for(const pine of [false,true]){const map=foliageCardTexture(pine),g=foliageCluster(pine);assert.ok(map.image.data.some((v,i)=>i%4===3&&v===0));assert.ok(map.image.data.some((v,i)=>i%4===3&&v===255));assert.ok(g.attributes.position.count>32);map.dispose();g.dispose();}
 }
 console.log('Natural terrain, lake geometry and foliage checks passed');
+
+import {roadStations,roadGeometry,NatureSurface} from './free_nature.js';
+{
+ const heights=new Array(151*151).fill(0);
+ // Exact uniform grade: all road vertices must stay on the heightfield,
+ // including the wider gravel shoulder, round junctions and white paint.
+ for(let z=0;z<151;z++)for(let x=0;x<151;x++)heights[z*151+x]=x*8;
+ const doc={version:1,half:150,step:2,heights,lakes:[],paths:[],roadJunctions:[[0,0]],
+  roads:[{id:'west',width:6,points:[[-25,-8],[-15,-8],[-8,-3],[0,0]]},
+         {id:'east',width:6,points:[[0,0],[12,0],[25,5]]},
+         {id:'south',width:6,points:[[0,0],[0,25]]}]};
+ const stations=roadStations(doc.roads[0].points);
+ assert.equal(stations[0].x,-25);assert.equal(stations.at(-1).x,0);
+ assert.ok(stations.every((s,i)=>Number.isFinite(s.ox)&&Number.isFinite(s.oz)&&(!i||s.d>stations[i-1].d)));
+ const layers=roadGeometry(doc);
+ for(const [kind,g] of Object.entries(layers)){
+  const p=g.attributes.position,n=g.attributes.normal;
+  assert.ok(p.count>0&&g.index.count>0);
+  for(let i=0;i<p.count;i++){
+   const h=p.getY(i)-terrainHeight(doc,p.getX(i),p.getZ(i));
+   assert.ok(h>.06&&h<.11,kind+' follows the actual terrain');
+   assert.ok(n.getY(i)>.75,kind+' faces upward');
+   if(kind==='paint')assert.ok(Math.hypot(p.getX(i),p.getZ(i))>3.0,'markings stop at the intersection');
+  }
+  g.dispose();
+ }
+ const root=new THREE.Group(),tex=new THREE.DataTexture(new Uint8Array([100,120,90,255]),1,1);
+ const flat=new THREE.PlaneGeometry(300,300),ground=new THREE.Mesh(flat,new THREE.MeshStandardMaterial({map:tex}));root.add(ground);
+ const nature=new NatureSurface(root,ground,{});
+ nature.set(doc);
+ assert.equal(nature.details.children.filter(m=>m.name.startsWith('Country roads /')).length,3);
+ nature.update(1000,1,{rain:1,storm:.5},new THREE.Color(0xabccee),new THREE.Vector3(0,1,0));
+ assert.ok(nature.roadMaterials.asphalt.roughness<.6);
+ nature.clear();assert.equal(nature.details.children.length,0);assert.equal(ground.geometry,flat);
+ nature.set(doc);assert.equal(nature.details.children.length,3);nature.clear();
+}
+console.log('Country roads, terrain-following meshes, junction markings and wet asphalt verified');

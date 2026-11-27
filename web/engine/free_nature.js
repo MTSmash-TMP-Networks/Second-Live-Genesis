@@ -57,10 +57,108 @@ function waterMaterial(){
 }
 function noImpact(mesh){mesh.userData.noImpact=true;return mesh;}
 
+// The host already rounded the road centerlines. Subdivide those exact
+// polylines and use bounded miter joins so trees, map and pavement agree.
+export function roadStations(points){
+ const p=[];
+ for(const v of points)if(!p.length||Math.hypot(v[0]-p.at(-1)[0],v[1]-p.at(-1)[1])>1e-6)p.push(v);
+ if(p.length<2)return [];
+ const normals=[],lengths=[];
+ for(let i=1;i<p.length;i++){
+  const dx=p[i][0]-p[i-1][0],dz=p[i][1]-p[i-1][1],len=Math.hypot(dx,dz);
+  lengths.push(len);normals.push([-dz/len,dx/len]);
+ }
+ const offsets=p.map((_,i)=>{
+  if(i===0)return normals[0];if(i===p.length-1)return normals.at(-1);
+  const a=normals[i-1],b=normals[i],x=a[0]+b[0],z=a[1]+b[1],len=Math.hypot(x,z);
+  if(len<1e-6)return b;
+  const nx=x/len,nz=z/len,m=Math.min(1.25,1/Math.max(.25,nx*b[0]+nz*b[1]));
+  return [nx*m,nz*m];
+ });
+ const stations=[];let d=0;
+ for(let i=0;i<lengths.length;i++){
+  const n=Math.max(1,Math.ceil(lengths[i]/.45)),a=p[i],b=p[i+1],u=offsets[i],v=offsets[i+1];
+  for(let j=0;j<n;j++){
+   const t=j/n;stations.push({x:a[0]+(b[0]-a[0])*t,z:a[1]+(b[1]-a[1])*t,
+    ox:u[0]+(v[0]-u[0])*t,oz:u[1]+(v[1]-u[1])*t,d:d+lengths[i]*t});
+  }
+  d+=lengths[i];
+ }
+ const last=p.at(-1),off=offsets.at(-1);stations.push({x:last[0],z:last[1],ox:off[0],oz:off[1],d});return stations;
+}
+const ROAD_LIFT={shoulder:.074,asphalt:.085,paint:.097};
+function roadBuilder(doc){
+ const position=[],uv=[],index=[];
+ const vertex=(x,z,lift)=>{
+  const i=position.length/3;
+  position.push(x,terrainHeight(doc,x,z)+lift,z);uv.push(x/2.4,z/2.4);return i;
+ };
+ const strip=(stations,left,right,lift)=>{
+  if(stations.length<2)return;
+  const cols=Math.max(1,Math.ceil((right-left)/.45)),first=position.length/3;
+  for(const s of stations)for(let j=0;j<=cols;j++){
+   const o=left+(right-left)*j/cols;vertex(s.x+s.ox*o,s.z+s.oz*o,lift(s));
+  }
+  for(let i=0;i<stations.length-1;i++)for(let j=0;j<cols;j++){
+   const a=first+i*(cols+1)+j,b=a+cols+1;index.push(a,a+1,b,a+1,b+1,b);
+  }
+ };
+ const disk=(x,z,radius,lift)=>{
+  const steps=48,rings=Math.ceil(radius/.45),center=vertex(x,z,lift),first=position.length/3;
+  for(let k=1;k<=rings;k++)for(let j=0;j<steps;j++){
+   const angle=j*2*Math.PI/steps,r=radius*k/rings;vertex(x+Math.cos(angle)*r,z+Math.sin(angle)*r,lift);
+  }
+  for(let j=0;j<steps;j++)index.push(center,first+(j+1)%steps,first+j);
+  for(let k=0;k<rings-1;k++)for(let j=0;j<steps;j++){
+   const a=first+k*steps+j,b=first+k*steps+(j+1)%steps,c=a+steps,d=b+steps;
+   index.push(a,b,c,b,d,c);
+  }
+ };
+ return {strip,disk,finish(){
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(position,3));
+  g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(index);
+  g.computeVertexNormals();if(position.length)g.computeBoundingSphere();return g;
+ }};
+}
+export function roadGeometry(doc){
+ const shoulder=roadBuilder(doc),asphalt=roadBuilder(doc),paint=roadBuilder(doc);
+ const junctions=doc.roadJunctions||[],roads=doc.roads||[];
+ for(const road of roads){
+  const stations=roadStations(road.points);if(stations.length<2)continue;
+  const length=stations.at(-1).d,w=road.width/2;
+  // Taper into the old village pavement without moving the road or sidewalks.
+  const lift=(kind,s)=>{
+   const distance=road.id==='village-south'?s.d:road.id==='village-north'?length-s.d:2;
+   return ROAD_LIFT[kind]-.060*Math.max(0,1-distance/2);
+  };
+  shoulder.strip(stations,-w-.65,w+.65,s=>lift('shoulder',s));
+  asphalt.strip(stations,-w,w,s=>lift('asphalt',s));
+  for(let i=1;i<stations.length;i++){
+   const a=stations[i-1],b=stations[i],x=(a.x+b.x)/2,z=(a.z+b.z)/2,d=(a.d+b.d)/2;
+   // No confusing lane markings through junctions or directly at the hotel door.
+   if(junctions.some(p=>Math.hypot(x-p[0],z-p[1])<5.6)||(road.id==='hotel-south'&&d<3))continue;
+   const l=s=>lift('paint',s);
+   for(const side of [-1,1]){
+    const off=side*(w-.24);paint.strip([a,b],off-.05,off+.05,l);
+   }
+   if(d%7.5<3)paint.strip([a,b],-.06,.06,l);
+  }
+ }
+ // Cover the common endpoints with tessellated pavement, not stacked boxes.
+ for(const [x,z] of junctions){
+  const connected=roads.filter(r=>[r.points[0],r.points.at(-1)].some(p=>p&&Math.hypot(p[0]-x,p[1]-z)<.01));
+  if(connected.length<2)continue;
+  const r=Math.max(...connected.map(q=>q.width/2));
+  shoulder.disk(x,z,r+.65,ROAD_LIFT.shoulder+.002);
+  asphalt.disk(x,z,r,ROAD_LIFT.asphalt+.003);
+ }
+ return {shoulder:shoulder.finish(),asphalt:asphalt.finish(),paint:paint.finish()};
+}
+
 export class NatureSurface{
  constructor(root,ground,forest){
   this.root=root;this.ground=ground;this.forest=forest;this.flat=ground.geometry;this.flatMaterial=ground.material;
-  this.details=new THREE.Group();this.details.name='Trails and lakes';root.add(this.details);
+  this.details=new THREE.Group();this.details.name='Trails, lakes and country roads';root.add(this.details);
   const grass=ground.material.map.clone();grass.repeat.set(1,1);grass.needsUpdate=true;
   this.uniforms={natureForest:{value:materialTexture(371,[102,86,64])},natureRock:{value:materialTexture(567,[119,116,105])}};
   this.groundMaterial=new THREE.MeshStandardMaterial({map:grass,roughness:1,vertexColors:true});
@@ -74,6 +172,11 @@ export class NatureSurface{
   this.groundMaterial.customProgramCacheKey=()=> 'free-nature-terrain-v1';
   this.pathMaterial=new THREE.MeshStandardMaterial({map:materialTexture(923,[127,108,78]),alphaMap:edgeTexture(),transparent:true,alphaTest:.06,depthWrite:false,roughness:1,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2});
   this.waterMaterial=waterMaterial();
+  this.roadMaterials={
+   shoulder:new THREE.MeshStandardMaterial({map:materialTexture(1471,[127,119,105]),roughness:1}),
+   asphalt:new THREE.MeshStandardMaterial({map:materialTexture(5632,[76,78,79]),roughness:.96}),
+   paint:new THREE.MeshStandardMaterial({map:materialTexture(1992,[214,212,199]),roughness:.88})
+  };
   this.doc=null;
   if(typeof document!=='undefined')this.loadAssets().catch(e=>console.warn('Optional nature textures:',e.message));
  }
@@ -106,6 +209,14 @@ export class NatureSurface{
   g.setAttribute('natureBlend',new THREE.Float32BufferAttribute(blend,2));
   this.ground.geometry=g;this.ground.material=this.groundMaterial;this.ground.receiveShadow=true;
   for(const path of doc.paths||[]){const mesh=new THREE.Mesh(trailGeometry(doc,path),this.pathMaterial);mesh.name='Hiking trail';mesh.receiveShadow=true;mesh.renderOrder=1;this.details.add(mesh);}
+  if(doc.roads?.length){
+   const geometries=roadGeometry(doc);
+   for(const [kind,geo] of Object.entries(geometries)){
+    if(!geo.attributes.position.count){geo.dispose();continue;}
+    const mesh=new THREE.Mesh(geo,this.roadMaterials[kind]);mesh.name='Country roads / '+kind;
+    mesh.receiveShadow=true;if(kind==='paint')noImpact(mesh);this.details.add(mesh);
+   }
+  }
   for(const lake of doc.lakes||[]){
    const geo=lakeGeometry(doc,lake);if(!geo.attributes.position.count){geo.dispose();continue;}
    const mesh=noImpact(new THREE.Mesh(geo,this.waterMaterial));mesh.name='Freshwater lake';mesh.renderOrder=3;this.details.add(mesh);
@@ -113,6 +224,9 @@ export class NatureSurface{
  }
  update(now,day,weather,horizon,lightDir){
   const u=this.waterMaterial.uniforms;u.clock.value=(now/1000)%3600;u.daylight.value=day;u.storm.value=weather.storm;u.skyColor.value.copy(horizon);u.lightDir.value.copy(lightDir);
+  const wet=Math.max(0,Math.min(1,weather.rain||0));
+  this.roadMaterials.asphalt.color.setScalar(1-.32*wet);this.roadMaterials.asphalt.roughness=.96-.40*wet;
+  this.roadMaterials.shoulder.color.setScalar(1-.20*wet);
  }
  clear(){
   if(this.ground.geometry!==this.flat)this.ground.geometry.dispose();

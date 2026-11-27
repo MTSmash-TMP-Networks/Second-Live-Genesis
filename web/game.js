@@ -1411,7 +1411,19 @@ function updateMinimap(now,vr=false){
  ctx.save();ctx.translate(96,96);ctx.scale(scale,scale);ctx.rotate(player.yaw);ctx.translate(-player.x,-player.z);
  if(freeState){
   const half=FREE_LAYOUT.half;box([0,0,0],[half*2,0,half*2],'#496340');
-  const terrain=freeState.terrain;if(terrain){for(const lake of terrain.lakes){ctx.beginPath();ctx.ellipse(lake.x,lake.z,lake.rx*.83,lake.rz*.83,0,0,Math.PI*2);ctx.fillStyle='#477e90';ctx.fill();}ctx.strokeStyle='#c2af87';ctx.lineWidth=1.65;for(const path of terrain.paths){ctx.beginPath();path.forEach(([x,z],i)=>i?ctx.lineTo(x,z):ctx.moveTo(x,z));ctx.stroke();}}
+  const terrain=freeState.terrain;
+  if(terrain){
+   for(const lake of terrain.lakes){ctx.beginPath();ctx.ellipse(lake.x,lake.z,lake.rx*.83,lake.rz*.83,0,0,Math.PI*2);ctx.fillStyle='#477e90';ctx.fill();}
+   ctx.strokeStyle='#c2af87';ctx.lineWidth=1.65;
+   for(const path of terrain.paths){ctx.beginPath();path.forEach(([x,z],i)=>i?ctx.lineTo(x,z):ctx.moveTo(x,z));ctx.stroke();}
+   ctx.lineJoin='round';ctx.lineCap='butt';
+   for(const road of terrain.roads||[]){
+    ctx.beginPath();road.points.forEach(([x,z],i)=>i?ctx.lineTo(x,z):ctx.moveTo(x,z));
+    ctx.strokeStyle='#9e9b8c';ctx.lineWidth=road.width+1.3;ctx.stroke();
+    ctx.strokeStyle='#5e6162';ctx.lineWidth=road.width;ctx.stroke();
+   }
+   for(const r of freeState.villageRoads||[])if(r.kind==='street')box([r.x,0,r.z],[r.w,0,r.d],'#5e6162');
+  }
   for(const b of freeState.blocks){if((b.hp??100)<=0)continue;const {p,s}=freeBounds(b);box(p,s,b.model?'#e1bc85':b.texture?'#9bbeb8':'#a9b5bc');}
   for(const x of [-half,half])box([x,0,0],[.2,0,2*half],'#abb8bf');
   for(const z of [-half,half])box([0,0,z],[2*half,0,.2],'#abb8bf');box([0,0,half],[2,0,.3],'#68e3b7');

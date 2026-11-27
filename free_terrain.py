@@ -22,6 +22,45 @@ def trail_distance(x,z):
             best=min(best,math.hypot(x-a[0]-dx*t,z-a[1]-dz*t))
     return best
 
+ROAD_LAYOUT_VERSION=1
+ROAD_SHOULDER=.65
+ROAD_TREE_MARGIN=1.25
+
+def road_points(points):
+    """Round the same route on the host for rendering, tree clearance and map."""
+    points=[list(p) for p in points]
+    for _ in range(2):
+        out=[points[0]]
+        for a,b in zip(points,points[1:]):
+            out.extend([[.75*a[i]+.25*b[i] for i in range(2)],
+                        [.25*a[i]+.75*b[i] for i in range(2)]])
+        out.append(points[-1])
+        points=out
+    return points
+
+def road_layout():
+    return [{**r,'points':road_points(r['points'])} for r in CONFIG.get('roads',[])]
+
+def clear_road_tree(doc,row):
+    """Only suppress trees on the new pavement/verge; keep their saved state."""
+    if row.get('kind')!='tree':return False
+    b,s=row['bounds'];x=b[0]+s[0]/2;z=b[2]+s[2]/2
+    # Include trunk width and a modest verge; do not clear the whole canopy.
+    for road in doc.get('roads',[]):
+        radius=road['width']/2+ROAD_SHOULDER+ROAD_TREE_MARGIN+max(s[0],s[2])/2
+        for a,c in zip(road['points'],road['points'][1:]):
+            if x<min(a[0],c[0])-radius or x>max(a[0],c[0])+radius or z<min(a[1],c[1])-radius or z>max(a[1],c[1])+radius:continue
+            dx=c[0]-a[0];dz=c[1]-a[1];ll=dx*dx+dz*dz
+            t=max(0.,min(1.,((x-a[0])*dx+(z-a[1])*dz)/ll)) if ll else 0.
+            if (x-a[0]-t*dx)**2+(z-a[1]-t*dz)**2<radius*radius:return True
+    return False
+
+def ensure_roads(doc):
+    if doc.get('roadVersion')==ROAD_LAYOUT_VERSION:return False
+    # Add road metadata only; never regenerate a persisted heightfield or lakes.
+    doc.update(roadVersion=ROAD_LAYOUT_VERSION,roads=road_layout(),roadJunctions=CONFIG.get('roadJunctions',[]))
+    return True
+
 def lake_radius(x,z,lake):
     return math.hypot((x-lake['x'])/lake['rx'],(z-lake['z'])/lake['rz'])
 
@@ -52,7 +91,9 @@ def build_terrain(blocks=()):
                 d=distance_rect(x,z,b,s)
                 if d<10:y*=smooth((d-3)/7)
             heights.append(max(0,min(2150,round(y*100))))
-    return {'version':CONFIG['version'],'step':STEP,'half':H,'heights':heights,'lakes':lakes,'paths':CONFIG['paths']}
+    doc={'version':CONFIG['version'],'step':STEP,'half':H,'heights':heights,'lakes':lakes,'paths':CONFIG['paths']}
+    ensure_roads(doc)
+    return doc
 
 class Terrain:
     def __init__(self,doc):
@@ -107,7 +148,10 @@ class Terrain:
 def load_terrain(db,blocks):
     db.execute('CREATE TABLE IF NOT EXISTS free_terrain (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL)')
     row=db.execute('SELECT data FROM free_terrain WHERE id=1').fetchone()
-    if row:return Terrain(json.loads(row[0]))
+    if row:
+        doc=json.loads(row[0]);terrain=Terrain(doc)
+        if ensure_roads(doc):db.execute('UPDATE free_terrain SET data=? WHERE id=1',(json.dumps(doc,separators=(',',':')),))
+        return terrain
     doc=build_terrain(blocks)
     db.execute('INSERT INTO free_terrain VALUES(1,?)',(json.dumps(doc,separators=(',',':')),))
     return Terrain(doc)

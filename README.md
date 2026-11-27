@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.20 · Natural Landscape Hotfix**
+**v0.15.21 · Country Roads**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.21 – Landstraßen
+
+Rund 800 Meter neue, zweispurige Landstraßen verbinden den Hotelzugang, das Dorf und die Naturregionen zu einem zusammenhängenden Straßennetz. Sanfte Kurven, körniger Asphalt, Kiesrandstreifen, weiße Randlinien und gestrichelte Mittellinien; an drei Verzweigungen bleiben die Kreuzungsflächen frei von Markierungen. Die Straßen folgen der vorhandenen Höhenkarte und führen zwischen Bergen und Seen hindurch. Bei Regen wird der Asphalt dunkler. Die Minimap zeigt das Straßennetz einschließlich der Dorfstraße. Die Migration ergänzt ausschließlich Straßen-Metadaten und hält Höhenkarte, Seen, Wanderwege sowie Spielerbauten unverändert. Bäume unmittelbar auf der Trasse werden ausgeblendet, ohne ihre gespeicherten Zustände zu löschen. Straßen sind Bodenflächen und keine zusätzlichen Bau- oder Kollisionsobjekte. Keine neuen externen Downloads.
 
 ## Neu in 0.15.20 – Gelände-Hotfix
 

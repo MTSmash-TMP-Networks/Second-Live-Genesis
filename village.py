@@ -121,7 +121,11 @@ class Village:
                 db.execute('ALTER TABLE village_state ADD COLUMN regrow_at REAL')
             saved={i:(hp,due) for i,hp,due in db.execute('SELECT id,hp,regrow_at FROM village_state')}
             wall_now=self.wall_clock()
+            from free_terrain import clear_road_tree
             for row in make_scenery(terrain):
+                # Roadside clearance is deterministic and does not delete or
+                # reset the saved damage/regrowth data of existing tree IDs.
+                if terrain is not None and clear_road_tree(terrain.doc,row):continue
                 key=row['id'];b,s=row['bounds']
                 # Never overwrite existing player builds during migration.
                 if key not in saved:
