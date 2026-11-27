@@ -171,6 +171,37 @@ export async function normalizeDoors(root, decode) {
   return manifest;
 }
 
+// Use the same CSP-safe build-time transcoder for vehicles. The manifest
+// advertises only verified, ready-to-render files, never raw Basis GLBs.
+export async function normalizeTraffic(root, decode) {
+  const folder=path.join(root,'vehicles'),manifestPath=path.join(folder,'manifest.json');
+  if(!fs.existsSync(manifestPath))return null;
+  const manifest=JSON.parse(fs.readFileSync(manifestPath,'utf8')),records=[];
+  for(const record of manifest.files||[]){
+    if(!/^(sedan|hatchback|suv|taxi)-lod[012]\.glb$/.test(record.file||''))continue;
+    const original=path.join(folder,record.file),name=record.file.replace(/\.glb$/,'-png.glb'),dest=path.join(folder,name);
+    try{
+      const source=fs.readFileSync(original);
+      assert(createHash('sha256').update(source).digest('hex')===record.sha256,'Vehicle source checksum mismatch');
+      const result=await convertGLB(source,decode),{doc}=readGLB(result.raw);
+      assert(!(doc.extensionsRequired||[]).includes(BASISU)&&!(doc.images||[]).some(i=>i.mimeType==='image/ktx2'),'Unconverted vehicle texture');
+      const names=new Set((doc.nodes||[]).map(n=>String(n.name||'').toLowerCase()));
+      assert(['wheel_fl','wheel_fr','wheel_rl','wheel_rr'].every(n=>names.has(n)),'Missing wheel pivots');
+      fs.writeFileSync(dest+'.tmp',result.raw);fs.renameSync(dest+'.tmp',dest);
+      records.push({...record,file:name,bytes:result.raw.length,source_sha256:record.sha256,
+       sha256:createHash('sha256').update(result.raw).digest('hex'),texture_format:'png'});
+      console.log(`Traffic ${name}: ${result.converted} Basis textures converted; ${result.raw.length} bytes`);
+    }catch(e){
+      fs.rmSync(dest,{force:true});fs.rmSync(dest+'.tmp',{force:true});
+      console.warn(`Optional vehicle ${record.file}: ${e.message}; fallback remains active`);
+    }finally{fs.rmSync(original,{force:true});}
+  }
+  manifest.files=records;manifest.format='meshopt-png-v1';manifest.ready=records.length;
+  fs.writeFileSync(manifestPath+'.tmp',JSON.stringify(manifest,null,2));fs.renameSync(manifestPath+'.tmp',manifestPath);
+  console.log(`Traffic models ready: ${records.length}/12`);
+  return manifest;
+}
+
 async function main() {
   const root = process.argv[2], basisDir = process.argv[3];
   assert(root && basisDir, 'Usage: node convert_door.mjs ASSET_ROOT BASIS_DIR');
@@ -188,6 +219,7 @@ async function main() {
     return (await decoderPromise)(raw);
   };
   await normalizeDoors(root, decode);
+  await normalizeTraffic(root, decode);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) await main();

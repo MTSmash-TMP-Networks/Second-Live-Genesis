@@ -289,6 +289,7 @@ assert.ok(!game.includes('freeTool')&&!html.includes('free-pvp-mode'));
 assert.ok(game.includes("if(freeState){phone('inventory');return;}"));
 const freeKeyTest=new Function('assert',`
 let blocks=0,removals=0,freeState=null;
+const performance={now:()=>1000};
 const freeTakeBlock=()=>{blocks++;},freeEdit=op=>{if(op==='remove')removals++;};
 `+getPart('function freeKey(','let freeTextureKey=')+`
 for(const key of ['Digit0','Digit1','Digit2','Digit3','KeyI','KeyT','KeyE','KeyB','KeyQ','KeyF','KeyG','KeyR'])assert.equal(freeKey(key),false);
@@ -298,6 +299,7 @@ freeState={vehicle:null};assert.equal(freeKey('Digit4'),true);assert.equal(block
 freeState.vehicle='car-1';
 for(const key of ['Digit0','Digit1','Digit2','Digit3','Digit4','Delete','KeyT','KeyB','KeyQ','KeyF','KeyG','KeyR','KeyW','Space'])assert.equal(freeKey(key),true);
 for(const key of ['KeyE','KeyV','KeyP','KeyI'])assert.equal(freeKey(key),false);
+assert.equal(freeKey('KeyH'),true);assert.equal(freeState.vehicleHintUntil,5000);
 assert.equal(blocks,2);assert.equal(removals,1);
 freeState.vehicle=null;assert.equal(freeKey('Delete'),true);assert.equal(removals,2);
 `);
@@ -485,3 +487,18 @@ const driveTest=new Function('assert',`
  `);
 driveTest(assert);
 console.log('Vehicle driving input, braking, focus loss and weapon restoration checks passed');
+
+const vehicleHintTest=new Function('assert',getPart('function vehicleHintVisible(','function freeKey(')+`
+ const s={vehicle:'car-1',vehicleHintUntil:5000};
+ assert.equal(vehicleHintVisible(s,1000),true);
+ assert.equal(vehicleHintVisible(s,4999),true);
+ assert.equal(vehicleHintVisible(s,5000),false);
+ assert.equal(vehicleHintVisible(s,15000),false);
+ assert.equal(vehicleHintVisible({...s,vehicle:null},1000),false);
+ assert.equal(vehicleHintVisible({vehicle:'car-1'},1000),false);
+ `);
+vehicleHintTest(assert);
+assert.ok(game.includes("hidden=!playing||!vehicleHintVisible(s,now)"));
+assert.ok(game.includes("s.vehicleHintUntil=performance.now()+4000"));
+assert.ok(game.includes("s.vehicleHintUntil=0"));
+console.log('Vehicle control introduction expires and can be recalled without resetting on polling');

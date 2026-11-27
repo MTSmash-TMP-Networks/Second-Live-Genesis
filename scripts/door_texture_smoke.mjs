@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { convertGLB, readGLB, writeGLB, normalizeDoors, makeDecoder, encodePNG } from './convert_door.mjs';
+import { convertGLB, readGLB, writeGLB, normalizeDoors, normalizeTraffic, makeDecoder, encodePNG } from './convert_door.mjs';
 
 const ktx = Buffer.alloc(80);
 Buffer.from('ab4b5458203230bb0d0a1a0a', 'hex').copy(ktx);
@@ -57,3 +57,20 @@ try{
   assert(!fs.existsSync(path.join(root,'door/1k.glb')));assert(!fs.existsSync(path.join(root,'door/2k.glb')));assert(!fs.existsSync(path.join(root,'door/2k-png.glb')));
 }finally{fs.rmSync(root,{recursive:true,force:true});}
 console.log('Door texture conversion, PNG pixel fidelity, manifest integrity and fallback OK (synthetic decoder)');
+
+const vehicleRoot=fs.mkdtempSync(path.join(os.tmpdir(),'sl-traffic-'));
+try{
+ const dir=path.join(vehicleRoot,'vehicles');fs.mkdirSync(dir);
+ const vehicleDoc=structuredClone(doc);vehicleDoc.nodes=['wheel_FL','wheel_FR','wheel_RL','wheel_RR'].map(name=>({name}));
+ const model=writeGLB(vehicleDoc,Buffer.concat([Buffer.from('ABCD'),ktx]));
+ const files=['taxi-lod0.glb','sedan-lod1.glb'].map(file=>{fs.writeFileSync(path.join(dir,file),model);return {file,sha256:createHash('sha256').update(model).digest('hex'),bytes:model.length};});
+ files[1].sha256='bad';
+ fs.writeFileSync(path.join(dir,'manifest.json'),JSON.stringify({files}));
+ const m=await normalizeTraffic(vehicleRoot,decode);
+ assert.equal(m.ready,1);assert.equal(m.format,'meshopt-png-v1');assert.equal(m.files[0].file,'taxi-lod0-png.glb');
+ const output=readGLB(fs.readFileSync(path.join(dir,m.files[0].file))).doc;
+ assert.equal(output.images[0].mimeType,'image/png');assert.deepEqual(output.extensionsRequired,[meshopt]);
+ assert.equal(output.nodes.length,4);assert.ok(!fs.existsSync(path.join(dir,'taxi-lod0.glb')));
+ assert.ok(!fs.existsSync(path.join(dir,'sedan-lod1-png.glb')));
+}finally{fs.rmSync(vehicleRoot,{recursive:true,force:true});}
+console.log('Traffic Basis texture normalization, wheel nodes, meshopt preservation and checksum fallback OK');

@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.23 · AI Traffic Hotfix**
+**v0.15.24 · Realistic Vehicles**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.24 – Realistischere Fahrzeuge
+
+Die Originalfahrzeuge von Tevy nutzen Meshopt-Geometrien und KTX2-Texturen. Der fehlerhafte Ausschluss dieser Formate ist behoben. Beim Docker-Build werden die Texturen mit dem bereits vorhandenen Basis-Konverter in PNG umgewandelt; Three.js lädt die komprimierte Geometrie mit dem eingebauten Meshopt-Decoder. Alle drei Detailstufen sind vorgesehen, mit bevorzugtem LOD0 für das eigene Fahrzeug und in der Nähe. Die Fahrzeug-Manifestdatei führt nur erfolgreich verifizierte, normalisierte Modelle auf. Bei fehlenden Downloads stehen deutlich detailliertere lokale Karosserien mit gebogenen Flächen, Radkästen, Alufelgen, Türfugen, Glas und Lackreflexionen bereit. Die große Fahrsteuerung verschwindet nach vier Sekunden; H blendet sie wieder ein, der kleine Tacho bleibt sichtbar. Keine Änderung an Multiplayer-Fahrphysik oder Spielständen.
 
 ## Neu in 0.15.23 – KI-Straßenverkehr-Hotfix
 

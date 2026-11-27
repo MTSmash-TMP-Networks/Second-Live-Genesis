@@ -196,3 +196,6 @@ body:has(#phone:not([hidden])) #free-hud{display:none!important}
 }
 
 .fw-time-weather{display:flex;flex-direction:column;align-items:flex-end;gap:2px;white-space:nowrap}#free-weather{color:#b6cddd;font-size:10px;line-height:1.1}.mobile #free-weather{font-size:9px}
+
+/* Keep the driving view clear once the short control introduction expires. */
+.free-driving #cross{visibility:hidden}

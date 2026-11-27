@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 BASE='https://tevy.dev/models/'
 SLUGS={'sedan':'family-sedan','hatchback':'hatchback','suv':'suv','taxi':'yellow-taxi'}
-MAX=4*1024*1024
+MAX=12*1024*1024
 WHEELS={'wheel_fl','wheel_fr','wheel_rl','wheel_rr'}
 ALLOWED={'tevy.dev','www.tevy.dev'}
 
@@ -17,7 +17,7 @@ def fetch(url,limit):
         p=urlsplit(u)
         return p.scheme=='https' and p.hostname in ALLOWED and not p.username and not p.password and p.port in (None,443)
     if not valid(url):raise ValueError('Invalid vehicle URL')
-    with urlopen(Request(url,headers={'User-Agent':'SecondLive/0.15.22 asset-build'}),timeout=15) as res:
+    with urlopen(Request(url,headers={'User-Agent':'SecondLive/0.15.24 asset-build'}),timeout=15) as res:
         if not valid(res.geturl()):raise ValueError('Unexpected download host')
         data=res.read(limit+1)
     if len(data)>limit:raise ValueError('Vehicle asset too large')
@@ -30,7 +30,27 @@ def validate(data):
     doc=json.loads(data[20:20+n])
     if doc.get('asset',{}).get('version')!='2.0':raise ValueError('Invalid glTF version')
     if any('uri' in item for k in ('images','buffers') for item in doc.get(k,[])):raise ValueError('External resource URI')
-    if set(doc.get('extensionsRequired',[]))&{'KHR_draco_mesh_compression','EXT_meshopt_compression','KHR_texture_basisu'}:raise ValueError('Unsupported compressed glTF')
+    # Tevy ships meshopt geometry and KTX2/Basis images by design.
+    # The existing offline Basis converter produces PNG; the renderer uses
+    # Three's bundled MeshoptDecoder. Draco is not supported.
+    if 'KHR_draco_mesh_compression' in doc.get('extensionsRequired',[]):raise ValueError('Unsupported Draco glTF')
+    if not doc.get('meshes') or not doc.get('scenes'):raise ValueError('Empty model')
+    offset=20+n;binary=0
+    while offset<len(data):
+        if offset+8>len(data):raise ValueError('Truncated GLB chunk')
+        size,tag=struct.unpack_from('<I4s',data,offset);offset+=8
+        if size%4 or offset+size>len(data):raise ValueError('Invalid GLB chunk')
+        if tag==b'BIN\x00':binary+=size
+        offset+=size
+    buffers=doc.get('buffers',[])
+    if not buffers or buffers[0].get('byteLength',0)>binary:raise ValueError('Missing embedded BIN')
+    for b in buffers[1:]:
+        if b.get('extensions',{}).get('EXT_meshopt_compression',{}).get('fallback') is not True:raise ValueError('Unexpected additional buffer')
+    for v in doc.get('bufferViews',[]):
+        e=v.get('extensions',{}).get('EXT_meshopt_compression')
+        if e:
+            if e.get('buffer')!=0 or not 0<=e.get('byteOffset',0)<=binary or not 0<e.get('byteLength',0)<=binary-e.get('byteOffset',0):raise ValueError('Invalid meshopt view')
+            if not 0<e.get('count',0)*e.get('byteStride',0)<=48*1024*1024:raise ValueError('Meshopt view exceeds budget')
     names={str(n.get('name','')).lower() for n in doc.get('nodes',[])}
     if not WHEELS<=names:raise ValueError('Missing animated wheel nodes')
     tris=0
@@ -57,8 +77,9 @@ def item(root,kind,slug,lod):
 def main(root):
     root=Path(root);root.mkdir(parents=True,exist_ok=True)
     with ThreadPoolExecutor(max_workers=4) as pool:
-        jobs=[pool.submit(item,root,k,s,l) for k,s in SLUGS.items() for l in (1,2)]
+        jobs=[pool.submit(item,root,k,s,l) for k,s in SLUGS.items() for l in (0,1,2)]
         records=[x for j in jobs if (x:=j.result()) is not None]
     (root/'manifest.json').write_text(json.dumps({'provider':'Tevy','license':'CC0-1.0','files':records},indent=2),'utf8')
+    print(f'Traffic downloads: {len(records)}/12 source files',flush=True)
 
 if __name__=='__main__':main(sys.argv[1])

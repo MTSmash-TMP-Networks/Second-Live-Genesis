@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.24 – Realistic Vehicles
+- Erlaubt Meshopt/Basis-GLBs von Tevy; Offline-Konvertierung eingebetteter KTX2-Texturen nach PNG mit Integritätsprüfung, ohne Browser-Worker oder Änderung der CSP. LOD0/1/2, alternative verfügbare Detailstufe, Diagnose bei Importfehlern.
+- Neue geschwungene lokale Karosserien mit Radöffnungen, Alufelgen, Glas, Lackreflexionen und Details; importierte Modelle verdecken die bisherigen Ersatz-Lichtquader. Benannte Lichtmaterialien werden animiert.
+- Die Fahrsteuerung wird nach vier Sekunden ausgeblendet und per H wieder angezeigt. Tacho und Ein-/Ausstieg bleiben aktiv; Fadenkreuz während der Fahrt verborgen. Kurze Statusmeldungen laufen auch beim Sitzen/Fahren ab.
+- Regressionstests für Konvertierung und Fahrzeug-Hinweise; unveränderte Server-Fahrphysik.
+
 ## 0.15.23 – AI Traffic Hotfix
 - Isolierte UI-Testumgebungen für `freeKey`, `freePrimary` und `freeSecondary` initialisieren `freeState`. Behebt den Docker-Fehler `ReferenceError: freeState is not defined` aus 0.15.22.
 - Veraltete Quelltextprüfungen an Fahrzeugzustand, Kollisionsabfrage, NPC- und Peer-Synchronisation angepasst; Tests für gesperrte und wieder freigegebene Tastatur- und Mausaktionen ergänzt. Keine Tests entfernt und keine Fahrzeugfunktionen deaktiviert.

@@ -838,8 +838,9 @@ function applyFreeSnapshot(s,result,initial=false){
  }
  if(vehicleChanged){
   clearControls();freeHeld=null;equipped=null;reloadId=null;reloadLeft=0;renderer?.reload?.(0);updateAmmo();
-  if(s.vehicle){s.returnFirst=first;first=false;player.pitch=0;$('weaponstatus').textContent='Fahrzeug';}
-  else{first=s.returnFirst??true;audio.stopEngine();$('weaponstatus').textContent='Unbewaffnet';}
+  if(s.vehicle){s.returnFirst=first;first=false;player.pitch=0;s.vehicleHintUntil=performance.now()+4000;$('weaponstatus').textContent='Fahrzeug';}
+  else{s.vehicleHintUntil=0;first=s.returnFirst??true;audio.stopEngine();$('weaponstatus').textContent='Unbewaffnet';}
+  document.body.classList.toggle('free-driving',!!s.vehicle);
  }
  if(result.terrain){s.terrain=result.terrain;freeView.setTerrain(s.terrain);}
  s.hp=result.hp;s.life=result.life;s.score=result.score;s.online=result.online;s.peers=result.peers||[];s.textures=result.textures||[];
@@ -884,7 +885,7 @@ async function leaveFreeWorld(){
   if(s.pending)await s.pending.catch(()=>{});
   const result=await freeRequest({action:'leave',lease:s.lease});
   if(freeState!==s)return;
-  chooseWeapon('none');freeState=null;audio.stopWeather();audio.stopEngine();freeView?.clear();document.body.classList.remove('free-playing','free-armed');$('free-hud').hidden=true;
+  chooseWeapon('none');freeState=null;audio.stopWeather();audio.stopEngine();freeView?.clear();document.body.classList.remove('free-playing','free-armed','free-driving','free-notice');$('free-hud').hidden=true;
   lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
   resetHotelViews();renderer.lobby.restoreProjection();renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);renderer.lobby.syncNpc(result.npc);renderer.syncHallFacades(result.facades||[],result.slot,state);
   Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0,stance:'walk',eyeHeight:1.65});
@@ -985,7 +986,8 @@ function freeSecondary(){
  else if(freeHeld)void freeEdit('place');
  else toggleScope();
 }
-function freeKey(code){if(freeState?.vehicle&&!['KeyE','KeyV','KeyP','KeyI'].includes(code))return true;if(code==='Digit4'){freeTakeBlock();return true;}if(code==='Delete'){void freeEdit('remove');return true;}return false;}
+function vehicleHintVisible(s,now){return !!s?.vehicle&&Number.isFinite(s.vehicleHintUntil)&&now<s.vehicleHintUntil;}
+function freeKey(code){if(freeState?.vehicle){if(code==='KeyH'){freeState.vehicleHintUntil=performance.now()+4000;return true;}if(!['KeyE','KeyV','KeyP','KeyI'].includes(code))return true;}if(code==='Digit4'){freeTakeBlock();return true;}if(code==='Delete'){void freeEdit('remove');return true;}return false;}
 let freeTextureKey='',freeLibraryKey='',freeModelUploading=false;
 async function freeRefreshModelLibrary(){
  const s=freeState;if(!s)return;
@@ -1019,14 +1021,16 @@ function updateFreeUI(){
 }
 function updateFreeHint(vr=false){
  const s=freeState;if(!s)return;
- const playing=canPlay()&&!vr;
+ const playing=canPlay()&&!vr,now=performance.now();
+ const msg=$('notice').textContent;if(msg!==freeLastNotice){freeLastNotice=msg;freeNoticeUntil=now+3500;}
+ document.body.classList.toggle('free-notice',playing&&!!msg&&now<freeNoticeUntil);
  if(s.vehicle){
-  $('interaction-prompt').hidden=!playing;$('interaction-name').textContent='Fahrzeug · '+Math.round(Math.abs(s.vehicles.find(v=>v.id===s.vehicle)?.speed||0)*3.6)+' km/h';
+  $('interaction-prompt').hidden=!playing||!vehicleHintVisible(s,now);$('interaction-name').textContent='Fahrzeug · '+Math.round(Math.abs(s.vehicles.find(v=>v.id===s.vehicle)?.speed||0)*3.6)+' km/h';
   $('interaction-actions').textContent='W/S: Gas / Rückwärts · A/D: Lenken · Leertaste: Bremsen · V: Ansicht · E: Aussteigen';
   $('touchInteract').textContent='Aussteigen';$('touchInteract').disabled=!playing||s.editing;
   for(const id of ['touchRepair','touchFire','touchReload','touchJump','touchSprint','touchCrouch','touchSecondary'])$(id).disabled=true;
   $('touchSecondary').hidden=$('touchZoom').hidden=$('held-model-size').hidden=$('touchRotateLeft').hidden=$('touchRotateRight').hidden=true;
-  $('cross').classList.toggle('actionable',playing);$('hint').textContent='Fahren · Steuerung: WASD / Touch-Stick';updateFreeUI();return;
+  $('cross').classList.toggle('actionable',false);$('hint').textContent='Fahren · H: Steuerung · E: Aussteigen';updateFreeUI();return;
  }
  if(s.seat){
   $('interaction-prompt').hidden=!playing;$('interaction-name').textContent='Stuhl · sitzend';$('interaction-actions').textContent='E · Aufstehen';
@@ -1040,9 +1044,7 @@ function updateFreeHint(vr=false){
  const building=h?.kind==='block'&&!h.id,removeTarget=building?freeTarget(true):null,canRemove=building&&freeOwn(removeTarget)&&!removeTarget.model;
  const wholeFix=!h&&!exit&&!gate?freeRepairTarget(s,true):null,fix=wholeFix?.kind==='building-part'&&wholeFix.stage===0?null:wholeFix;
  const structureFix=wholeFix?.kind==='building-part'?wholeFix:null;
- const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!gate&&!door&&!chair&&!own&&!structureFix&&!vehicle&&now>=freeHintUntil);
- const msg=$('notice').textContent;if(msg!==freeLastNotice){freeLastNotice=msg;freeNoticeUntil=now+3500;}
- document.body.classList.toggle('free-notice',playing&&!!msg&&now<freeNoticeUntil);
+ const panel=$('interaction-prompt');panel.hidden=!playing||(!h&&!exit&&!gate&&!door&&!chair&&!own&&!structureFix&&!vehicle&&now>=freeHintUntil);
  $('held-model-size').hidden=!playing||!h;
  $('held-mount').hidden=h?.kind!=='model';$('held-mount').disabled=s.editing||h?.kind!=='model'||!freeCandidate(h,'wall');
  if(h){$('held-model-extent').textContent=freeHeldExtent().toFixed(2).replace('.',',')+' m';$('held-size-minus').disabled=s.editing||freeHeldExtent()<=(h.kind==='model'?.1:.5);$('held-size-plus').disabled=s.editing||freeHeldExtent()>=4;}
