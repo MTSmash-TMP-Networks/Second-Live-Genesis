@@ -5,6 +5,7 @@ import {VillageView} from './village.js';
 import {FreeWeather} from './free_weather.js';
 import {terrainHeight,terrainMaxHeight,terrainRay,terrainWater,terrainGeometry,trailGeometry,lakeGeometry,validTerrain} from './free_terrain.js';
 import {NatureSurface} from './free_nature.js';
+import {TrafficView} from './free_traffic.js';
 import {VillageNpcMotion,villageFallPose,villagePrismOverlap,villagePrismRay,villagePrismTop,villageSurfaceIntact,patchVillageShader} from './village_damage.js';
 import {FreeWorldImpactMarks} from './impact_marks.js';
 import {villageTreeParts} from './village_landscape.js';
@@ -184,7 +185,7 @@ export class FreeWorldView{
   this.cube=new THREE.BoxGeometry(1,1,1);this.materials=new Map();this.textures=new Map();this.meshes=[];this.peers=new Map();this.local=null;this.revision=-1;this.generation=0;
   const box=(p,s,m)=>{const o=new THREE.Mesh(this.cube,m);o.position.set(...p);o.scale.set(...s);this.scene.add(o);return o;};
   this.impactMarks=new FreeWorldImpactMarks();this.impactProxies=new Map();this.impactProxyMaterial=new THREE.MeshBasicMaterial({visible:false});
-  this.terrainRoot=new THREE.Group();this.scene.add(this.terrainRoot);this.ground=grassSurface();this.terrainRoot.add(this.ground);this.village=new VillageView(this.scene);this.nature=new NatureSurface(this.terrainRoot,this.ground,this.village.forest);this.terrain=null;
+  this.terrainRoot=new THREE.Group();this.scene.add(this.terrainRoot);this.ground=grassSurface();this.terrainRoot.add(this.ground);this.village=new VillageView(this.scene);this.nature=new NatureSurface(this.terrainRoot,this.ground,this.village.forest);this.terrain=null;this.traffic=new TrafficView(this.scene);this.trafficNight=0;
   const iceMap=terrainTexture(false),iceMaterial=new THREE.MeshStandardMaterial({map:iceMap,vertexColors:true,roughness:.84});
   for(let side=0;side<4;side++)this.terrainRoot.add(iceCliff(side,iceMaterial));
   iceGate(this.scene,box,iceMap);
@@ -216,6 +217,7 @@ export class FreeWorldView{
   this.hemi.color.set(0x99b3ec).lerp(new THREE.Color(0xffffff),s.day);this.hemi.intensity=(.20+1.6*s.day)*(1-.38*weather.cloud-.20*weather.storm)+weather.flash*.9;
   const darkness=Math.max(s.night,weather.storm*.72);
   this.nature.update(now,s.day,weather,horizon,d);
+  this.trafficNight=darkness;
   this.village.roads.setNight(darkness);
   this.village.interior.setNight(darkness,player);
   return phase;
@@ -390,7 +392,7 @@ export class FreeWorldView{
   }else if(this.local)this.local.visible=false;
  }
  clear(){
-  this.weather.clear();this.weather.terrain=null;this.terrain=null;this.nature.clear();
+  this.weather.clear();this.weather.terrain=null;this.terrain=null;this.nature.clear();this.traffic.clear();
   this.impactMarks.clearWorld();for(const root of this.impactProxies.values())root.removeFromParent();this.impactProxies.clear();
   this.generation++;this.revision=-1;this.village.rubble.clear();this.showPreview(null);this.sync([]);this.models.clear();this.modelRefs.clear();
   while(this.effects.items.length)this.effects.remove(0);this.effects.light.intensity=0;

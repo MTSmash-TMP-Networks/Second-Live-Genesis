@@ -7,6 +7,7 @@ from room_models import image_size, MAX_FILE, validate_glb
 from village import Village, ROADS
 from village_structure import prism_overlap, prism_ray
 from free_terrain import load_terrain
+from free_traffic import Traffic
 
 L=json.loads((Path(__file__).resolve().parent/'web/engine/free_world_layout.json').read_text('utf8'))
 HALF=int(L['half']/L['grid']);HEIGHT=int(L['height']/L['grid'])
@@ -141,6 +142,8 @@ class FreeWorld:
             legacy_boxes=[block_bounds(b) for b in self.blocks.values()]
             self.terrain=load_terrain(db,legacy_boxes)
         self.village=Village(self.path,legacy_boxes,self.clock,terrain=self.terrain)
+        self.traffic=Traffic(self.terrain,self.clock)
+        self.traffic.place_initial(self)
         self.revision=1
     def clear_impacts(self,targets):
         with closing(sqlite3.connect(self.path)) as db,db:
@@ -175,11 +178,16 @@ class FreeWorld:
         before=self.village.door_revision
         self.village.tick(now,self.players,self.blocked,ray_box,self.solid_rows,self.body_box,SPAWN)
         if before!=self.village.door_revision:self.revision+=1
+        self.traffic.tick(self,now)
     def prune(self,now):
         for player,row in list(self.players.items()):
-            if now-row['seen']>=L['leaseSeconds']:self.players.pop(player,None)
+            if now-row['seen']>=L['leaseSeconds']:
+                self.traffic.release(player,row,now);self.players.pop(player,None)
     def disconnect(self,player):
-        with self.lock:self.players.pop(player,None)
+        with self.lock:
+            row=self.players.get(player)
+            if row:self.traffic.release(player,row,self.clock())
+            self.players.pop(player,None)
     def member(self,player,lease=None,require_lease=True):
         self.prune(self.clock());row=self.players.get(player)
         need(row is not None,'Free-World-Sitzung abgelaufen',409)
@@ -197,9 +205,12 @@ class FreeWorld:
         if type(revision) is not int:revision=-1
         self.release_invalid_seats(self.clock())
         wall_time=time.time()
-        peers=[{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life','score','weapon')},'seat':r.get('seat')} for key,r in self.players.items() if key!=player]
+        peers=[{**{k:r[k] for k in ('slot','nickname','avatar','position','yaw','stance','hp','life','score','weapon')},'seat':r.get('seat'),'vehicle':r.get('vehicle')} for key,r in self.players.items() if key!=player]
         out={'slot':row['slot'],'hp':row['hp'],'life':row['life'],'score':row['score'],'position':row['position'],'yaw':row['yaw'],'corrected':corrected,'peers':peers,'online':len(self.players),'revision':self.revision,'notice':notice,'seat':row.get('seat'),'textures':self.own_textures(player),'dayPhase':(wall_time%L['daySeconds'])/L['daySeconds'],'weatherTime':wall_time}
         if revision<0:out['terrain']=self.terrain.doc
+        out['vehicle']=row.get('vehicle')
+        out['vehicles']=self.traffic.snapshot(self.players)
+        out['departedDrivers']=list(self.traffic.departed.values())
         out['npcs']=self.village.snapshot()
         out['corpses']=self.village.corpses(self.clock())
         if revision!=self.revision:
@@ -211,7 +222,8 @@ class FreeWorld:
     def enter(self,player,profile):
         with self.lock:
             now=self.clock();self.prune(now)
-            row={'slot':profile['slot'],'nickname':profile['nickname'],'avatar':profile['avatar'],'lease':secrets.token_urlsafe(24),'seen':now,'move_at':now,'edit_at':-100.,'pulse_at':-100.,'position':list(SPAWN),'yaw':0.,'stance':'walk','weapon':None,'seat':None,'seat_return':None,'hp':100,'life':1,'score':0,'shield':now+3}
+            if player in self.players:self.traffic.release(player,self.players[player],now)
+            row={'slot':profile['slot'],'nickname':profile['nickname'],'avatar':profile['avatar'],'lease':secrets.token_urlsafe(24),'seen':now,'move_at':now,'edit_at':-100.,'pulse_at':-100.,'position':list(SPAWN),'yaw':0.,'stance':'walk','weapon':None,'seat':None,'seat_return':None,'vehicle':None,'hp':100,'life':1,'score':0,'shield':now+3}
             self.players[player]=row
             # Initial NPC snapshots must use the current simulation timeline,
             # even after the world has been idle for a long time.
@@ -275,9 +287,13 @@ class FreeWorld:
     def blocked(self,p,height=1.6):
         if abs(p[0])>L['half']-.28 or abs(p[2])>L['half']-.28 or p[1]<self.terrain.height(p[0],p[2])-.025 or p[1]+height>L['height']+.001:return True
         b,s=self.body_box(p,height)
-        return any(prism_overlap(b,s,o) for o in self.solid_rows())
+        return self.traffic.walk_blocked(p,height) or any(prism_overlap(b,s,o) for o in self.solid_rows())
     def update(self,row,data,now):
         if type(data.get('life')) is not int or data['life']!=row['life']:return True
+        if row.get('vehicle'):
+            player=next((key for key,r in self.players.items() if r is row),None)
+            self.traffic.control(player,row,data,now)
+            return False
         p=vec(data.get('position'));yaw=data.get('yaw');stance=data.get('stance','walk')
         need(numeric(yaw) and stance in ('walk','sprint','crouch'),'Ungueltige Bewegung')
         weapon=data.get('weapon')
@@ -307,6 +323,7 @@ class FreeWorld:
         need(not any(x['id']!=exclude and overlap(b,s,*block_bounds(x)) for x in self.blocks.values()),'Stellplatz belegt',409)
         need(b[1]+.002>=self.terrain.max_height(b,s),'Bauobjekt ragt in das Gelaende',409)
         need(not any(prism_overlap(b,s,o) for o in self.village.solids()),'Baum oder Gebaeude im Stellplatz',409)
+        need(not self.traffic.build_blocked(b,s),'Fahrzeug im Stellplatz',409)
         for other in [*self.players.values(),*self.village.snapshot()]:
             need(not overlap(b,s,*self.body_box(other['position'],1.6)),'Spieler im Stellplatz',409)
 
@@ -516,6 +533,9 @@ class FreeWorld:
         if now<target['shield']:return 'Spawn-Schutz aktiv',shot
         target['hp']=max(0,target['hp']-damage)
         if target['hp']==0:
+            if target.get('vehicle'):
+                owner=next((key for key,r in self.players.items() if r is target),None)
+                self.traffic.release(owner,target,now)
             target.update(hp=100,life=target['life']+1,position=list(SPAWN),yaw=0.,move_at=now,shield=now+3,seat=None,seat_return=None)
             row['score']+=1
             return 'Spielpunkt +1',shot
@@ -525,6 +545,7 @@ class FreeWorld:
             now=self.clock();row=self.member(player,data.get('lease'));op=data.get('action')
             self.tick_village(now)
             if op in ('leave','abandon'):
+                self.traffic.release(player,row,now)
                 del self.players[player];return {'left':True}
             if op=='texture_delete':
                 i=data.get('id');need(isinstance(i,str),'Ungueltige Textur')
@@ -537,7 +558,10 @@ class FreeWorld:
                 return self.snapshot(player,row,data.get('revision'),corrected)
             need(type(data.get('life')) is int and data['life']==row['life'],'Spieler wurde neu gespawnt',409)
             if row.get('seat') and op!='stand':raise CaptureError('Bitte zuerst aufstehen',409)
-            if op=='sit':notice=self.sit(row,data,now)
+            if row.get('vehicle') and op!='vehicle_exit':raise CaptureError('Bitte zuerst aussteigen',409)
+            if op=='vehicle_enter':notice=self.traffic.enter(self,player,row,data,now)
+            elif op=='vehicle_exit':notice=self.traffic.exit(self,player,row,now)
+            elif op=='sit':notice=self.sit(row,data,now)
             elif op=='stand':notice=self.stand(row,now)
             elif op=='place':notice=self.build(player,row,data,now)
             elif op=='relocate':notice=self.relocate(player,row,data,now)

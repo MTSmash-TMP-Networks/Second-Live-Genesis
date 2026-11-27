@@ -1,4 +1,4 @@
-import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell, PORTAL_SIDES, FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeModelPlacement, freeBlocked, freeGround, freeExitAt, freeSecretDoorAt, freeWorldDoorAt, villageParts, villageColliders, terrainHeight, terrainWater } from './engine/renderer.bundle.js';
+import { RoomRenderer, RoomPhysics, HOTEL_LAYOUT, DECOR, curtainBounds, LOBBY_LAYOUT, lobbyDoor, lobbyWalkable, lobbyDoorAt, hotelOpenings, CHARACTER_OPTIONS, DEFAULT_CHARACTER, normalizeCharacter, WALLS, REMOVED, cellBox, solidRuns, solidContains, solidRay, floorSupported, nearestCell, PORTAL_SIDES, FREE_LAYOUT, FreeWorldView, freeBounds, freeRay, freePlacement, freeModelPlacement, freeBlocked, freeGround, freeExitAt, freeSecretDoorAt, freeWorldDoorAt, villageParts, villageColliders, terrainHeight, terrainWater, vehicleBlocked, nearestVehicle } from './engine/renderer.bundle.js';
 import { GameAudio } from './audio.js';
 const audio=new GameAudio();
 const $=id=>document.getElementById(id), canvas=$('world');
@@ -206,7 +206,7 @@ function setScopeZoom(on){
  document.body.classList.toggle('scope-zoom',scopeZoom);
 }
 function toggleScope(){if(equipped!=='rifle'||held||posture||reloadId||!canPlay()||renderer?.xrMode?.active)return;if(!first)first=true;setScopeZoom(!scopeZoom);}
-function chooseWeapon(id){if(freeState?.editing)return;if((held||posture||freeState?.seat||lobbyState||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;if(freeState){freeHeld=null;updateFreeUI();}updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Einzelfeuer':equipped==='rifle'?'Scharfschützengewehr · Einzelschuss · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer':'Unbewaffnet';}
+function chooseWeapon(id){if(freeState?.editing)return;if((held||posture||freeState?.seat||freeState?.vehicle||lobbyState||lobbyTransition)&&id!=='none')return;if(![...weaponIds,'none'].includes(id))return;setScopeZoom(false);releaseTrigger();if(reloadId){reloadId=null;reloadLeft=0;renderer?.reload?.(0);}equipped=id==='none'?null:id;if(freeState){freeHeld=null;updateFreeUI();}updateAmmo();$('weaponstatus').textContent=equipped==='pistol'?'Pistole · Einzelfeuer':equipped==='rifle'?'Scharfschützengewehr · Einzelschuss · Rechtsklick: Zoom':equipped==='m16'?'M16 · Dauerfeuer':'Unbewaffnet';}
 function arsenal(){if(freeState){phone('inventory');return;}if(!started||studioOpen||lobbyState||lobbyTransition){$('notice').textContent='Das Inventar ist in deinem Hotelzimmer verfügbar.';return;}phone('inventory');}
 $('closearsenal').onclick=()=>showPhonePage('home');
 for(const id of [...weaponIds,'none'])$('equip-'+id).onclick=()=>{if(!started||studioOpen||lobbyState||lobbyTransition||freeState?.editing)return;chooseWeapon(id);$('closephone').onclick();};
@@ -499,7 +499,7 @@ function placementPoint(id){
   if(id!=='surface_rug'&&Object.entries(bodies).some(([k,b])=>k!==id&&k!=='surface_rug'&&state.objects[k]>0&&overlap(b.p,boundsSize(spec[k].s,b.q))))return null;
   return p.map(v=>Math.round(v*10000)/10000);
 }
-async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if(freeState){if(freeState.seat)await freeEdit('stand');else if(freeHeld)await freeEdit('place');else if(freeExitAt(playerEye(),dir()))await leaveFreeWorld();else if(freeSecretDoorAt(playerEye(),dir(),freeObstacles(freeState)))$('notice').textContent='Die Tür ist verschlossen.';else if(freeDoorTarget(freeState))await freeEdit('door');else if(freeChairTarget(freeState))await freeEdit('sit');else freeGrab();return;}if(lobbyState){const door=lobbyInteraction(ray);if(door?.free){await enterFreeWorld();return;}if(door?.slot===lobbyState.slot)returnToRoom();else if(door)$('notice').textContent='Dieses Gästezimmer ist privat.';return;}if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
+async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if(freeState){if(freeState.vehicle)await freeVehicleAction('vehicle_exit');else if(freeState.seat)await freeEdit('stand');else if(freeHeld)await freeEdit('place');else if(freeExitAt(playerEye(),dir()))await leaveFreeWorld();else if(freeVehicleTarget(freeState))await freeVehicleAction('vehicle_enter');else if(freeSecretDoorAt(playerEye(),dir(),freeObstacles(freeState)))$('notice').textContent='Die Tür ist verschlossen.';else if(freeDoorTarget(freeState))await freeEdit('door');else if(freeChairTarget(freeState))await freeEdit('sit');else freeGrab();return;}if(lobbyState){const door=lobbyInteraction(ray);if(door?.free){await enterFreeWorld();return;}if(door?.slot===lobbyState.slot)returnToRoom();else if(door)$('notice').textContent='Dieses Gästezimmer ist privat.';return;}if(posture){if(posture.sleeping)setSleeping(false);else leavePosture();return;}if(held){const id=held,p=placementPoint(id);if(!p){$('notice').textContent='Kein freier Stellplatz – weiter bewegen';return;}const angle=heldAngle;if(await action('place_object',id,null,{position:p,rotation:angle})){held=null;bodies[id]={p:[...p],v:[0,0,0],q:yawQuat(angle)};}return;}
   const hit=interactionTarget(ray),primary=primaryInteraction(hit,ray);
   if(primary?.op==='toggle_light'){audio.play('click');await action(primary.op,primary.id);return;}
   if(primary?.op==='toggle_curtains'){await action(primary.op,primary.id);return;}
@@ -508,7 +508,7 @@ async function interact(ray=null){if(!canPlay()||busy||lobbyTransition)return;if
   if(doorInView(hit,ray)){if(lobbyEnabled)await enterLobby();else $('notice').textContent='Gemeinsamer Hotelflur nicht verfügbar.';}
 }
 function groundAt(x,z){if(freeState)return freeGround(freeObstacles(freeState),x,player.y,z);if(lobbyState)return 0;if(z<-5&&state.unlocked&&!lobbyEnabled)return 0;return floorSupported(WALLS.surface_0,state.walls?.surface_0||[],x,z)?0:-1.35;}
-function coll(x,z,height=player.stance==='crouch'?1.12:1.6){if(freeState)return freeBlocked(freeObstacles(freeState),x,player.y,z,height);if(lobbyState)return !lobbyWalkable(x,z);if(Math.abs(x)>4.65||z>4.65||z<(!lobbyEnabled&&state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+height&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,height*.53,height-.15].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(!spec[id].imported||spec[id].row.solid)&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+height&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
+function coll(x,z,height=player.stance==='crouch'?1.12:1.6){if(freeState)return freeWalkBlocked(freeState,x,player.y,z,height);if(lobbyState)return !lobbyWalkable(x,z);if(Math.abs(x)>4.65||z>4.65||z<(!lobbyEnabled&&state.unlocked?-14.5:-4.65))return true;if(z<-4.65&&Math.abs(x)>.72&&z>-5.4)return true;return collisionRoom().some(b=>b.p[1]-b.s[1]/2<player.y+height&&b.p[1]+b.s[1]/2>Math.max(.1,player.y+.1)&&[.25,height*.53,height-.15].some(h=>solidContains(b,[x,player.y+h,z],.25)))||Object.entries(bodies).some(([id,b])=>id!==held&&id!=='surface_rug'&&state.objects[id]>0&&(!spec[id].imported||spec[id].row.solid)&&(()=>{const s=boundsSize(spec[id].s,b.q);return b.p[1]-s[1]/2<player.y+height&&b.p[1]+s[1]/2>player.y+.1&&Math.abs(x-b.p[0])<s[0]/2+.28&&Math.abs(z-b.p[2])<s[2]/2+.28;})());}
 let enteringGame=false,pendingAvatar=null;
 function isPersonalSessionError(e){
  return e?.status===401&&(e.code==='session_required'||/^Persoenliche Sitzung fehlt/i.test(e.message||''));
@@ -713,6 +713,8 @@ function freeDims(size=freeSize,shape=freeShape){
 function freeShapeLabel(){return {'cube':'Würfel','wall-z':'Wandplatte Z','wall-x':'Wandplatte X','floor':'Bodenplatte'}[freeShape];}
 function freeOwn(b){return !!b&&b.ownerSlot===accountProfile?.slot;}
 function freeObstacles(s){return s.obstacles||s.blocks.concat((s.scenery||[]).filter(b=>b.hp>0));}
+function freeWalkBlocked(s,x,y,z,height=1.6){return freeBlocked(freeObstacles(s),x,y,z,height)||vehicleBlocked(s.vehicles,x,y,z,height);}
+function freeVehicleTarget(s){return s&&!freeHeld&&!s.seat&&!s.vehicle?nearestVehicle(s.vehicles,player):null;}
 function freeTarget(includeBroken=false){
  if(!freeState)return null;
  const hit=freeRay(playerEye(),dir(),freeObstacles(freeState),FREE_LAYOUT.reach,includeBroken);
@@ -775,7 +777,7 @@ function freeCandidate(h=freeHeld,mode='place'){
  return freeModelPlacement([x,y,z],e,rotation,blocks,players);
 }
 function freeTake(h){
- if(!freeState||freeState.editing||freeState.seat||!h)return;
+ if(!freeState||freeState.editing||freeState.seat||freeState.vehicle||!h)return;
  chooseWeapon('none');freeHeld=h;freeHintUntil=performance.now()+4000;updateFreeUI();
  if(!$('phone').hidden)$('closephone').onclick();
 }
@@ -817,12 +819,15 @@ async function loadFreeTexture(id){
 }
 function applyFreeSnapshot(s,result,initial=false){
  if(freeState!==s)return;
+ const previousVehicle=s.vehicle||null,nextVehicle=result.vehicle||null,vehicleChanged=previousVehicle!==nextVehicle;
+ s.vehicle=nextVehicle;s.vehicles=Array.isArray(result.vehicles)?result.vehicles:[];
+ freeView.traffic.sync(s.vehicles,result.departedDrivers||[]);
  const previousSeat=s.seat?.id||null,nextSeat=result.seat?.id||null,seatChanged=previousSeat!==nextSeat;
  s.seat=result.seat||null;
- if(initial||result.life!==s.life||result.corrected||seatChanged){
+ if(initial||result.life!==s.life||result.corrected||seatChanged||vehicleChanged){
   Object.assign(player,{x:result.position[0],y:result.position[1],z:result.position[2],yaw:result.yaw,pitch:0,vy:0,stance:'walk',eyeHeight:1.65});
   if(!initial&&result.life!==s.life){freeHeld=null;clearControls();$('notice').textContent='Neu gespawnt · kurzer Schutz aktiv';}
-  else if(!initial&&result.corrected&&!seatChanged)$('notice').textContent='Position korrigiert';
+  else if(!initial&&result.corrected&&!seatChanged&&!vehicleChanged)$('notice').textContent='Position korrigiert';
  }
  if(seatChanged){
   clearControls();freeHeld=null;
@@ -830,6 +835,11 @@ function applyFreeSnapshot(s,result,initial=false){
    equipped=null;reloadId=null;reloadLeft=0;renderer?.reload?.(0);updateAmmo();
    $('weaponstatus').textContent='Unbewaffnet';first=true;player.pitch=-.12;
   }else if(!result.notice&&!initial)$('notice').textContent='Aufgestanden';
+ }
+ if(vehicleChanged){
+  clearControls();freeHeld=null;equipped=null;reloadId=null;reloadLeft=0;renderer?.reload?.(0);updateAmmo();
+  if(s.vehicle){s.returnFirst=first;first=false;player.pitch=0;$('weaponstatus').textContent='Fahrzeug';}
+  else{first=s.returnFirst??true;audio.stopEngine();$('weaponstatus').textContent='Unbewaffnet';}
  }
  if(result.terrain){s.terrain=result.terrain;freeView.setTerrain(s.terrain);}
  s.hp=result.hp;s.life=result.life;s.score=result.score;s.online=result.online;s.peers=result.peers||[];s.textures=result.textures||[];
@@ -846,7 +856,7 @@ function applyFreeSnapshot(s,result,initial=false){
    renderer.shot('pistol',npc.shot,freeView.effects);audio.play('shot',null,0);
   }
  }
- s.npcShots=nextShots;freeView.sync([...s.peers,...s.npcs,...(result.corpses||[])]);s.lastOK=performance.now();freeView.syncClock(result.dayPhase,s.lastOK,result.weatherTime);
+ s.npcShots=nextShots;freeView.sync([...s.peers.filter(p=>!p.vehicle),...s.npcs,...(result.corpses||[])]);s.lastOK=performance.now();freeView.syncClock(result.dayPhase,s.lastOK,result.weatherTime);
  if(result.notice)$('notice').textContent=result.notice;
  updateWorldStatus();updateFreeUI();
 }
@@ -868,12 +878,13 @@ async function enterFreeWorld(){
 }
 async function leaveFreeWorld(){
  const s=freeState;if(!s||lobbyTransition||s.editing)return;
+ if(s.vehicle){$('notice').textContent='Bitte zuerst aus dem Fahrzeug aussteigen.';return;}
  lobbyTransition=true;clearControls();
  try{
   if(s.pending)await s.pending.catch(()=>{});
   const result=await freeRequest({action:'leave',lease:s.lease});
   if(freeState!==s)return;
-  chooseWeapon('none');freeState=null;audio.stopWeather();freeView?.clear();document.body.classList.remove('free-playing','free-armed');$('free-hud').hidden=true;
+  chooseWeapon('none');freeState=null;audio.stopWeather();audio.stopEngine();freeView?.clear();document.body.classList.remove('free-playing','free-armed');$('free-hud').hidden=true;
   lobbyState={slot:result.slot,lease:result.lease,online:result.online,capacity:result.capacity,lastOK:performance.now(),sending:false};
   resetHotelViews();renderer.lobby.restoreProjection();renderer.lobby.setOwn(result.slot,accountProfile);renderer.lobby.setRooms(result.rooms||[]);renderer.lobby.sync(result.peers||[]);renderer.lobby.syncNpc(result.npc);renderer.syncHallFacades(result.facades||[],result.slot,state);
   Object.assign(player,{x:result.position[0],y:0,z:result.position[2],yaw:result.yaw,pitch:0,vy:0,stance:'walk',eyeHeight:1.65});
@@ -882,7 +893,28 @@ async function leaveFreeWorld(){
  }catch(e){$('notice').textContent=e.message;if(e.status===401||e.status===409)location.reload();}
  finally{lobbyTransition=false;clearControls();}
 }
-function freeMove(s){return {action:'update',lease:s.lease,revision:s.revision,life:s.life,position:[player.x,player.y,player.z],yaw:player.yaw,stance:player.stance,weapon:equipped};}
+function freeDriveInput(){
+ if(!canPlay()||document.hidden||!document.hasFocus()||freeState?.editing)return [0,0];
+ const clamp=x=>Math.max(-1,Math.min(1,x));
+ return [keys.has('Space')?0:clamp(Number(keys.has('KeyW'))-Number(keys.has('KeyS'))+touchMove[1]),clamp(Number(keys.has('KeyD'))-Number(keys.has('KeyA'))+touchMove[0])];
+}
+function freeMove(s){return {action:'update',lease:s.lease,revision:s.revision,life:s.life,position:[player.x,player.y,player.z],yaw:player.yaw,stance:player.stance,weapon:s.vehicle?null:equipped,...(s.vehicle?{drive:freeDriveInput()}:{})};}
+async function freeVehicleAction(action){
+ const s=freeState;if(!s||s.editing||!canPlay()||lobbyTransition||s.seat)return;
+ const target=action==='vehicle_enter'?freeVehicleTarget(s):null;
+ if(action==='vehicle_enter'&&!target||action==='vehicle_exit'&&!s.vehicle)return;
+ s.editing=true;
+ try{
+  if(s.pending)await s.pending;
+  if(freeState!==s||!canPlay())return;
+  const life=s.life;applyFreeSnapshot(s,await freeRequest(freeMove(s)));
+  if(freeState!==s||s.life!==life||!canPlay())return;
+  if(action==='vehicle_enter'&&freeVehicleTarget(s)?.id!==target.id)return;
+  applyFreeSnapshot(s,await freeRequest({action,lease:s.lease,revision:s.revision,life:s.life,...(target?{id:target.id}:{})}));
+  audio.play('door');
+ }catch(e){$('notice').textContent=e.message;if(e.status===401)location.reload();}
+ finally{s.editing=false;}
+}
 function freePoll(){
  const s=freeState;if(!s||s.pending||s.editing||lobbyTransition)return;
  const p=freeRequest(freeMove(s)).then(result=>applyFreeSnapshot(s,result)).catch(e=>{
@@ -893,7 +925,7 @@ function freePoll(){
  s.pending=p;
 }
 async function freeEdit(op,weapon=null,mode='place'){
- const s=freeState,h=freeHeld;if(!s||!canPlay()||s.editing||lobbyTransition||s.seat&&op!=='stand')return;
+ const s=freeState,h=freeHeld;if(!s||!canPlay()||s.editing||lobbyTransition||s.vehicle||s.seat&&op!=='stand')return;
  if(op==='pulse'&&(!weapon||weapon!==equipped||h)||op==='place'&&!h||op==='repair'&&h)return;
  // A reusable block is a construction tool, not the object to delete.
  // Capture the aimed block before awaiting a poll so a later mouse movement cannot delete another block.
@@ -943,15 +975,17 @@ async function freeEdit(op,weapon=null,mode='place'){
  finally{s.editing=false;}
 }
 function freePrimary(){
+ if(freeState?.vehicle)return;
  if(freeHeld?.kind==='block')void freeEdit('place');
  else if(!freeHeld&&equipped)pressTrigger();
 }
 function freeSecondary(){
+ if(freeState?.vehicle)return;
  if(freeHeld?.kind==='block'&&!freeHeld.id)void freeEdit('remove');
  else if(freeHeld)void freeEdit('place');
  else toggleScope();
 }
-function freeKey(code){if(code==='Digit4'){freeTakeBlock();return true;}if(code==='Delete'){void freeEdit('remove');return true;}return false;}
+function freeKey(code){if(freeState?.vehicle&&!['KeyE','KeyV','KeyP','KeyI'].includes(code))return true;if(code==='Digit4'){freeTakeBlock();return true;}if(code==='Delete'){void freeEdit('remove');return true;}return false;}
 let freeTextureKey='',freeLibraryKey='',freeModelUploading=false;
 async function freeRefreshModelLibrary(){
  const s=freeState;if(!s)return;
@@ -968,10 +1002,10 @@ function updateFreeUI(){
  $('free-hud').hidden=!s||!$('phone').hidden||studioOpen;
  if(!s)return;
  $('free-online').textContent=s.online+' Spieler';$('free-health-bar').style.width=Math.max(0,Math.min(100,s.hp))+'%';
- $('free-hud-detail').textContent=s.hp+' HP · '+s.score+' Punkte';document.body.classList.toggle('free-armed',!!equipped);
+ $('free-hud-detail').textContent=s.vehicle?Math.round(Math.abs(s.vehicles.find(v=>v.id===s.vehicle)?.speed||0)*3.6)+' km/h · '+s.hp+' HP':s.hp+' HP · '+s.score+' Punkte';document.body.classList.toggle('free-armed',!!equipped);
  $('free-hud-size').textContent=freeHeld?freeHeld.name+' · '+freeHeldExtent().toFixed(2).replace('.',',')+' m':(({pistol:'Pistole',rifle:'Scharfschützengewehr',m16:'M16'})[equipped]||'Unbewaffnet')+(equipped?' · '+ammo[equipped]+' / '+clipSize[equipped]:'');
  $('free-size').value=String(freeSize);$('free-shape').value=freeShape;$('free-model-select').value=freeModelSource||'';
- $('free-model-take').disabled=!freeModelSource||s.editing||!!s.seat||freeModelUploading;$('free-block-take').disabled=s.editing||!!s.seat;
+ $('free-model-take').disabled=!freeModelSource||s.editing||!!s.seat||!!s.vehicle||freeModelUploading;$('free-block-take').disabled=s.editing||!!s.seat||!!s.vehicle;
  const key=JSON.stringify(s.textures);if(key!==freeTextureKey){
   const select=$('free-texture-select');select.replaceChildren(new Option('Weiß / Standard',''));
   for(const t of s.textures)select.add(new Option(t.name,t.id));
@@ -986,6 +1020,14 @@ function updateFreeUI(){
 function updateFreeHint(vr=false){
  const s=freeState;if(!s)return;
  const playing=canPlay()&&!vr;
+ if(s.vehicle){
+  $('interaction-prompt').hidden=!playing;$('interaction-name').textContent='Fahrzeug · '+Math.round(Math.abs(s.vehicles.find(v=>v.id===s.vehicle)?.speed||0)*3.6)+' km/h';
+  $('interaction-actions').textContent='W/S: Gas / Rückwärts · A/D: Lenken · Leertaste: Bremsen · V: Ansicht · E: Aussteigen';
+  $('touchInteract').textContent='Aussteigen';$('touchInteract').disabled=!playing||s.editing;
+  for(const id of ['touchRepair','touchFire','touchReload','touchJump','touchSprint','touchCrouch','touchSecondary'])$(id).disabled=true;
+  $('touchSecondary').hidden=$('touchZoom').hidden=$('held-model-size').hidden=$('touchRotateLeft').hidden=$('touchRotateRight').hidden=true;
+  $('cross').classList.toggle('actionable',playing);$('hint').textContent='Fahren · Steuerung: WASD / Touch-Stick';updateFreeUI();return;
+ }
  if(s.seat){
   $('interaction-prompt').hidden=!playing;$('interaction-name').textContent='Stuhl · sitzend';$('interaction-actions').textContent='E · Aufstehen';
   $('touchInteract').textContent='Aufstehen';$('touchInteract').disabled=!playing||s.editing;
@@ -993,11 +1035,12 @@ function updateFreeHint(vr=false){
   $('touchSecondary').hidden=$('touchZoom').hidden=$('held-model-size').hidden=$('touchRotateLeft').hidden=$('touchRotateRight').hidden=true;
   $('cross').classList.toggle('actionable',playing);$('hint').textContent='Free World · E: Aufstehen';updateFreeUI();return;
  }
+ const vehicle=freeVehicleTarget(s);
  const h=freeHeld,exit=!h&&freeExitAt(playerEye(),dir()),gate=!h&&!exit&&freeSecretDoorAt(playerEye(),dir(),freeObstacles(s)),door=!h&&!exit&&!gate?freeDoorTarget(s):null,chair=!h&&!exit&&!gate&&!door?freeChairTarget(s):null,target=!h&&!exit&&!gate&&!door&&!chair?freeTarget(true):null,own=freeOwn(target),candidate=playing&&h?freeCandidate(h):null;
  const building=h?.kind==='block'&&!h.id,removeTarget=building?freeTarget(true):null,canRemove=building&&freeOwn(removeTarget)&&!removeTarget.model;
  const wholeFix=!h&&!exit&&!gate?freeRepairTarget(s,true):null,fix=wholeFix?.kind==='building-part'&&wholeFix.stage===0?null:wholeFix;
  const structureFix=wholeFix?.kind==='building-part'?wholeFix:null;
- const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!gate&&!door&&!chair&&!own&&!structureFix&&now>=freeHintUntil);
+ const panel=$('interaction-prompt'),now=performance.now();panel.hidden=!playing||(!h&&!exit&&!gate&&!door&&!chair&&!own&&!structureFix&&!vehicle&&now>=freeHintUntil);
  const msg=$('notice').textContent;if(msg!==freeLastNotice){freeLastNotice=msg;freeNoticeUntil=now+3500;}
  document.body.classList.toggle('free-notice',playing&&!!msg&&now<freeNoticeUntil);
  $('held-model-size').hidden=!playing||!h;
@@ -1008,13 +1051,13 @@ function updateFreeHint(vr=false){
  $('touchSecondary').hidden=!h;$('touchSecondary').textContent=building?'Entfernen':'Ablegen';
  $('touchSecondary').disabled=!playing||s.editing||(building?!canRemove:!candidate);
  $('touchFire').disabled=!playing||s.editing||(h?.kind==='block'?!candidate:!equipped||!!h||!!reloadId);$('touchFire').textContent=h?.kind==='block'?'Setzen':'Feuer';
- $('touchInteract').disabled=!playing||(!exit&&!gate&&!door&&!chair&&!candidate&&!(own&&target.hp>0))||s.editing;$('touchInteract').textContent=exit?'Hotel':gate?'Untersuchen':door?(door.door.open?'Schließen':'Öffnen'):chair?'Hinsetzen':h?'Abstellen':'Aufheben';
+ $('touchInteract').disabled=!playing||(!exit&&!gate&&!door&&!chair&&!candidate&&!vehicle&&!(own&&target.hp>0))||s.editing;$('touchInteract').textContent=exit?'Hotel':vehicle?(vehicle.npc?'Übernehmen':'Einsteigen'):gate?'Untersuchen':door?(door.door.open?'Schließen':'Öffnen'):chair?'Hinsetzen':h?'Abstellen':'Aufheben';
  $('touchRepair').disabled=!playing||s.editing||!fix;$('touchReload').disabled=!equipped||!!reloadId;$('touchArsenal').disabled=false;$('touchArsenal').textContent='Inventar';
  $('touchJump').disabled=player.stance==='crouch';$('touchSprint').disabled=$('touchCrouch').disabled=!playing;
  $('touchSprint').setAttribute('aria-pressed',String(player.stance==='sprint'||touchSprint));$('touchCrouch').setAttribute('aria-pressed',String(player.stance==='crouch'||touchCrouch));
- $('interaction-name').textContent=exit?'HOTEL · Ausgang':gate?'Eingefrorene Tür':door?'Gebäudetür':chair?'Stuhl':h?(candidate?'Objekt abstellen':canRemove?'Eigenen Block entfernen':'Stellplatz blockiert'):structureFix?(structureFix.stage===4?'Gebäudeteil zerstört':structureFix.stage>0?'Gebäudeteil beschädigt':'Gebäude beschädigt'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
- $('interaction-actions').textContent=exit?'E · Zum Hotel':gate?'E · Untersuchen':door?('E · '+(door.door.open?'Schließen':'Öffnen')+((door.damage?.[448]||0)>0?' · R: Reparieren':'')):chair?(s.peers.some(p=>p.seat?.id===chair.id)?'Besetzt':'E · Hinsetzen')+(chair.stage?' · R: Reparieren':''):h?(building?'Linksklick: setzen · Rechtsklick: entfernen · +/−: Größe · Q/F: drehen · 0: abbrechen':(h.kind==='block'?'Linksklick/E: abstellen':'E: abstellen · B: Wand')+' · Q/F: drehen · +/−: Größe · 0: abbrechen'):structureFix?'R: Teil reparieren · Shift+R: Gebäude wiederaufbauen':own?(target.hp?'E · Aufheben · Entf · Entfernen'+(target.hp<100?' · R: Reparieren':''):'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
- $('cross').classList.toggle('actionable',playing&&(exit||gate||!!door||!!chair||!!candidate||own||canRemove||!!structureFix));
+ $('interaction-name').textContent=exit?'HOTEL · Ausgang':vehicle?(vehicle.kind==='taxi'?'Taxi':'Auto'):gate?'Eingefrorene Tür':door?'Gebäudetür':chair?'Stuhl':h?(candidate?'Objekt abstellen':canRemove?'Eigenen Block entfernen':'Stellplatz blockiert'):structureFix?(structureFix.stage===4?'Gebäudeteil zerstört':structureFix.stage>0?'Gebäudeteil beschädigt':'Gebäude beschädigt'):own?(target.hp?'Eigenes Objekt':'Objekt zerstört'):'Free World';
+ $('interaction-actions').textContent=exit?'E · Zum Hotel':vehicle?(Math.abs(vehicle.speed)>2.2?'Fahrzeug hält an …':vehicle.npc?'E · Fahrzeug übernehmen':'E · Einsteigen'):gate?'E · Untersuchen':door?('E · '+(door.door.open?'Schließen':'Öffnen')+((door.damage?.[448]||0)>0?' · R: Reparieren':'')):chair?(s.peers.some(p=>p.seat?.id===chair.id)?'Besetzt':'E · Hinsetzen')+(chair.stage?' · R: Reparieren':''):h?(building?'Linksklick: setzen · Rechtsklick: entfernen · +/−: Größe · Q/F: drehen · 0: abbrechen':(h.kind==='block'?'Linksklick/E: abstellen':'E: abstellen · B: Wand')+' · Q/F: drehen · +/−: Größe · 0: abbrechen'):structureFix?'R: Teil reparieren · Shift+R: Gebäude wiederaufbauen':own?(target.hp?'E · Aufheben · Entf · Entfernen'+(target.hp<100?' · R: Reparieren':''):'R · Reparieren · Entf · Entfernen'):'I · Inventar · 1–3 · Spielwaffen · 4 · Baublock';
+ $('cross').classList.toggle('actionable',playing&&(exit||!!vehicle||gate||!!door||!!chair||!!candidate||own||canRemove||!!structureFix));
  $('hint').textContent='Free World · I: Inventar';updateFreeUI();
 }
 $('free-model-select').onchange=()=>{freeModelSource=$('free-model-select').value||null;freeHintUntil=performance.now()+4000;updateFreeUI();};
@@ -1311,7 +1354,7 @@ canvas.addEventListener('pointerdown',e=>{if(!mobile&&e.button===0&&document.poi
 canvas.addEventListener('contextmenu',e=>{if(canPlay()&&!mobile)e.preventDefault();});
 window.addEventListener('mousedown',e=>{if(e.button===2&&!mobile&&document.pointerLockElement===canvas&&canPlay()){e.preventDefault();if(freeState)freeSecondary();else toggleScope();}});
 window.addEventListener('wheel',e=>{
- if(!canPlay()||lobbyState||freeState?.editing||freeState?.seat||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
+ if(!canPlay()||lobbyState||freeState?.editing||freeState?.seat||freeState?.vehicle||lobbyTransition||renderer?.xrMode?.active||mobile||held||posture||!e.deltaY)return;
  const slot=wheelInventorySlot(equipped,freeHeld,!!freeState,e.deltaY);if(slot===null)return;
  e.preventDefault();
  const now=performance.now();if(now-lastWheel<140)return;lastWheel=now;
@@ -1326,7 +1369,7 @@ window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener(
 function part(p,s,c,r=0,q=null){draw({p,s,c:rgb(c),r,q,m:mat(c)});}
 function canPlay(){return started&&active&&$('phone').hidden&&$('arsenal').hidden&&$('updater').hidden;}
 function fire(ray=null){
-  if(!canPlay()||lobbyState||lobbyTransition||posture||freeState?.seat||!equipped||busy||reloadId||fireCooldown>0)return false;
+  if(!canPlay()||lobbyState||lobbyTransition||posture||freeState?.seat||freeState?.vehicle||!equipped||busy||reloadId||fireCooldown>0)return false;
   const weapon=equipped;
   if(ammo[weapon]<=0){startReload(true);return false;}
   if(freeState){if(freeHeld||freeState.editing)return false;void freeEdit('pulse',weapon);return true;}
@@ -1443,6 +1486,7 @@ function updateMinimap(now,vr=false){
  function dot(p,color,r=3){if(Math.hypot(p[0]-96,p[1]-96)>87)return;ctx.beginPath();ctx.arc(...p,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();ctx.lineWidth=1;ctx.strokeStyle='#16232e';ctx.stroke();}
  const project=(x,z)=>minimapProject(x,z,player,scale);
  if(freeState){
+  for(const car of freeState.vehicles||[])dot(project(car.position[0],car.position[2]),car.kind==='taxi'?'#f0c842':'#d7dce3',2.8);
   for(const peer of freeView.peers.values()){const v=peer.g.position;dot(project(v.x,v.z),'#8db8f5',3.5);}
   const p=minimapEdge(project(0,FREE_LAYOUT.half),78);ctx.fillStyle='#71edc0';ctx.fillRect(p[0]-3.5,p[1]-3.5,7,7);
  }else if(lobbyState){
@@ -1466,7 +1510,7 @@ function frame(now,xrFrame){
   let dt=Math.max(0,Math.min(.035,(now-prev)/1000));prev=now;
   if(studioOpen){$('minimap').hidden=true;updateAvatarModelStatus();renderer.renderStudio(canvas,dt,$('character-preview'));return;}
   const vr=!!renderer.xrMode?.active;const xrInput=vr?renderer.xrMode.inputs(xrFrame):null;
-  if(canPlay()&&!posture&&!freeState?.seat&&!lobbyTransition){
+  if(canPlay()&&!posture&&!freeState?.seat&&!freeState?.vehicle&&!lobbyTransition){
     stepReload(dt);stepTrigger(dt);
     if(vr)player.yaw+=xrInput.turn;
     let f=vr?xrInput.move[1]:Number(keys.has('KeyW'))-Number(keys.has('KeyS'))+touchMove[1],s=vr?xrInput.move[0]:Number(keys.has('KeyD'))-Number(keys.has('KeyA'))+touchMove[0],a=player.yaw+(vr?xrInput.headYaw:0);
@@ -1479,11 +1523,11 @@ function frame(now,xrFrame){
      const obstacles=freeObstacles(freeState),height=player.stance==='crouch'?1.12:1.6;
      const move=(x,z)=>{
       const from=terrainHeight(freeState.terrain,player.x,player.z),to=terrainHeight(freeState.terrain,x,z),onGround=player.y<=from+.07&&Math.abs(player.vy)<.2;
-      if(onGround&&Math.abs(to-from)<=.22&&!freeBlocked(obstacles,x,to,z,height)){player.x=x;player.z=z;player.y=to;player.vy=0;return;}
-      if(!freeBlocked(obstacles,x,player.y,z,height)){player.x=x;player.z=z;return;}
+      if(onGround&&Math.abs(to-from)<=.22&&!freeWalkBlocked(freeState,x,to,z,height)){player.x=x;player.z=z;player.y=to;player.vy=0;return;}
+      if(!freeWalkBlocked(freeState,x,player.y,z,height)){player.x=x;player.z=z;return;}
       if(Math.abs(player.vy)>.1)return;
       const top=freeGround(obstacles,x,player.y+.20,z);
-      if(top>player.y+.001&&top-player.y<=.20&&!freeBlocked(obstacles,x,top,z,height)){player.x=x;player.z=z;player.y=top;player.vy=0;}
+      if(top>player.y+.001&&top-player.y<=.20&&!freeWalkBlocked(freeState,x,top,z,height)){player.x=x;player.z=z;player.y=top;player.vy=0;}
      };
      if(dx)move(player.x+dx,player.z);if(dz)move(player.x,player.z+dz);
     }else{
@@ -1493,7 +1537,7 @@ function frame(now,xrFrame){
     const ground=groundAt(player.x,player.z);
     if(!vr&&player.stance!=='crouch'&&keys.has('Space')&&Math.abs(player.y-ground)<1e-5)player.vy=4.2;
     player.vy-=9.81*dt;const nextY=Math.max(ground,player.y+player.vy*dt);
-    if(freeState&&player.vy>0&&freeBlocked(freeObstacles(freeState),player.x,nextY,player.z,player.stance==='crouch'?1.12:1.6))player.vy=0;
+    if(freeState&&player.vy>0&&freeWalkBlocked(freeState,player.x,nextY,player.z,player.stance==='crouch'?1.12:1.6))player.vy=0;
     else{player.y=nextY;if(player.y===ground)player.vy=0;}
   }
   if(!canPlay()||posture||lobbyTransition){if(player.stance==='sprint')player.stance='walk';}
@@ -1511,9 +1555,19 @@ function frame(now,xrFrame){
     if(!movable(posture.id)||!pose||pose.y<-.05||pose.y>.25||Math.hypot(player.x-pose.x,player.z-pose.z)>.25||groundAt(pose.x,pose.z)<-.1)leavePosture();
     else{player.x=pose.x;player.z=pose.z;player.y=pose.y;player.vy=0;posture.yaw=pose.yaw;}
   }
+  const carPose=freeState?freeView.traffic.step(dt,player,freeState.vehicle,first,freeView.trafficNight||0):null;
+  if(carPose)Object.assign(player,{x:carPose.x,y:carPose.y,z:carPose.z,yaw:carPose.yaw,vy:0,stance:'walk',pitch:0});
   let d=dir(),eye=playerEye(),target=eye.map((v,i)=>v+d[i]);
   const torch=started&&flashlightOn&&!vr&&!posture?.sleeping?{origin:eye,direction:d}:null;
-  if(!first&&!vr&&!posture){let t=eye.map((v,i)=>v-d[i]*2.1);if(!coll(t[0],t[2])){eye=t;target=eye.map((v,i)=>v+d[i]);}}
+  if(carPose){
+   const a=carPose.yaw,c=Math.cos(a),s=Math.sin(a);
+   if(first){eye=[player.x-.43*c,player.y+1.23,player.z+.43*s];target=[eye[0]-s*10,eye[1]-.22,eye[2]-c*10];}
+   else{eye=[player.x+s*6.6,player.y+2.8,player.z+c*6.6];target=[player.x-s*2.5,player.y+1.05,player.z-c*2.5];
+    const ray=eye.map((v,i)=>v-target[i]),len=Math.hypot(...ray);const hit=freeRay(target,ray.map(v=>v/len),freeObstacles(freeState),len,false,freeState.terrain);
+    if(hit&&hit.dist<len-.15){const t=Math.max(.35,hit.dist-.2)/len;eye=target.map((v,i)=>v+ray[i]*t);}
+   }
+   const v=target.map((x,i)=>x-eye[i]),l=Math.hypot(...v);d=v.map(x=>x/l);
+  }else if(!first&&!vr&&!posture){let t=eye.map((v,i)=>v-d[i]*2.1);if(!coll(t[0],t[2])){eye=t;target=eye.map((v,i)=>v+d[i]);}}
   renderer.begin();
   if(freeState){
     $('npc-greeting').hidden=true;renderer.equip(equipped,first&&!scopeZoom);
@@ -1521,7 +1575,8 @@ function frame(now,xrFrame){
     $('free-time').textContent=String(hours).padStart(2,'0')+':'+String(minutes).padStart(2,'0');
     const weather=freeView.weather.state;$('free-weather').textContent=weather.label;
     if(document.hidden||!document.hasFocus()||!$('phone').hidden)audio.stopWeather();else audio.weather(weather.rain,weather.sheltered,weather.thunder);
-    freeView.step(dt,player,accountProfile,!first&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5,renderer.weaponModels,equipped,freeState.seat);
+    freeView.step(dt,player,accountProfile,!freeState.vehicle&&!first&&Math.hypot(eye[0]-player.x,eye[2]-player.z)>.5,renderer.weaponModels,equipped,freeState.seat);
+    if(carPose&&canPlay()&&!document.hidden&&document.hasFocus())audio.engine(carPose.speed,freeDriveInput()[0]);else audio.stopEngine();
     if(canPlay()&&freeHeld)freeView.showPreview(freeCandidate(freeHeld),freeHeld,loadFreeHeldModel);else freeView.showPreview(null);
     audio.listener(eye,d);renderer.render(canvas,eye,target,mobile,dt,player,scopeZoom,false,freeView.scene,torch);
     updateMinimap(now,vr);

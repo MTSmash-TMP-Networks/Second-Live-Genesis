@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.21 · Country Roads**
+**v0.15.22 · AI Traffic**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.22 – KI-Straßenverkehr
+
+Elf Fahrzeuge (acht Pkw, drei Taxis) mit NPC-Fahrern, Rechtsverkehr, zwei Rundstrecken, einer Taxibucht beim Hotel, animierten Rädern, Bremslichtern, Blinkern und nächtlicher Lichtdarstellung. Fahrzeuge können im Spiel übernommen werden, sobald sie in Reichweite sind und langsam fahren oder stehen. Der NPC steigt aus; E steigt ein bzw. aus, WASD fährt, Leertaste bremst, V wechselt zwischen Innen- und Außenansicht. Touch-Stick und Aktionstaste funktionieren auch mobil. Tempoanzeige und Minimap zeigen die Fahrzeuge. Der Server prüft Belegung, Eingaben, Hindernisse, Steigungen und Wasser; nach Sitzungsende wird das Fahrzeug freigegeben. Vier optionale CC0-GLB-Modelle von Tevy werden versioniert beim Docker-Build geladen und strukturell geprüft (https://tevy.dev/models); lokale Ersatzmodelle bleiben funktionsfähig, falls ein Download fehlt. Fahrphysik ist ein vereinfachtes Arcade-Modell, nicht eine vollständige Fahrzeugdynamiksimulation. Keine Taxifahrten als Fahrgast, Polizei- oder Fahndungsmechanik in dieser Version.
 
 ## Neu in 0.15.21 – Landstraßen
 

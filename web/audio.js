@@ -69,5 +69,20 @@ export class GameAudio {
     }catch{this.stopWeather();}
   }
   stopWeather(){const nodes=this.rainNodes;if(!nodes)return;this.rainNodes=null;try{nodes.source.stop();}catch{}for(const node of Object.values(nodes))try{node.disconnect();}catch{}}
-  stopAll(){this.stopWeather();for(const s of [...this.sources]){try{s.stop();}catch{}}}
+  engine(speed,throttle){
+    const c=this.ctx;if(!this.enabled||!c||c.state!=='running'){this.stopEngine();return;}
+    try{
+      if(!this.engineNodes){
+        const source=c.createOscillator(),filter=c.createBiquadFilter(),level=c.createGain();
+        source.type='sawtooth';source.frequency.value=35;filter.type='lowpass';filter.frequency.value=115;level.gain.value=0;
+        source.connect(filter);filter.connect(level);level.connect(this.master);this.engineNodes={source,filter,level};source.start();
+      }
+      const {source,filter,level}=this.engineNodes,v=Math.min(1,Math.abs(speed)/13),gas=Math.abs(throttle||0);
+      source.frequency.setTargetAtTime(33+70*v+27*gas,c.currentTime,.10);
+      filter.frequency.setTargetAtTime(95+210*v+90*gas,c.currentTime,.12);
+      level.gain.setTargetAtTime(.065+.07*v+.05*gas,c.currentTime,.12);
+    }catch{this.stopEngine();}
+  }
+  stopEngine(){const nodes=this.engineNodes;if(!nodes)return;this.engineNodes=null;try{nodes.source.stop();}catch{}for(const n of Object.values(nodes))try{n.disconnect();}catch{}}
+  stopAll(){this.stopWeather();this.stopEngine();for(const s of [...this.sources]){try{s.stop();}catch{}}}
 }

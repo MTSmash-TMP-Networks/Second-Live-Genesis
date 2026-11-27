@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.22 – AI Traffic
+- Elf serverseitig synchronisierte Fahrzeuge: acht Pkw und drei Taxis, davon ein wartendes Taxi beim Hotel. NPC-Verkehr mit Rechtsverkehr, Kurven, Bremsen vor Hindernissen und Fußgängern.
+- Fahrzeuge in Reichweite übernehmen, NPC aussteigen lassen, selbst fahren und wieder aussteigen. Exklusive Belegung, serverseitige Geschwindigkeits- und Kollisionsprüfung, Freigabe bei Sitzungsende. Vereinfachte Arcade-Fahrphysik.
+- Animierte Räder, Lenkung, Blinker, Bremslichter und Nachtlichtdarstellung; Fahrer, Geschwindigkeitsanzeige, Motorgeräusch, Innen-/Außenkamera, Touch-Steuerung und Minimap.
+- Optionale versionierte Tevy-GLBs (CC0, LOD1/LOD2), geprüfte Dateistruktur und lokale Ersatzkarosserien ohne externe Browser-Anfragen. Neue Tests für Übernahme, Steuerung, Belegung und Darstellung.
+
 ## 0.15.21 – Country Roads
 - Rund 800 Meter neue Landstraßen, Hotelzufahrt und verbundene Rundstrecke mit beiden Dorfanschlüssen. Drei Verzweigungen, Kiesrandstreifen, weiße Randlinien und gestrichelte Mittellinien. Drei gebündelte, geländefolgende Meshes mit wetterabhängiger Asphaltoberfläche; Minimap zeigt die tatsächlichen Trassen.
 - Straßen-Metadaten werden einmalig in bestehende Gelände-Datensätze migriert, ohne Höhenwerte, Seen, Wege oder Spielerbauten zu ändern. Deterministische Freihaltung der Trassen von Baumstämmen; gespeicherte Baumzustände bleiben erhalten.

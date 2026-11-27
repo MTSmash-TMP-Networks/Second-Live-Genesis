@@ -399,7 +399,7 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
         from panorama_capture import PanoramaStore
         panorama = PanoramaStore(capture)
     class Handler(BaseHTTPRequestHandler):
-        server_version = "SecondLive/0.15.21"
+        server_version = "SecondLive/0.15.22"
 
         def log_message(self, fmt, *args):
             print("%s - %s" % (self.address_string(), fmt % args), flush=True)
@@ -609,13 +609,13 @@ def make_handler(store: ScanStore, token: str, updater=None, guest_game=False, w
                     return
                 filepath = (root / rel).resolve()
                 types = {".obj": "text/plain; charset=utf-8", ".glb": "model/gltf-binary", ".gltf": "model/gltf+json", ".bin": "application/octet-stream", ".hdr": "application/octet-stream", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
-                typ = "application/json" if rel == "manifest.json" else "text/plain; charset=utf-8" if rel == "hands/LICENSE.txt" else types.get(filepath.suffix.lower())
+                typ = "application/json" if rel in ("manifest.json","vehicles/manifest.json","nature/manifest.json") else "text/plain; charset=utf-8" if rel == "hands/LICENSE.txt" else types.get(filepath.suffix.lower())
                 if not typ or not filepath.is_relative_to(root) or not filepath.is_file():
                     self.send_json(404, {"error": "Asset nicht gefunden"})
                     return
                 self.send_data(200, filepath.read_bytes(), typ, "no-store" if rel == "manifest.json" else "public, max-age=3600")
             elif path == "/api/health":
-                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.15.21", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "free_world": bool(free_world), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
+                self.send_json(200, {"ok": True, "name": "Second Live", "version": "0.15.22", "accounts": bool(accounts), "hotel_lobby": bool(lobby), "free_world": bool(free_world), "revision": os.getenv("SECOND_LIVE_REVISION", "local"), "personal_world": bool(capture), "world_capture": bool(capture and legacy_capture), "requires_token": bool(token), "requires_game_token": bool(token) and not guest_game, "graphics_assets": (WEB / "assets/polyhaven/manifest.json").is_file() and (WEB / "engine/renderer.bundle.js").is_file()})
             elif path == "/api/update/status":
                 if self.require_admin(): self.send_json(200, updater.status())
             elif path.startswith("/api/free-world/texture/") or path.startswith("/api/free-world/model/"):

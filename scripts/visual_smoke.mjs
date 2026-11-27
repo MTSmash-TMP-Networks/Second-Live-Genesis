@@ -979,3 +979,22 @@ import {roadStations,roadGeometry,NatureSurface} from './free_nature.js';
  nature.set(doc);assert.equal(nature.details.children.length,3);nature.clear();
 }
 console.log('Country roads, terrain-following meshes, junction markings and wet asphalt verified');
+
+import {TrafficView,vehicleBlocked,nearestVehicle} from './free_traffic.js';
+{
+ const scene=new THREE.Scene(),traffic=new TrafficView(scene);
+ const row={id:'car-test',kind:'taxi',color:'#efbd28',position:[0,0,0],yaw:0,speed:4,steer:.5,brake:true,indicator:1,npc:true,driverSlot:null,avatar:null};
+ assert.ok(vehicleBlocked([row],0,0,0));assert.ok(!vehicleBlocked([row],4,0,0));
+ assert.equal(nearestVehicle([row],{x:2,y:0,z:0}).id,row.id);
+ assert.equal(nearestVehicle([{...row,driverSlot:0}],{x:2,y:0,z:0}),null);
+ traffic.sync([row]);
+ const a=traffic.cars.get(row.id);assert.equal(a.model.wheels.length,4);
+ const pose=traffic.step(.1,{x:0,y:0,z:0},row.id,false,1);
+ assert.equal(pose.speed,4);assert.ok(a.lights.head.emissiveIntensity>2);
+ assert.ok(Math.abs(a.model.wheels[0].spin.rotation.x)>.5);
+ assert.ok(Math.abs(a.model.wheels[0].pivot.rotation.y)>.1);
+ traffic.sync([{...row,position:[1,0,-2]}]);traffic.step(.1,{x:0,y:0,z:0},row.id,false,1);
+ assert.ok(a.root.position.z<0);
+ traffic.clear();assert.equal(traffic.cars.size,0);assert.equal(scene.children.length,0);
+}
+console.log('Traffic fallback models, rotating wheels, vehicle targeting and cleanup verified');

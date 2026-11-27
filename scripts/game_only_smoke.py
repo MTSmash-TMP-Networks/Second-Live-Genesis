@@ -35,6 +35,65 @@ def room_model_fixture(change=None):
     return struct.pack('<IIIII',0x46546c67,2,28+len(js)+len(vertices),len(js),0x4e4f534a)+js+struct.pack('<II',len(vertices),0x004e4942)+vertices
 
 class GameOnlyTest(unittest.TestCase):
+    def test_traffic_routes_vehicle_ownership_and_driving(self):
+        from free_world import FreeWorld
+        from free_traffic import car_intersects, car_bounds, MAX_SPEED
+        now=[100.]
+        with tempfile.TemporaryDirectory() as tmp:
+            world=FreeWorld(tmp,lambda:now[0])
+            a=world.enter('a',{'slot':0,'nickname':'Driver A','avatar':DEFAULT_AVATAR})
+            b=world.enter('b',{'slot':1,'nickname':'Driver B','avatar':DEFAULT_AVATAR})
+            self.assertEqual(len(a['vehicles']),11)
+            self.assertEqual(sum(c['kind']=='taxi' for c in a['vehicles']),3)
+            self.assertEqual(len(world.traffic.routes),4)
+            self.assertTrue(all(r.length>300 for r in world.traffic.routes))
+            taxi=world.traffic.cars['car-11']
+            self.assertTrue(taxi['parked'])
+            self.assertEqual(taxi['kind'],'taxi')
+            self.assertFalse(car_intersects([0,0,0],0,[3.1,0,0],math.pi))
+            self.assertTrue(car_intersects([0,0,0],0,[1,0,0],math.pi/2))
+            self.assertTrue(world.blocked(taxi['position']))
+            # Position the authenticated test clients beside the waiting taxi.
+            row=world.players['a'];other=world.players['b']
+            p=taxi['position'][:]
+            row['position']=[p[0]+2.,0.,p[2]]
+            other['position']=[p[0]+2.,0.,p[2]+1.1]
+            def req(who,session,action,**kw):
+                return world.request(who,{'action':action,'lease':session['lease'],'life':world.players[who]['life'],**kw})
+            entered=req('a',a,'vehicle_enter',id=taxi['id'])
+            self.assertEqual(entered['vehicle'],taxi['id'])
+            self.assertEqual(taxi['owner'],'a')
+            self.assertFalse(taxi['npc'])
+            self.assertTrue(entered['departedDrivers'])
+            self.assertIsNone(row['weapon'])
+            with self.assertRaises(CaptureError):req('b',b,'vehicle_enter',id=taxi['id'])
+            with self.assertRaises(CaptureError):req('a',a,'sit',id='missing')
+            with self.assertRaises(CaptureError):req('a',a,'update',drive=[10,0])
+            other['position']=[0.,0.,146.]
+            req('a',a,'update',drive=[1.,0.])
+            for _ in range(6):
+                now[0]+=.20;result=req('a',a,'update',drive=[1.,0.])
+            self.assertGreater(taxi['speed'],0)
+            self.assertLessEqual(taxi['speed'],MAX_SPEED)
+            self.assertLess(taxi['position'][2],p[2]-.5)
+            self.assertEqual(result['position'],taxi['position'])
+            peer=req('b',b,'update',position=other['position'],yaw=0.)
+            self.assertEqual(next(x for x in peer['peers'] if x['slot']==0)['vehicle'],taxi['id'])
+            self.assertEqual(next(x for x in peer['vehicles'] if x['id']==taxi['id'])['driverSlot'],0)
+            req('a',a,'update',drive=[0.,0.])
+            for _ in range(6):
+                now[0]+=.20;req('a',a,'update',drive=[0.,0.])
+            exited=req('a',a,'vehicle_exit')
+            self.assertIsNone(exited['vehicle'])
+            self.assertIsNone(taxi['owner'])
+            self.assertFalse(world.blocked(exited['position']))
+            req('a',a,'vehicle_enter',id=taxi['id'])
+            world.disconnect('a')
+            self.assertIsNone(taxi['owner'])
+            self.assertEqual(taxi['speed'],0.)
+            self.assertNotIn('a',world.players)
+
+
     def test_country_road_layout_and_terrain_migration(self):
         import sqlite3
         from contextlib import closing
