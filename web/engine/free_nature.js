@@ -1,6 +1,8 @@
 // Natural landscape presentation. All source imagery is packaged locally at
 // image build time; deterministic fallback materials work without any downloads.
 import * as THREE from 'three';
+import {Reflector} from 'three/addons/objects/Reflector.js';
+import {VegetationView} from './free_vegetation.js';
 import {terrainHeight,terrainGeometry,trailGeometry,lakeGeometry} from './free_terrain.js';
 
 function random(seed){let n=seed>>>0;return ()=>{n=(Math.imul(n,1664525)+1013904223)>>>0;return n/4294967296;};}
@@ -17,43 +19,107 @@ function edgeTexture(){
  for(let x=0;x<n;x++){const a=Math.round(255*Math.min(1,x/9,(n-1-x)/9));data.set([a,a,a,255],x*4);}
  const t=new THREE.DataTexture(data,n,1);t.wrapT=THREE.RepeatWrapping;t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearFilter;t.needsUpdate=true;return t;
 }
-function waterMaterial(){
- const uniforms=THREE.UniformsUtils.merge([THREE.UniformsLib.fog,{clock:{value:0},daylight:{value:1},storm:{value:0},skyColor:{value:new THREE.Color(0xb0cfe0)},lightDir:{value:new THREE.Vector3(0,1,0)}}]);
- return new THREE.ShaderMaterial({uniforms,side:THREE.DoubleSide,transparent:true,depthWrite:false,fog:true,vertexShader:`
+// Reflect the actual landscape in a small render target. The reflection
+// is distorted by fine, multi-directional wave normals and rain impacts,
+// not by wide alternating color bands.
+export function lakeShader(){
+ const uniforms=THREE.UniformsUtils.merge([THREE.UniformsLib.fog,{
+  color:{value:new THREE.Color(0xffffff)},tDiffuse:{value:null},textureMatrix:{value:new THREE.Matrix4()},
+  clock:{value:0},daylight:{value:1},storm:{value:0},rain:{value:0},reflectReady:{value:0},
+  skyColor:{value:new THREE.Color(0xb0cfe0)},lightDir:{value:new THREE.Vector3(0,1,0)}
+ }]);
+ return {uniforms,vertexShader:`
+ attribute float lakeDepth;
  varying vec3 vWorld;
+ varying vec4 vReflection;
+ varying float vDepth;
+ uniform mat4 textureMatrix;
  #include <fog_pars_vertex>
  void main(){
   vWorld=(modelMatrix*vec4(position,1.0)).xyz;
+  vReflection=textureMatrix*vec4(position,1.0);
+  vDepth=lakeDepth;
   vec4 mvPosition=modelViewMatrix*vec4(position,1.0);
   gl_Position=projectionMatrix*mvPosition;
   #include <fog_vertex>
  }
  `,fragmentShader:`
  varying vec3 vWorld;
- uniform float clock,daylight,storm;
+ varying vec4 vReflection;
+ varying float vDepth;
+ uniform sampler2D tDiffuse;
+ uniform float clock,daylight,storm,rain,reflectReady;
  uniform vec3 skyColor,lightDir;
  #include <fog_pars_fragment>
+ float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+ vec2 drop(vec2 p,float spacing,float offset){
+  vec2 g=p*spacing+vec2(offset,offset*.73),cell=floor(g);
+  vec2 center=vec2(hash(cell+vec2(6.2,1.9)),hash(cell+vec2(4.7,8.1)))*.64+.18;
+  vec2 d=fract(g)-center;
+  float dist=length(d),age=fract(clock*.83+hash(cell+offset)),r=age*.66;
+  float envelope=exp(-pow((dist-r)*20.0,2.0))*(1.0-age)*smoothstep(.02,.08,dist);
+  return d/max(.001,dist)*sin((dist-r)*83.0)*envelope;
+ }
  void main(){
   vec2 p=vWorld.xz;
-  float a=sin(dot(p,vec2(1.36,.79))+clock*1.12);
-  float b=sin(dot(p,vec2(-.71,2.19))-clock*.86);
-  float c=sin(dot(p,vec2(4.13,-3.53))+clock*1.8);
-  float waves=.8+storm*1.6;
-  vec3 n=normalize(vec3((a*.075+c*.024)*waves,1.0,(b*.089-c*.023)*waves));
+  float a=sin(dot(p,vec2(6.7,3.4))+clock*1.72);
+  float b=sin(dot(p,vec2(-4.3,9.1))-clock*2.02);
+  float c=sin(dot(p,vec2(17.1,-9.3))+clock*2.9);
+  float d=sin(dot(p,vec2(2.7,-15.9))-clock*2.4);
+  vec2 ripple=(drop(p,2.7,0.0)+drop(p,3.8,7.2))*.048*rain;
+  vec2 slope=vec2(a*.014+b*.010+c*.005,b*.014-a*.008+d*.005)*(1.0+storm*1.8)+ripple;
+  vec3 n=normalize(vec3(slope.x,1.0,slope.y));
   vec3 v=normalize(cameraPosition-vWorld);
-  float f=pow(1.0-clamp(dot(n,v),0.0,1.0),3.4);
-  vec3 deep=mix(vec3(.016,.035,.045),vec3(.058,.19,.18),daylight);
-  deep*=.93+.07*a+.055*b;
-  vec3 reflected=skyColor*(.61+.39*daylight);
-  vec3 color=mix(deep,reflected,.13+.78*f);
-  float spec=pow(max(dot(reflect(-lightDir,n),v),0.0),52.0)*daylight*(1.0-storm*.75);
-  color+=vec3(1.0,.85,.62)*spec*.72;
-  gl_FragColor=vec4(color,.78+.21*f);
+  float facing=clamp(dot(n,v),0.0,1.0);
+  float fresnel=.025+.975*pow(1.0-facing,4.0);
+  vec2 proj=vReflection.xy/max(.0001,vReflection.w)+slope*.22;
+  vec3 reflected=skyColor*.82;
+  if(reflectReady>.5&&vReflection.w>0.0){
+   vec3 image=texture2D(tDiffuse,clamp(proj,vec2(.003),vec2(.997))).rgb;
+   reflected=mix(reflected,image,.92);
+  }
+  float depth=max(vDepth,0.0),absorb=1.0-exp(-depth*4.8);
+  vec3 shallow=mix(vec3(.033,.047,.041),vec3(.115,.166,.098),daylight);
+  vec3 deep=mix(vec3(.008,.022,.029),vec3(.020,.092,.079),daylight);
+  vec3 water=mix(shallow,deep,absorb);
+  vec3 color=mix(water,reflected,clamp(fresnel*.85+.06,.0,.92));
+  float spec=pow(max(dot(reflect(-lightDir,n),v),0.0),112.0)*daylight*(1.0-storm*.86);
+  color+=vec3(.95,.83,.62)*spec*.39;
+  float edge=smoothstep(0.0,.13,depth);
+  float alpha=edge*clamp(.12+.78*absorb+.50*fresnel,.10,.98);
+  gl_FragColor=vec4(color,alpha);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
   #include <fog_fragment>
  }
- `});
+ `};
+}
+function lakeReflector(geo,lake,all){
+ // Reflector's plane is local XY with a +Z normal. Align the clipped
+ // heightfield geometry to this plane, preserving every world coordinate.
+ geo.translate(0,-lake.level-.006,0);geo.rotateX(Math.PI/2);
+ const mesh=new Reflector(geo,{textureWidth:512,textureHeight:512,multisample:0,clipBias:.002,shader:lakeShader()});
+ mesh.rotation.x=-Math.PI/2;mesh.position.y=lake.level+.006;
+ mesh.material.transparent=true;mesh.material.depthWrite=false;mesh.material.side=THREE.DoubleSide;mesh.material.fog=true;
+ mesh.name='Freshwater lake';mesh.renderOrder=3;mesh.userData.noImpact=true;
+ const renderReflection=mesh.onBeforeRender,worldCamera=new THREE.Vector3();
+ let last=-Infinity;
+ mesh.onBeforeRender=function(renderer,scene,camera,...args){
+  const u=mesh.material.uniforms;camera.getWorldPosition(worldCamera);
+  const distance=Math.hypot(worldCamera.x-lake.x,worldCamera.z-lake.z);
+  if(!camera.isPerspectiveCamera||renderer.xr?.isPresenting||worldCamera.y<lake.level+.025||distance>Math.max(lake.rx,lake.rz)+50){
+   u.reflectReady.value=0;return;
+  }
+  const now=performance.now();if(now-last<66&&u.reflectReady.value>.5)return;
+  // Avoid recursive reflection renders between the two lakes.
+  const others=all.filter(o=>o!==mesh).map(o=>[o,o.visible]);
+  for(const [o] of others)o.visible=false;
+  const target=renderer.getRenderTarget(),xr=renderer.xr.enabled,shadows=renderer.shadowMap.autoUpdate;
+  try{renderReflection.call(mesh,renderer,scene,camera,...args);u.reflectReady.value=1;last=now;}
+  catch(e){u.reflectReady.value=0;mesh.visible=true;renderer.xr.enabled=xr;renderer.shadowMap.autoUpdate=shadows;renderer.setRenderTarget(target);console.warn('Lake reflection disabled:',e.message||e);mesh.onBeforeRender=()=>{};}
+  finally{for(const [o,visible] of others)o.visible=visible;}
+ };
+ return mesh;
 }
 function noImpact(mesh){mesh.userData.noImpact=true;return mesh;}
 
@@ -171,7 +237,7 @@ export class NatureSurface{
   };
   this.groundMaterial.customProgramCacheKey=()=> 'free-nature-terrain-v1';
   this.pathMaterial=new THREE.MeshStandardMaterial({map:materialTexture(923,[127,108,78]),alphaMap:edgeTexture(),transparent:true,alphaTest:.06,depthWrite:false,roughness:1,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2});
-  this.waterMaterial=waterMaterial();
+  this.lakes=[];this.vegetation=new VegetationView(root);
   this.roadMaterials={
    shoulder:new THREE.MeshStandardMaterial({map:materialTexture(1471,[127,119,105]),roughness:1}),
    asphalt:new THREE.MeshStandardMaterial({map:materialTexture(5632,[76,78,79]),roughness:.96}),
@@ -196,14 +262,17 @@ export class NatureSurface{
   this.forest.setNatureTextures?.({bark,barkNormal,leaf,pine});
  }
  set(doc){
-  this.clear();this.doc=doc;
+  // Preserve the current obstruction set when a full snapshot refreshes terrain.
+  const boxes=this.vegetation.boxes,roads=this.vegetation.roads;this.clear();this.doc=doc;
+  this.vegetation.setObstacles(boxes,roads);this.vegetation.set(doc);
   const g=terrainGeometry(doc),p=g.attributes.position,blend=[];
   for(let i=0;i<p.count;i++){
    const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
    const slope=Math.hypot(terrainHeight(doc,x+1,z)-terrainHeight(doc,x-1,z),terrainHeight(doc,x,z+1)-terrainHeight(doc,x,z-1))/2;
    const patch=.5+.28*Math.sin(x*.039+Math.cos(z*.051))+.17*Math.cos(z*.083-x*.022);
-   const forest=Math.max(0,Math.min(.84,patch*.9+(x<-25&&z<12&&z>-105?.17:0)));
-   const rock=Math.max(0,Math.min(.96,(slope-.32)*1.6+Math.max(0,y-12)*.065));
+   const bank=(doc.lakes||[]).some(l=>Math.hypot((x-l.x)/l.rx,(z-l.z)/l.rz)<1.05&&y<l.level+.20);
+   const forest=bank?.95:Math.max(0,Math.min(.84,patch*.9+(x<-25&&z<12&&z>-105?.17:0)));
+   const rock=Math.max(bank?.16:0,Math.min(.96,(slope-.32)*1.6+Math.max(0,y-12)*.065));
    blend.push(forest,rock);
   }
   g.setAttribute('natureBlend',new THREE.Float32BufferAttribute(blend,2));
@@ -219,11 +288,13 @@ export class NatureSurface{
   }
   for(const lake of doc.lakes||[]){
    const geo=lakeGeometry(doc,lake);if(!geo.attributes.position.count){geo.dispose();continue;}
-   const mesh=noImpact(new THREE.Mesh(geo,this.waterMaterial));mesh.name='Freshwater lake';mesh.renderOrder=3;this.details.add(mesh);
+   const mesh=lakeReflector(geo,lake,this.lakes);this.lakes.push(mesh);this.details.add(mesh);
   }
  }
- update(now,day,weather,horizon,lightDir){
-  const u=this.waterMaterial.uniforms;u.clock.value=(now/1000)%3600;u.daylight.value=day;u.storm.value=weather.storm;u.skyColor.value.copy(horizon);u.lightDir.value.copy(lightDir);
+ setObstacles(boxes,roads){this.vegetation.setObstacles(boxes,roads);}
+ update(now,day,weather,horizon,lightDir,player){
+  for(const lake of this.lakes){const u=lake.material.uniforms;u.clock.value=(now/1000)%3600;u.daylight.value=day;u.storm.value=weather.storm||0;u.rain.value=weather.rain||0;u.skyColor.value.copy(horizon);u.lightDir.value.copy(lightDir);}
+  this.vegetation.update(now,player,weather);
   const wet=Math.max(0,Math.min(1,weather.rain||0));
   this.roadMaterials.asphalt.color.setScalar(1-.32*wet);this.roadMaterials.asphalt.roughness=.96-.40*wet;
   this.roadMaterials.shoulder.color.setScalar(1-.20*wet);
@@ -231,8 +302,8 @@ export class NatureSurface{
  clear(){
   if(this.ground.geometry!==this.flat)this.ground.geometry.dispose();
   this.ground.geometry=this.flat;this.ground.material=this.flatMaterial;
-  for(const mesh of [...this.details.children]){mesh.geometry.dispose();mesh.removeFromParent();}
-  this.doc=null;
+  for(const mesh of [...this.details.children]){mesh.geometry.dispose();mesh.removeFromParent();mesh.dispose?.();}
+  this.lakes.length=0;this.vegetation.clear();this.doc=null;
  }
 }
 

@@ -1,8 +1,16 @@
 # Second Live – World Genesis
 
-**v0.15.25 · Premium Vehicles**
+**v0.15.26 · Natural Environment**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.26 – Natürliche Umgebung
+
+Dichte Wiesen mit hohem Gras, Wildblumen, Farnen, Sträuchern und Hecken; Schilf, Rohrkolben, Seerosen und Steine an den Seen. Die Vegetation folgt der gespeicherten Höhenkarte, berücksichtigt Straßen, Wanderwege, Gebäude und Spielerbauten und bewegt sich wetterabhängig im Wind. Detailreiche Pflanzenmodelle in der Nähe, leichte instanzierte Geometrien in größerer Entfernung.
+
+Die Seen nutzen eine kleine, echte planare Szenenspiegelung mit feinen Wasserwellen, Regenringen, tiefenabhängiger Färbung und transparenten Uferbereichen. Höhe, Seegrenzen, Spielphysik und Speicherstände bleiben unverändert. Bei nicht unterstützter Spiegelung bleibt die Wasseroberfläche mit Himmelsreflexionsfarbe sichtbar.
+
+**Automatischer Pflanzenimport:** Docker ermittelt die offiziellen GLB-/ZIP-Links der [Vinish-Gräser](https://vinish.dev/free-3d-models/grass-and-ground-cover), [Sträucher](https://vinish.dev/free-3d-models/bushes-and-hedges) und [Blumen](https://vinish.dev/free-3d-models/flowers) (CC BY 4.0) aus den Katalogseiten und prüft Größe, eingebettete Daten, Urheberangabe und Geometriebudget. Zusätzlich versucht der Build, CC0-Pflanzentexturen von Poly Haven über dessen Asset-API zu beziehen. Alle erfolgreichen Downloads werden lokal im Image gespeichert; keine externen Browser-Anfragen und kein manuelles Pflanzenpaket nötig. Bei fehlenden oder geänderten Downloadlinks bleibt die Free World mit lokalen Pflanzengeometrien vollständig nutzbar. Der Build-Log nennt die tatsächlich verfügbaren Modelle und Texturpaare.
 
 ## Neu in 0.15.25 – Premium-Fahrzeuge
 

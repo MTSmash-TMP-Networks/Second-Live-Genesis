@@ -76,7 +76,7 @@ export function trailGeometry(doc,path){
 // Clip the water surface to the submerged terrain triangles. No rectangular
 // blue plane sticking out through a bank.
 export function lakeGeometry(doc,lake){
- const {half:h,step:s}=doc,n=Math.round(h*2/s)+1,pos=[],uv=[];
+ const {half:h,step:s}=doc,n=Math.round(h*2/s)+1,pos=[],uv=[],depth=[];
  const level=lake.level,loX=Math.max(0,Math.floor((lake.x-lake.rx+h)/s)),hiX=Math.min(n-2,Math.ceil((lake.x+lake.rx+h)/s)),loZ=Math.max(0,Math.floor((lake.z-lake.rz+h)/s)),hiZ=Math.min(n-2,Math.ceil((lake.z+lake.rz+h)/s));
  const clip=tri=>{
   const out=[];
@@ -85,7 +85,7 @@ export function lakeGeometry(doc,lake){
    if(ia)out.push(a);
    if(ia!==ib){const f=(level-a[1])/(b[1]-a[1]);out.push([a[0]+(b[0]-a[0])*f,level,a[2]+(b[2]-a[2])*f]);}
   }
-  for(let i=1;i+1<out.length;i++)for(const p of [out[0],out[i],out[i+1]]){pos.push(p[0],level+.006,p[2]);uv.push(p[0]*.12,p[2]*.12);}
+  for(let i=1;i+1<out.length;i++)for(const p of [out[0],out[i],out[i+1]]){pos.push(p[0],level+.006,p[2]);uv.push(p[0]*.12,p[2]*.12);depth.push(Math.max(0,level-p[1]));}
  };
  const vertex=(i,j)=>[-h+i*s,doc.heights[j*n+i]/100,-h+j*s];
  for(let j=loZ;j<=hiZ;j++)for(let i=loX;i<=hiX;i++){
@@ -93,5 +93,5 @@ export function lakeGeometry(doc,lake){
   if(Math.hypot((x-lake.x)/lake.rx,(z-lake.z)/lake.rz)>.95)continue;
   const a=vertex(i,j),b=vertex(i+1,j),c=vertex(i,j+1),d=vertex(i+1,j+1);clip([a,c,b]);clip([b,c,d]);
  }
- const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeVertexNormals();return g;
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setAttribute('lakeDepth',new THREE.Float32BufferAttribute(depth,1));g.computeVertexNormals();return g;
 }

@@ -846,7 +846,7 @@ function applyFreeSnapshot(s,result,initial=false){
  s.hp=result.hp;s.life=result.life;s.score=result.score;s.online=result.online;s.peers=result.peers||[];s.textures=result.textures||[];
  if(Array.isArray(result.blocks)){s.blocks=result.blocks;s.revision=result.revision;freeView.setBlocks(s.blocks,s.revision,loadFreeTexture,loadFreeModel);if(freeHeld?.id){const b=s.blocks.find(b=>b.id===freeHeld.id);if(!b||!b.hp||b.version!==freeHeld.version){freeHeld=null;$('notice').textContent='Objekt wurde verändert. Bitte erneut aufnehmen.';}}}
  if(Array.isArray(result.scenery)){s.scenery=result.scenery;s.villageRoads=result.villageRoads||[];freeView.village.set(s.scenery,s.villageRoads);}
- if(Array.isArray(result.scenery)||Array.isArray(result.blocks)||!s.obstacles){rebuildFreeObstacles(s);freeView.setWeatherObstacles(s.obstacles);}
+ if(Array.isArray(result.scenery)||Array.isArray(result.blocks)||!s.obstacles){rebuildFreeObstacles(s);freeView.setWeatherObstacles(s.obstacles);freeView.setVegetationObstacles(s.blocks.concat(s.scenery||[]),s.villageRoads||[]);}
  if(Array.isArray(result.impacts))s.impacts=result.impacts;
  freeView.syncImpactMarks(s.impacts||[],s.blocks,s.scenery||[]);
  s.npcs=result.npcs||[];

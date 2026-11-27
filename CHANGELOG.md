@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.26 – Natural Environment
+- Deterministische, instanzierte Wiesenvegetation mit Gräsern, Wildblumen, Farnen, Sträuchern und Hecken; Schilf, Rohrkolben, Seerosen und Ufersteine. Wetterabhängiger Wind, Höhenkartenanpassung, freie Straßen/Wanderwege und Bauflächen. Begrenztes Nahbereichs-Dreiecksbudget.
+- Automatische optionale Pflanzen-Downloads im Docker-Build: offizielle Vinish-Kataloglinks, strukturgeprüfte GLB-Dateien und CC0-Pflanzentexturen von Poly Haven; lokale Bereitstellung, Lizenznachweise, SHA-256 bzw. Anbieterprüfsummen, lokale Ersatzgeometrien bei Netz-/Formatfehlern.
+- Seeoberflächen mit 512x512-Szenenspiegelungen, feinen Wellen, Regenringen, Tiefenfärbung und transparenten Ufern. Begrenzte Reflexionsupdates, keine rekursiven Seespiegelungen. Unveränderte Geländephysik und Spielstände.
+- Neue Offline-Tests für Downloadvalidierung, Pflanzenplatzierung, Geometriedaten und Wasseroberfläche.
+
 ## 0.15.25 – Premium Vehicles
 - Fünf bereitgestellte Vinish.dev-Originalmodelle mit eingebetteten Texturen, vier separaten Rädern, Lenkrad und Innenraum; ergänzend fünf lokal vorbereitete, reduzierte Detailstufen. Einmaliges ZIP-Paket unter `optional-vehicles/Second-Live-Premium-Vehicles.zip`; SHA-256, Format, Szenen-Pivots und Dreiecksbudget werden beim Build geprüft.
 - Alle fünf Modelle in der NPC-Flotte; drei gelbe Luxury-SUV-Taxis mit Taxischild. Modellbezogene Fahrerpositionen und Innenkamera, animierte Lenkräder und Radrotation, passende native Lichtmaterialien. Proportionale Skalierung in die bisherige Kollisionshülle; unveränderte Fahrphysik.

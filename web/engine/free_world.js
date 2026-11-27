@@ -199,6 +199,7 @@ export class FreeWorldView{
  syncClock(phase,now,weatherTime){if(Number.isFinite(phase)){this.phase=phase;this.phaseTime=now;}this.weather.sync(weatherTime,now);}
  setTerrain(doc){if(!validTerrain(doc))return;this.terrain=doc;this.nature.set(doc);this.weather.terrain=doc;}
  setWeatherObstacles(rows){this.weather.setObstacles(rows);}
+ setVegetationObstacles(rows,roads){this.nature.setObstacles(rows.filter(r=>(r.hp??100)>0).map(freeBox),roads||[]);}
  updateSky(now,player){
   const phase=(this.phase+Math.max(0,now-this.phaseTime)/1000/layout.daySeconds)%1,s=freeSkyState(phase),d=new THREE.Vector3(...s.direction).normalize();
   this.sky.position.set(player.x,player.y,player.z);this.sun.position.copy(d).multiplyScalar(395);this.moon.position.copy(d).multiplyScalar(-395);
@@ -216,7 +217,7 @@ export class FreeWorldView{
   this.moonlight.position.copy(d).multiplyScalar(-150);this.moonlight.intensity=.22*s.night*(1-.7*weather.cloud);
   this.hemi.color.set(0x99b3ec).lerp(new THREE.Color(0xffffff),s.day);this.hemi.intensity=(.20+1.6*s.day)*(1-.38*weather.cloud-.20*weather.storm)+weather.flash*.9;
   const darkness=Math.max(s.night,weather.storm*.72);
-  this.nature.update(now,s.day,weather,horizon,d);
+  this.nature.update(now,s.day,weather,horizon,d,player);
   this.trafficNight=darkness;
   this.village.roads.setNight(darkness);
   this.village.interior.setNight(darkness,player);

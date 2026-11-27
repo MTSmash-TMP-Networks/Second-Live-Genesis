@@ -1038,3 +1038,32 @@ import {normalizeVehicleTemplate,premiumModelSpec,createImportedVehicle} from '.
  }
 }
 console.log('Premium vehicle orientation, proportional scaling, driver seats, steering pivots and taxi repaint verified');
+
+import {plantSites,vegetationClearance,VegetationView} from './free_vegetation.js';
+import {terrainWater} from './free_terrain.js';
+import {lakeShader} from './free_nature.js';
+{
+ const doc={version:1,half:150,step:2,heights:[],paths:[],roads:[{width:7,points:[[-140,-15],[140,-15]]}],lakes:[{x:40,z:50,rx:16,rz:12,level:.72}]};
+ for(let z=-150;z<=150;z+=2)for(let x=-150;x<=150;x+=2){
+  const d=Math.hypot((x-40)/16,(z-50)/12);
+  doc.heights.push(d<1.13?Math.round(100*Math.max(0,Math.min(1.15,(d-.4)*2.5))):0);
+ }
+ const boxes=[[[-5,0,-5],[10,4,10]]],roads=[{x:30,z:-40,w:4,d:12}];
+ const sites=plantSites(doc,boxes,roads),blocked=vegetationClearance(doc,boxes,roads);
+ assert.ok(sites.length>3000);assert.deepEqual(plantSites(doc,boxes,roads),sites);
+ assert.ok(sites.every(s=>!blocked(s.x,s.z)));
+ assert.ok(sites.every(s=>['reeds','cattails','lily','stone'].includes(s.kind)||!terrainWater(doc,s.x,s.z)));
+ assert.ok(sites.some(s=>s.kind==='reeds')&&sites.some(s=>s.kind==='lily'));
+ const keys=new Set(sites.map(s=>JSON.stringify(s)));
+ const changed=plantSites(doc,boxes.concat([[[-90,0,-90],[5,4,5]]]),roads);
+ assert.ok(changed.length<sites.length&&changed.every(s=>keys.has(JSON.stringify(s))));
+ const g=lakeGeometry(doc,doc.lakes[0]),depth=g.attributes.lakeDepth;
+ assert.equal(depth.count,g.attributes.position.count);assert.ok(depth.array.some(v=>v>0.5));assert.ok(depth.array.some(v=>v<.001));g.dispose();
+ const shader=lakeShader();assert.ok(shader.uniforms.tDiffuse&&shader.uniforms.textureMatrix&&shader.uniforms.rain);
+ const root=new THREE.Group(),v=new VegetationView(root);
+ v.setObstacles(boxes,roads);v.set(doc);v.update(1000,{x:40,z:47},{rain:.7,storm:.5});
+ assert.ok(v.batches.length>0&&v.batches.every(m=>m.isInstancedMesh&&m.userData.noImpact));
+ assert.ok(v.uniforms.plantWind.value>1);
+ v.clear();assert.equal(v.batches.length,0);assert.equal(v.root.children.length,0);
+}
+console.log('Natural vegetation spacing, deterministic placement, instancing and depth-aware lake shader verified');

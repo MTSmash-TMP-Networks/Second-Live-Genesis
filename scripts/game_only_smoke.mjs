@@ -507,3 +507,7 @@ assert.ok(game.includes("carPose.eye||[-.43,1.23,0]"));
 assert.ok(game.includes("player.x+c*x+s*z,player.y+y,player.z-s*x+c*z"));
 assert.ok(html.includes('Vinish.dev')&&html.includes('creativecommons.org/licenses/by/4.0/'));
 console.log('Premium vehicle camera anchor and attribution checks passed');
+
+assert.ok(game.includes('freeView.setVegetationObstacles(s.blocks.concat(s.scenery||[]),s.villageRoads||[])'));
+assert.ok(html.includes('Pflanzen-Texturen')&&html.includes('Poly Haven'));
+console.log('Free World vegetation obstacle synchronization and source credits verified');
