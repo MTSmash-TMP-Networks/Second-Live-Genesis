@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.23 – AI Traffic Hotfix
+- Isolierte UI-Testumgebungen für `freeKey`, `freePrimary` und `freeSecondary` initialisieren `freeState`. Behebt den Docker-Fehler `ReferenceError: freeState is not defined` aus 0.15.22.
+- Veraltete Quelltextprüfungen an Fahrzeugzustand, Kollisionsabfrage, NPC- und Peer-Synchronisation angepasst; Tests für gesperrte und wieder freigegebene Tastatur- und Mausaktionen ergänzt. Keine Tests entfernt und keine Fahrzeugfunktionen deaktiviert.
+
 ## 0.15.22 – AI Traffic
 - Elf serverseitig synchronisierte Fahrzeuge: acht Pkw und drei Taxis, davon ein wartendes Taxi beim Hotel. NPC-Verkehr mit Rechtsverkehr, Kurven, Bremsen vor Hindernissen und Fußgängern.
 - Fahrzeuge in Reichweite übernehmen, NPC aussteigen lassen, selbst fahren und wieder aussteigen. Exklusive Belegung, serverseitige Geschwindigkeits- und Kollisionsprüfung, Freigabe bei Sitzungsende. Vereinfachte Arcade-Fahrphysik.

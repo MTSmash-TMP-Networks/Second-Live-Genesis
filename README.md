@@ -1,8 +1,12 @@
 # Second Live – World Genesis
 
-**v0.15.22 · AI Traffic**
+**v0.15.23 · AI Traffic Hotfix**
 
 Second Live ist ein browserbasiertes 3D-Open-World-Spiel für Desktop, Smartphone und perspektivisch VR. Die Spielwelt wird aus gezielt modellierten, fotorealistisch texturierten Gebäuden und Umgebungen aufgebaut. Spieler können die Welt erkunden, verändern, zerstören und wieder aufbauen. Die aktuelle Version ist ein lokaler Entwicklungsprototyp, kein öffentlicher Multiplayer-Dienst.
+
+## Neu in 0.15.23 – KI-Straßenverkehr-Hotfix
+
+Die isolierten JavaScript-Regressionstests kennen jetzt den neuen Fahrzeugzustand. Veraltete Prüfungen für Fußgänger-Kollision, NPC-Synchronisation, Waffenwahl und Bewegung wurden an die Fahrzeugintegration angepasst. Zusätzliche Tests prüfen die Sperre von Bau- und Waffenaktionen während der Fahrt und ihre Wiederfreigabe nach dem Aussteigen. Fahrzeugfunktionen, Landschaft und Spielstände bleiben unverändert.
 
 ## Neu in 0.15.22 – KI-Straßenverkehr
 

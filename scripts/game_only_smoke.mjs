@@ -288,12 +288,18 @@ assert.ok(ids.includes('free-inventory')&&ids.includes('equip-block')&&ids.inclu
 assert.ok(!game.includes('freeTool')&&!html.includes('free-pvp-mode'));
 assert.ok(game.includes("if(freeState){phone('inventory');return;}"));
 const freeKeyTest=new Function('assert',`
-let blocks=0,removals=0;
+let blocks=0,removals=0,freeState=null;
 const freeTakeBlock=()=>{blocks++;},freeEdit=op=>{if(op==='remove')removals++;};
 `+getPart('function freeKey(','let freeTextureKey=')+`
 for(const key of ['Digit0','Digit1','Digit2','Digit3','KeyI','KeyT','KeyE','KeyB','KeyQ','KeyF','KeyG','KeyR'])assert.equal(freeKey(key),false);
 assert.equal(freeKey('Digit4'),true);assert.equal(blocks,1);
 assert.equal(freeKey('Delete'),true);assert.equal(removals,1);
+freeState={vehicle:null};assert.equal(freeKey('Digit4'),true);assert.equal(blocks,2);
+freeState.vehicle='car-1';
+for(const key of ['Digit0','Digit1','Digit2','Digit3','Digit4','Delete','KeyT','KeyB','KeyQ','KeyF','KeyG','KeyR','KeyW','Space'])assert.equal(freeKey(key),true);
+for(const key of ['KeyE','KeyV','KeyP','KeyI'])assert.equal(freeKey(key),false);
+assert.equal(blocks,2);assert.equal(removals,1);
+freeState.vehicle=null;assert.equal(freeKey('Delete'),true);assert.equal(removals,2);
 `);
 freeKeyTest(assert);
 const resizeFreeTest=new Function('assert',getPart('function resizeFreeObject(','function freeCandidate(')+`
@@ -302,7 +308,7 @@ m.extent=.1;resizeFreeObject(m,-1);assert.equal(m.extent,.1);m.extent=4;resizeFr
 const b={kind:'block',shape:'cube',dims:[2,2,2]};resizeFreeObject(b,1);assert.equal(JSON.stringify(b.dims),'[3,3,3]');
 const w={kind:'block',shape:'wall-x',dims:[1,4,4]};resizeFreeObject(w,-1);assert.equal(JSON.stringify(w.dims),'[1,3,3]');
 `);resizeFreeTest(assert);
-assert.ok(game.includes("weapon:equipped"));
+assert.ok(game.includes("weapon:s.vehicle?null:equipped"));
 assert.ok(game.includes("void freeEdit('pulse',weapon)"));
 assert.ok(game.includes("action='relocate';extra.id=h.id;extra.version=h.version"));
 console.log('Unified inventory and independent 10 cm model / 50 cm block sizing checks passed');
@@ -360,13 +366,15 @@ const flashlightUiTest=new Function('assert',`
 console.log('Free World wheel inventory and smartphone flashlight toggle checks passed');
 
 const buildMouseTest=new Function('assert',`
- let freeHeld=null,equipped=null;const calls=[];
+ let freeHeld=null,equipped=null,freeState=null;const calls=[];
  const freeEdit=op=>calls.push(op),pressTrigger=()=>calls.push('fire'),toggleScope=()=>calls.push('zoom');
  `+getPart('function freePrimary(','function freeKey(')+`
  freeHeld={kind:'block'};freePrimary();freeSecondary();assert.deepEqual(calls,['place','remove']);
  freeHeld={kind:'block',id:2};freePrimary();freeSecondary();assert.deepEqual(calls.slice(2),['place','place']);
  freeHeld={kind:'model'};freePrimary();freeSecondary();assert.deepEqual(calls.slice(4),['place']);
  freeHeld=null;equipped='rifle';freePrimary();freeSecondary();assert.deepEqual(calls.slice(5),['fire','zoom']);
+ freeState={vehicle:'car-1'};freePrimary();freeSecondary();freeHeld={kind:'block'};freePrimary();freeSecondary();assert.equal(calls.length,7);
+ freeState.vehicle=null;freePrimary();assert.equal(calls.at(-1),'place');
  `);buildMouseTest(assert);
 const buildRemoveTest=new Function('assert',`
  return (async()=>{
@@ -391,9 +399,10 @@ const placed={id:1,hp:100},aliveTree={id:'tree-1',hp:100},deadTree={id:'tree-2',
 assert.deepEqual(obstacles({blocks:[placed],scenery:[aliveTree,deadTree,building]}),[placed,aliveTree,building]);
 assert.deepEqual(obstacles({blocks:[placed]}),[placed]);
 assert.ok(game.includes('freeView.village.set(s.scenery,s.villageRoads)'));
-assert.ok(game.includes('freeView.sync([...s.peers,...s.npcs,...(result.corpses||[])])'));
+assert.ok(game.includes('freeView.sync([...s.peers.filter(p=>!p.vehicle),...s.npcs,...(result.corpses||[])])'));
 assert.ok(game.includes('s.npcs=result.npcs||[];'));
-assert.ok(game.includes('freeBlocked(freeObstacles(freeState)'));
+assert.ok(game.includes('freeWalkBlocked(freeState,x,player.y,z,height)'));
+assert.ok(game.includes('vehicleBlocked(s.vehicles,x,y,z,height)'));
 assert.ok(game.includes('renderer.shot(\'pistol\',npc.shot,freeView.effects)'));
 console.log('Hidden village client scenery, dead tree collision and NPC snapshot checks passed');
 
@@ -447,7 +456,7 @@ assert.ok(updater.includes('Kein manueller Import erforderlich.'));
  chair.hp=100;s.seat={id:chair.id};assert.equal(select(s),null);
  assert.ok(game.includes("if(freeState.seat)await freeEdit('stand')"));
  assert.ok(game.includes("else if(freeChairTarget(freeState))await freeEdit('sit')"));
- assert.ok(game.includes('!posture&&!freeState?.seat&&!lobbyTransition'));
+ assert.ok(game.includes('!posture&&!freeState?.seat&&!freeState?.vehicle&&!lobbyTransition'));
  assert.ok(game.includes('renderer.weaponModels,equipped,freeState.seat)'));
 }
 
@@ -456,3 +465,23 @@ assert.ok(game.includes('freeView.syncClock(result.dayPhase,s.lastOK,result.weat
 assert.ok(game.includes('freeView.setWeatherObstacles(s.obstacles)'));
 assert.ok(game.includes('audio.weather(weather.rain,weather.sheltered,weather.thunder)'));
 assert.ok(game.includes('freeState=null;audio.stopWeather()'));
+
+const driveTest=new Function('assert',`
+ let keys=new Set(),touchMove=[0,0],freeState={vehicle:'car-1'},playing=true;
+ let document={hidden:false,hasFocus:()=>true},player={x:1,y:2,z:3,yaw:0,stance:'walk'},equipped='rifle';
+ const canPlay=()=>playing;
+ `+getPart('function freeDriveInput(){','async function freeVehicleAction(')+`
+ const state={vehicle:'car-1',lease:'test',revision:4,life:1};
+ keys.add('KeyW');keys.add('KeyD');assert.deepEqual(freeDriveInput(),[1,1]);
+ let data=freeMove(state);assert.deepEqual(data.drive,[1,1]);assert.equal(data.weapon,null);
+ keys.add('Space');assert.deepEqual(freeDriveInput(),[0,1]);
+ keys.clear();touchMove=[-.6,-.4];assert.deepEqual(freeDriveInput(),[-.4,-.6]);
+ document.hidden=true;assert.deepEqual(freeDriveInput(),[0,0]);
+ document.hidden=false;document.hasFocus=()=>false;assert.deepEqual(freeDriveInput(),[0,0]);
+ document.hasFocus=()=>true;playing=false;assert.deepEqual(freeDriveInput(),[0,0]);
+ playing=true;freeState.editing=true;assert.deepEqual(freeDriveInput(),[0,0]);
+ freeState.editing=false;state.vehicle=null;data=freeMove(state);
+ assert.equal(data.weapon,'rifle');assert.ok(!Object.hasOwn(data,'drive'));
+ `);
+driveTest(assert);
+console.log('Vehicle driving input, braking, focus loss and weapon restoration checks passed');
